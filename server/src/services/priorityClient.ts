@@ -1,13 +1,14 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/src/services/priorityClient.ts
 // PURPOSE: HTTP client for Priority ERP oData API. Handles auth,
-//          required headers, rate limiting, and error handling.
-//          All Priority requests go through this client.
+//          required headers, and retry logic. Rate limiting and
+//          error extraction live in priorityRateLimit.ts.
 // USED BY: routes/reports.ts, routes/filters.ts
 // EXPORTS: queryPriority, ODataParams, PriorityResponse
 // ═══════════════════════════════════════════════════════════════
 
 import { getPriorityConfig } from '../config/priority';
+import { rateLimitDelay, extractErrorMessage } from './priorityRateLimit';
 
 export interface ODataParams {
   $select?: string;
@@ -20,18 +21,6 @@ export interface ODataParams {
 
 export interface PriorityResponse {
   value: Record<string, unknown>[];
-}
-
-// WHY: 200ms delay between requests to stay under Priority's 100 calls/minute limit
-const RATE_LIMIT_DELAY_MS = 200;
-let lastRequestTime = 0;
-
-async function rateLimitDelay(): Promise<void> {
-  const elapsed = Date.now() - lastRequestTime;
-  if (elapsed < RATE_LIMIT_DELAY_MS) {
-    await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_DELAY_MS - elapsed));
-  }
-  lastRequestTime = Date.now();
 }
 
 function buildUrl(entity: string, params: ODataParams): string {
@@ -74,14 +63,16 @@ async function fetchWithRetry(url: string, attempt = 0, maxRetries = 3): Promise
   }
 
   if (response.status === 429 && attempt < maxRetries) {
+    const errMsg = await extractErrorMessage(response);
     const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
-    console.warn(`[priority] Rate limited — retry ${attempt + 1}/${maxRetries} after ${delay}ms`);
+    console.warn(`[priority] Rate limited (${errMsg}) — retry ${attempt + 1}/${maxRetries} after ${delay}ms`);
     await new Promise((resolve) => setTimeout(resolve, delay));
     return fetchWithRetry(url, attempt + 1, maxRetries);
   }
 
   if (response.status >= 500 && attempt < 1) {
-    console.warn(`[priority] Server error ${response.status} — retrying once`);
+    const errMsg = await extractErrorMessage(response);
+    console.warn(`[priority] Server error ${response.status} (${errMsg}) — retrying once`);
     await new Promise((resolve) => setTimeout(resolve, 500));
     return fetchWithRetry(url, attempt + 1, 1);
   }
@@ -102,7 +93,8 @@ export async function queryPriority(
   }
 
   if (!response.ok) {
-    throw new Error(`Priority query failed: ${response.status} ${response.statusText}`);
+    const errMsg = await extractErrorMessage(response);
+    throw new Error(`Priority query failed: ${response.status} — ${errMsg}`);
   }
 
   const data = (await response.json()) as { value?: Record<string, unknown>[] };
