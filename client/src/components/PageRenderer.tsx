@@ -25,9 +25,9 @@ interface PageRendererProps {
 export default function PageRenderer({ page }: PageRendererProps) {
   return (
     <div>
-      <h1 className="text-[28px] font-bold tracking-tight text-slate-900 mb-6">
+      <h2 className="text-[28px] font-bold tracking-tight text-slate-900 mb-6">
         {page.name}
-      </h1>
+      </h2>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {page.widgets.map((widget) => (
           <div key={widget.id} className={`${COL_SPAN_CLASSES[widget.colSpan] ?? 'col-span-12'}`}>
