@@ -13,6 +13,7 @@ import { env } from './config/environment';
 import { createCacheProvider } from './services/cache';
 import { createHealthRouter } from './routes/health';
 import { createReportsRouter } from './routes/reports';
+import { createFiltersRouter } from './routes/filters';
 import { logStartup } from './services/logger';
 
 const app = express();
@@ -25,6 +26,7 @@ const cache = createCacheProvider();
 // Mount API routes
 app.use('/api/v1/health', createHealthRouter(cache));
 app.use('/api/v1/reports', createReportsRouter(cache));
+app.use('/api/v1/reports', createFiltersRouter(cache));
 
 // WHY: In production, Express serves the built React app.
 // In development, Vite's dev server handles the frontend.
