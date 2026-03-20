@@ -29,20 +29,17 @@ const PageConfigSchema = z.object({
 // instead of silently rendering nothing.
 export const pages = z.array(PageConfigSchema).parse([
   {
-    id: 'overview',
-    name: 'Overview',
-    path: '/overview',
+    id: 'qc',
+    name: 'Quality Control',
+    path: '/qc',
     widgets: [
-      { id: 'overview-sales', reportId: 'demo-sales-orders', type: 'table', title: 'Recent Sales Orders', colSpan: 12 },
-      { id: 'overview-inventory', reportId: 'demo-inventory', type: 'table', title: 'Inventory Levels', colSpan: 12 },
-    ],
-  },
-  {
-    id: 'sales',
-    name: 'Sales',
-    path: '/sales',
-    widgets: [
-      { id: 'sales-orders', reportId: 'demo-sales-orders', type: 'table', title: 'All Sales Orders', colSpan: 12 },
+      {
+        id: 'grv-log',
+        reportId: 'grv-log',
+        type: 'table',
+        title: 'GRV Log — Goods Receiving Vouchers',
+        colSpan: 12,
+      },
     ],
   },
 ]);

@@ -2,7 +2,7 @@
 // FILE: client/src/utils/formatters.ts
 // PURPOSE: Formatting functions for currency, dates, numbers, percents.
 //          Used by all widgets to ensure consistent display.
-// USED BY: DemoTableWidget, future widget components
+// USED BY: ReportTableWidget
 // EXPORTS: formatCurrency, formatNumber, formatDate, formatPercent, formatCellValue
 // ═══════════════════════════════════════════════════════════════
 

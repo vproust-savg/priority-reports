@@ -7,13 +7,12 @@
 // ═══════════════════════════════════════════════════════════════
 
 import type { ComponentType } from 'react';
-import DemoTableWidget from '../components/widgets/DemoTableWidget';
+import ReportTableWidget from '../components/widgets/ReportTableWidget';
 
 export interface WidgetProps {
   reportId: string;
 }
 
 export const widgetRegistry: Record<string, ComponentType<WidgetProps>> = {
-  table: DemoTableWidget,
-  // Future: kpi: KPIWidget, chart: ChartWidget, download: DownloadWidget
+  table: ReportTableWidget,
 };

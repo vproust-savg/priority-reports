@@ -20,7 +20,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route element={<Layout />}>
-            <Route path="/" element={<Navigate to="/overview" replace />} />
+            <Route path="/" element={<Navigate to="/qc" replace />} />
             {/* WHY: Routes are generated from pages config so adding a new page
                 NEVER requires touching App.tsx — just add to config/pages.ts. */}
             {pages.map((page) => (
