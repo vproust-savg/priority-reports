@@ -27,7 +27,7 @@ export default function FilterBar({ filters, filtersLoading, values, onChange }:
 
   return (
     // WHY: bg-slate-50/60 creates visual separation from table content — matches table header tint
-    <div className="flex flex-col lg:flex-row flex-wrap items-start lg:items-end gap-4 px-5 py-4 bg-slate-50/60 border-b border-slate-100">
+    <div className="flex flex-col md:flex-row flex-wrap items-start md:items-end gap-4 px-5 py-4 bg-slate-50/60 border-b border-slate-100">
       <div className="flex flex-col gap-1">
         <label className={labelClass}>From</label>
         <input
