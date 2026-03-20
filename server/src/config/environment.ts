@@ -33,6 +33,9 @@ const EnvSchema = z.object({
   // Upstash Redis
   UPSTASH_REDIS_URL: optionalUrl,
   UPSTASH_REDIS_TOKEN: optionalString,
+
+  // Airtable (for report status updates)
+  AIRTABLE_TOKEN: optionalString,
 });
 
 // WHY: Crash on startup if env vars are wrong. This prevents
