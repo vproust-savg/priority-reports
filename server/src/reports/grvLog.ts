@@ -13,6 +13,13 @@ import type { ReportFilters } from '../config/reportRegistry';
 import { reportRegistry } from '../config/reportRegistry';
 import { parseGrvRemarks } from '../services/htmlParser';
 
+// WHY: OData string literals use single quotes. A bare quote in a value
+// breaks the query. Doubling escapes it: O'Brien → O''Brien.
+// Zod regex blocks quotes today, but this is defense in depth.
+function escapeODataString(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
 const columns: ColumnDefinition[] = [
   { key: 'date', label: 'Date', type: 'date' },
   { key: 'docNo', label: 'GRV #', type: 'string' },
@@ -35,8 +42,8 @@ function buildQuery(filters: ReportFilters): ODataParams {
 
   if (filters.from) conditions.push(`CURDATE ge ${filters.from}T00:00:00Z`);
   if (filters.to) conditions.push(`CURDATE le ${filters.to}T23:59:59Z`);
-  if (filters.vendor) conditions.push(`SUPNAME eq '${filters.vendor}'`);
-  if (filters.status) conditions.push(`STATDES eq '${filters.status}'`);
+  if (filters.vendor) conditions.push(`SUPNAME eq '${escapeODataString(filters.vendor)}'`);
+  if (filters.status) conditions.push(`STATDES eq '${escapeODataString(filters.status)}'`);
 
   const pageSize = filters.pageSize ?? 50;
   const page = filters.page ?? 1;
