@@ -14,6 +14,8 @@ Reports are **widgets** arranged on **configurable pages**. Adding a page or rea
 Building from specifications. Each spec has a matching implementation plan.
 Backend and frontend are built in **separate Claude Code sessions** that share `shared/types/`.
 
+**Parallel session rules:** Backend session only writes to `server/`. Frontend session only writes to `client/`. Shared types in `shared/types/` must be created before either session starts. Neither session should modify `CLAUDE.md`.
+
 **Active:** `specs/02a-backend/` and `specs/02b-frontend/` (Spec 02 — real Priority API data)
 **Completed:** `specs/done/` (Spec 01 — foundation with mock data)
 
