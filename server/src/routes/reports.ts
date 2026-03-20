@@ -80,7 +80,20 @@ export function createReportsRouter(cache: CacheProvider): Router {
       res.status(502).json({ error: `Failed to fetch from Priority: ${message}` });
       return;
     }
-    const rows = priorityData.value.map(report.transformRow);
+    // WHY: Some reports need sub-form data that can't use $expand (e.g. GRV Log).
+    // enrichRows fetches sub-forms individually before transformRow parses them.
+    let rawRows = priorityData.value;
+    if (report.enrichRows) {
+      try {
+        rawRows = await report.enrichRows(rawRows);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        console.error(`[reports] Sub-form enrichment failed for ${reportId}: ${message}`);
+        // WHY: Continue with un-enriched rows rather than failing the request.
+        // The transform will produce null fields for the missing sub-form data.
+      }
+    }
+    const rows = rawRows.map(report.transformRow);
 
     // WHY: Priority may not support $count=true. Estimate totalCount:
     // if fewer rows than pageSize, we're on the last page.

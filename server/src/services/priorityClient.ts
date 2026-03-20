@@ -1,15 +1,14 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/src/services/priorityClient.ts
-// PURPOSE: HTTP client for Priority ERP oData API. Handles auth,
-//          required headers, and retry logic. Rate limiting and
-//          error extraction live in priorityRateLimit.ts.
-// USED BY: routes/reports.ts, routes/filters.ts
-// EXPORTS: queryPriority, ODataParams, PriorityResponse
+// PURPOSE: High-level Priority ERP oData client. Builds URLs,
+//          parses responses, and provides queryPriority (list queries)
+//          and querySubform (single sub-form fetch) APIs.
+// USED BY: routes/reports.ts, routes/filters.ts, reports/grvLog.ts
+// EXPORTS: queryPriority, querySubform, ODataParams, PriorityResponse
 // ═══════════════════════════════════════════════════════════════
 
-import https from 'node:https';
 import { getPriorityConfig } from '../config/priority';
-import { rateLimitDelay } from './priorityRateLimit';
+import { fetchWithRetry, extractErrorMessage } from './priorityHttp';
 
 export interface ODataParams {
   $select?: string;
@@ -24,14 +23,6 @@ export interface PriorityResponse {
   value: Record<string, unknown>[];
 }
 
-// WHY: Node's native fetch (undici) causes "socket terminated" errors with
-// Priority's CloudFront-backed API. Node's https module uses HTTP/1.1 and
-// handles the connection correctly.
-interface HttpsResponse {
-  status: number;
-  body: string;
-}
-
 function buildUrl(entity: string, params: ODataParams): string {
   const config = getPriorityConfig();
   const url = new URL(`${config.baseUrl}${entity}`);
@@ -44,88 +35,6 @@ function buildUrl(entity: string, params: ODataParams): string {
   if (params.$orderby) url.searchParams.set('$orderby', params.$orderby);
 
   return url.toString();
-}
-
-function httpsGet(url: string): Promise<HttpsResponse> {
-  const config = getPriorityConfig();
-  const auth = Buffer.from(`${config.username}:${config.password}`).toString('base64');
-
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, {
-      headers: {
-        // WHY: Without IEEE754Compatible, Priority returns incorrect numeric values
-        'IEEE754Compatible': 'true',
-        // WHY: Without this, Priority may silently truncate results below 1000
-        'Prefer': 'odata.maxpagesize=1000',
-        'Authorization': `Basic ${auth}`,
-      },
-      timeout: 30_000,
-    }, (res) => {
-      const chunks: Buffer[] = [];
-      res.on('data', (chunk: Buffer) => chunks.push(chunk));
-      res.on('end', () => {
-        resolve({ status: res.statusCode ?? 500, body: Buffer.concat(chunks).toString('utf-8') });
-      });
-      res.on('error', reject);
-    });
-
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(new Error('Request timed out')); });
-  });
-}
-
-// WHY: Priority returns errors in two JSON formats. Without parsing these,
-// logs only show "400 Bad Request" with no actionable detail.
-function extractErrorMessage(body: string): string {
-  try {
-    const data = JSON.parse(body);
-
-    // OData standard format: { error: { message: "..." } }
-    if (data?.error?.message) {
-      const msg = typeof data.error.message === 'string'
-        ? data.error.message
-        : data.error.message.value;
-      if (msg) return msg;
-    }
-
-    // Priority interface format: { FORM: { InterfaceErrors: { text: "..." } } }
-    if (data?.FORM?.InterfaceErrors?.text) {
-      return data.FORM.InterfaceErrors.text;
-    }
-
-    return body.slice(0, 200);
-  } catch {
-    return body.slice(0, 200) || 'Unknown error';
-  }
-}
-
-// WHY: 429 gets 3 retries with exponential backoff (spec requirement).
-// 500+ gets 1 retry with flat delay (transient server errors).
-async function fetchWithRetry(url: string, attempt = 0, maxRetries = 3): Promise<HttpsResponse> {
-  await rateLimitDelay();
-
-  const response = await httpsGet(url);
-
-  if (response.status === 401) {
-    throw new Error('Priority auth failed — check credentials');
-  }
-
-  if (response.status === 429 && attempt < maxRetries) {
-    const errMsg = extractErrorMessage(response.body);
-    const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
-    console.warn(`[priority] Rate limited (${errMsg}) — retry ${attempt + 1}/${maxRetries} after ${delay}ms`);
-    await new Promise((resolve) => setTimeout(resolve, delay));
-    return fetchWithRetry(url, attempt + 1, maxRetries);
-  }
-
-  if (response.status >= 500 && attempt < 1) {
-    const errMsg = extractErrorMessage(response.body);
-    console.warn(`[priority] Server error ${response.status} (${errMsg}) — retrying once`);
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    return fetchWithRetry(url, attempt + 1, 1);
-  }
-
-  return response;
 }
 
 export async function queryPriority(
@@ -145,6 +54,52 @@ export async function queryPriority(
     throw new Error(`Priority query failed: ${response.status} — ${errMsg}`);
   }
 
-  const data = JSON.parse(response.body) as { value?: Record<string, unknown>[] };
+  let data: { value?: Record<string, unknown>[] };
+  try {
+    data = JSON.parse(response.body) as { value?: Record<string, unknown>[] };
+  } catch {
+    throw new Error(`Priority returned invalid JSON (${response.body.length} bytes): ${response.body.slice(0, 200)}`);
+  }
   return { value: data.value ?? [] };
+}
+
+// WHY: Priority's $expand truncates responses on some entities. The proven
+// pattern (from the sync project) is two-step: fetch parent, then fetch
+// each sub-form individually via entity(key)/SUBFORM_NAME.
+export async function querySubform(
+  entity: string,
+  keyParts: Record<string, string>,
+  subformName: string,
+): Promise<Record<string, unknown> | null> {
+  const config = getPriorityConfig();
+  const keyStr = Object.entries(keyParts)
+    // WHY: OData single-quote escaping doubles the quote (same pattern as escapeODataString)
+    .map(([k, v]) => `${k}='${v.replace(/'/g, "''")}'`)
+    .join(',');
+  const url = `${config.baseUrl}${entity}(${keyStr})/${subformName}`;
+
+  const response = await fetchWithRetry(url);
+
+  if (response.status === 404) return null;
+  if (response.status < 200 || response.status >= 300) {
+    console.warn(`[priority] Sub-form fetch failed: ${response.status} for ${entity}/${subformName}`);
+    return null;
+  }
+
+  try {
+    const data = JSON.parse(response.body) as Record<string, unknown>;
+    // WHY: Single-entity sub-forms return fields directly (no "value" array).
+    // Multi-record sub-forms return { value: [...] }. Handle both.
+    if ('value' in data && Array.isArray(data.value)) {
+      return (data.value as Record<string, unknown>[])[0] ?? null;
+    }
+    // Strip OData metadata keys, return data fields only
+    const record: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (!k.startsWith('@')) record[k] = v;
+    }
+    return Object.keys(record).length > 0 ? record : null;
+  } catch {
+    return null;
+  }
 }

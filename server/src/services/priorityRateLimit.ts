@@ -1,10 +1,9 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/src/services/priorityRateLimit.ts
-// PURPOSE: Rate limiting and error extraction for Priority API.
-//          Rolling window tracks requests to stay under 100/min.
-//          Error extractor parses Priority's two JSON error formats.
-// USED BY: services/priorityClient.ts
-// EXPORTS: rateLimitDelay, extractErrorMessage
+// PURPOSE: Rate limiting for Priority API. Rolling window tracks
+//          requests to stay under 100/min with minimum spacing.
+// USED BY: services/priorityHttp.ts
+// EXPORTS: rateLimitDelay
 // ═══════════════════════════════════════════════════════════════
 
 const MIN_SPACING_MS = 200;
@@ -37,31 +36,4 @@ export async function rateLimitDelay(): Promise<void> {
   }
 
   requestTimestamps.push(Date.now());
-}
-
-// WHY: Priority returns errors in two JSON formats. Without parsing these,
-// logs only show "400 Bad Request" with no actionable detail.
-export async function extractErrorMessage(response: Response): Promise<string> {
-  try {
-    const text = await response.text();
-    const data = JSON.parse(text);
-
-    // OData standard format: { error: { message: "..." } }
-    if (data?.error?.message) {
-      const msg = typeof data.error.message === 'string'
-        ? data.error.message
-        : data.error.message.value;
-      if (msg) return msg;
-    }
-
-    // Priority interface format: { FORM: { InterfaceErrors: { text: "..." } } }
-    if (data?.FORM?.InterfaceErrors?.text) {
-      return data.FORM.InterfaceErrors.text;
-    }
-
-    // Fall back to raw text (truncated)
-    return text.slice(0, 200);
-  } catch {
-    return response.statusText;
-  }
 }

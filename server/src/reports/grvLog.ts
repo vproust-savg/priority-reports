@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/src/reports/grvLog.ts
-// PURPOSE: GRV Log report definition. Queries DOCUMENTS_P with
-//          $expand=DOCUMENTSTEXT_SUBFORM, parses HTML remarks
-//          into 7 structured inspection fields. 14 total columns.
+// PURPOSE: GRV Log report definition. Queries DOCUMENTS_P, then
+//          fetches DOCUMENTSTEXT_SUBFORM per row (two-step pattern).
+//          Parses HTML remarks into 7 structured inspection fields.
 // USED BY: config/reportRegistry.ts (auto-registers on import)
 // EXPORTS: (none — self-registers into reportRegistry)
 // ═══════════════════════════════════════════════════════════════
@@ -11,6 +11,7 @@ import type { ColumnDefinition } from '@shared/types';
 import type { ODataParams } from '../services/priorityClient';
 import type { ReportFilters } from '../config/reportRegistry';
 import { reportRegistry } from '../config/reportRegistry';
+import { querySubform } from '../services/priorityClient';
 import { parseGrvRemarks } from '../services/htmlParser';
 
 // WHY: OData string literals use single quotes. A bare quote in a value
@@ -49,8 +50,9 @@ function buildQuery(filters: ReportFilters): ODataParams {
   const page = filters.page ?? 1;
 
   return {
-    $select: 'DOCNO,CURDATE,SUPNAME,CDES,STATDES,TOTPRICE,TOWARHSDES,OWNERLOGIN',
-    $expand: 'DOCUMENTSTEXT_SUBFORM',
+    // WHY: TYPE included because DOCUMENTS_P has composite key (DOCNO + TYPE),
+    // needed to fetch sub-forms in the enrichRows step.
+    $select: 'DOCNO,TYPE,CURDATE,SUPNAME,CDES,STATDES,TOTPRICE,TOWARHSDES,OWNERLOGIN',
     $filter: conditions.length > 0 ? conditions.join(' and ') : undefined,
     $orderby: 'CURDATE desc',
     $top: pageSize,
@@ -58,12 +60,33 @@ function buildQuery(filters: ReportFilters): ODataParams {
   };
 }
 
-function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
-  // WHY: DOCUMENTSTEXT_SUBFORM is a single-entity sub-form (object, not array).
-  // If Priority returns an array, use the first element.
-  let subform = raw.DOCUMENTSTEXT_SUBFORM as Record<string, unknown> | undefined;
-  if (Array.isArray(subform)) subform = subform[0];
+// WHY: Priority's $expand truncates responses on DOCUMENTS_P (CloudFront
+// drops connection mid-body). Two-step fetch: get rows, then fetch each
+// text sub-form individually. Batched in groups of 10 for rate limit safety.
+async function enrichRows(rows: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
+  const BATCH_SIZE = 10;
 
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map((row) =>
+        querySubform(
+          'DOCUMENTS_P',
+          { DOCNO: row.DOCNO as string, TYPE: row.TYPE as string },
+          'DOCUMENTSTEXT_SUBFORM',
+        ),
+      ),
+    );
+    for (let j = 0; j < batch.length; j++) {
+      batch[j].DOCUMENTSTEXT_SUBFORM = results[j];
+    }
+  }
+
+  return rows;
+}
+
+function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
+  const subform = raw.DOCUMENTSTEXT_SUBFORM as Record<string, unknown> | null;
   const htmlText = (subform?.TEXT as string) ?? null;
   const remarks = parseGrvRemarks(htmlText);
 
@@ -88,4 +111,5 @@ reportRegistry.set('grv-log', {
   columns,
   buildQuery,
   transformRow,
+  enrichRows,
 });

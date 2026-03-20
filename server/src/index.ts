@@ -35,7 +35,7 @@ if (env.NODE_ENV === 'production') {
 
   // WHY: SPA catch-all — React Router handles client-side routing.
   // Without this, direct URL access to /overview returns 404.
-  app.get('*', (_req, res) => {
+  app.get('/{*path}', (_req, res) => {
     res.sendFile(path.join(__dirname, '../../../../client/dist/index.html'));
   });
 }

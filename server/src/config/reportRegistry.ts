@@ -26,6 +26,9 @@ export interface ReportConfig {
   columns: ColumnDefinition[];
   buildQuery: (filters: ReportFilters) => ODataParams;
   transformRow: (raw: Record<string, unknown>) => Record<string, unknown>;
+  // WHY: Priority's $expand truncates responses for some entities (DOCUMENTS_P).
+  // Reports that need sub-form data use this to fetch it in a second step.
+  enrichRows?: (rows: Record<string, unknown>[]) => Promise<Record<string, unknown>[]>;
 }
 
 export const reportRegistry = new Map<string, ReportConfig>();

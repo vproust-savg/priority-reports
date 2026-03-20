@@ -61,7 +61,8 @@ export function parseGrvRemarks(html: string | null): GrvRemarkFields {
   // Convert <br> and block-level boundaries to newlines before stripping tags
   // WHY: Priority wraps each section in <p> or <div> — without this,
   // "Test line 2</p><div>Truck Temp" collapses into one line.
-  text = text.replace(/<br\s*\/?>/gi, '\n');
+  // WHY: Priority's <br> tags often have data-* attributes: <br data-abc="true">
+  text = text.replace(/<br[^>]*\/?>/gi, '\n');
   text = text.replace(/<\/?(p|div)\s*\/?>/gi, '\n');
 
   // Strip all remaining HTML tags
