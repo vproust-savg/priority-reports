@@ -1,1 +1,11 @@
-providers = ["node"]
+[phases.setup]
+nixPkgs = ["nodejs_20", "npm"]
+
+[phases.build]
+cmds = [
+  "cd client && npm install && npm run build",
+  "cd server && npm install && npm run build",
+]
+
+[start]
+cmd = "cd server && npm start"
