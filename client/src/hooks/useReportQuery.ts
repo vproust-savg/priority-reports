@@ -2,7 +2,7 @@
 // FILE: client/src/hooks/useReportQuery.ts
 // PURPOSE: Thin wrapper around TanStack Query for fetching report data.
 //          ALL widgets use this hook. No direct API calls in components.
-// USED BY: DemoTableWidget, future widget components
+// USED BY: ReportTableWidget
 // EXPORTS: useReportQuery
 // ═══════════════════════════════════════════════════════════════
 
@@ -14,6 +14,8 @@ interface ReportQueryParams {
   pageSize?: number;
   from?: string;
   to?: string;
+  vendor?: string;
+  status?: string;
 }
 
 export function useReportQuery(reportId: string, params: ReportQueryParams = {}) {
@@ -27,6 +29,8 @@ export function useReportQuery(reportId: string, params: ReportQueryParams = {})
       if (params.pageSize) searchParams.set('pageSize', String(params.pageSize));
       if (params.from) searchParams.set('from', params.from);
       if (params.to) searchParams.set('to', params.to);
+      if (params.vendor) searchParams.set('vendor', params.vendor);
+      if (params.status) searchParams.set('status', params.status);
 
       const url = `/api/v1/reports/${reportId}?${searchParams}`;
       const response = await fetch(url);
