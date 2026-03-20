@@ -23,8 +23,9 @@ const QueryParamsSchema = z.object({
   page: z.coerce.number().min(1).default(1),
   // WHY: Default changed from 25 (Spec 01) to 50 — matches frontend ReportTableWidget default
   pageSize: z.coerce.number().min(1).max(1000).default(50),
-  from: z.string().optional(),
-  to: z.string().optional(),
+  // WHY: Regex prevents OData injection — only ISO date format allowed
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   // WHY: Regex prevents OData injection — only alphanumeric, dash, underscore allowed
   vendor: z.string().regex(/^[a-zA-Z0-9_-]+$/).optional(),
   status: z.string().regex(/^[a-zA-Z0-9_ -]+$/).optional(),
