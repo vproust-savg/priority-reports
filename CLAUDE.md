@@ -11,8 +11,11 @@ Reports are **widgets** arranged on **configurable pages**. Adding a page or rea
 
 ## Current State
 
-Building from specifications. Read `specs/spec-01-foundation.md` for the current build spec.
-Backend and frontend are built in **separate Claude Code sessions**.
+Building from specifications. Each spec has a matching implementation plan.
+Backend and frontend are built in **separate Claude Code sessions** that share `shared/types/`.
+
+**Active:** `specs/02a-backend/` and `specs/02b-frontend/` (Spec 02 — real Priority API data)
+**Completed:** `specs/done/` (Spec 01 — foundation with mock data)
 
 ## Tech Stack
 
@@ -43,7 +46,10 @@ Backend and frontend are built in **separate Claude Code sessions**.
 ├── server/          ← Backend (Express + TypeScript)
 ├── client/          ← Frontend (React + Vite + Tailwind)
 ├── shared/types/    ← Shared TypeScript types (both import from here)
-├── specs/           ← Build specifications (spec-01-foundation.md, etc.)
+├── specs/           ← Build specs & plans, organized by workstream
+│   ├── 02a-backend/ ← Backend spec + plan (current)
+│   ├── 02b-frontend/← Frontend spec + plan (current)
+│   └── done/        ← Completed specs (archived)
 ├── tools/           ← Reference files (Priority XML metadata map — READ ONLY)
 └── CLAUDE.md        ← You are here
 ```
@@ -88,9 +94,10 @@ This code is maintained exclusively by LLMs. Every decision optimizes for AI rea
 
 ## How to Add a New Report (Spec 02+)
 
-1. Add report definition to Airtable "API Reports" table
-2. Add backend route or use generic /api/v1/reports/:reportId
-3. Add widget entry to the page config
+1. Create report definition in `server/src/reports/` (self-registers via side-effect import)
+2. Import it in `server/src/routes/reports.ts` for side-effect registration
+3. Add widget entry to `client/src/config/pages.ts`
+4. Update Airtable "API Reports" table with report metadata
 
 **Finding entity names:** Check `tools/priority_erp.xml` for available Priority oData entity names and their field definitions.
 
@@ -119,6 +126,7 @@ This code is maintained exclusively by LLMs. Every decision optimizes for AI rea
 - **Rate limits:** 100 calls/minute, 15 queued max, 3-minute timeout per request
 - **Pagination:** `$top` + `$skip` params. Always paginate — large entities timeout without it.
 - **Header:** Always include `Prefer: odata.maxpagesize=1000`
+- **Header:** Always include `IEEE754Compatible: true` (prevents floating-point precision issues)
 - **XML metadata:** `tools/priority_erp.xml` contains all entity names and field definitions
 - **Existing reference:** The sync project at `/Users/victorproust/Documents/Work/Priority/Airtable_Priority_N8N_v1/` uses the same Priority API — check its patterns when in doubt.
 
@@ -135,4 +143,5 @@ This code is maintained exclusively by LLMs. Every decision optimizes for AI rea
 - Making files longer than 150 lines instead of splitting
 - Forgetting the intent block at top of new files
 - Using Airtable field names instead of field IDs
+- Interpolating user input directly into OData `$filter` queries — validate with `z.string().regex(/^[a-zA-Z0-9_-]+$/)`
 - Changing the `ApiResponse` envelope shape without reviewing all consumers
