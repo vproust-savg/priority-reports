@@ -2,7 +2,7 @@
 // FILE: server/src/config/environment.ts
 // PURPOSE: Centralized environment configuration. Read .env once,
 //          export typed config object. All other files import from here.
-// USED BY: index.ts, cache.ts, routes, priorityClient (future)
+// USED BY: index.ts, cache.ts, routes, priority.ts
 // EXPORTS: env
 // ═══════════════════════════════════════════════════════════════
 
@@ -21,7 +21,7 @@ const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(3001),
 
-  // Priority ERP (not used in Spec 01 — mock data only)
+  // Priority ERP
   PRIORITY_ENV: z.enum(['uat', 'production']).default('uat'),
   PRIORITY_UAT_BASE_URL: optionalUrl,
   PRIORITY_UAT_USERNAME: optionalString,

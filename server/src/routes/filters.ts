@@ -13,8 +13,9 @@ import { queryPriority } from '../services/priorityClient';
 import { getReport } from '../config/reportRegistry';
 import type { FiltersResponse, FilterOption } from '@shared/types';
 
-// WHY: No need to import grvLog here — reports.ts already does it,
-// and Node's module cache ensures it runs only once.
+// WHY: Ensure report definitions are registered even if filters.ts
+// loads before reports.ts. Node module cache prevents double-registration.
+import '../reports/grvLog';
 
 export function createFiltersRouter(cache: CacheProvider): Router {
   const router = Router();

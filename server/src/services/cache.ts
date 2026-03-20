@@ -3,7 +3,7 @@
 // PURPOSE: Cache abstraction with Upstash Redis implementation.
 //          The interface is the contract — swap implementations
 //          without touching any business code.
-// USED BY: routes/reports.ts
+// USED BY: routes/reports.ts, routes/filters.ts
 // EXPORTS: CacheProvider, buildCacheKey, createCacheProvider
 // ═══════════════════════════════════════════════════════════════
 
@@ -26,7 +26,7 @@ export function buildCacheKey(
   reportId: string,
   params: { page?: number; pageSize?: number; from?: string; to?: string; vendor?: string; status?: string }
 ): string {
-  return `report:${reportId}:p${params.page ?? 1}:s${params.pageSize ?? 25}:${params.from ?? ''}:${params.to ?? ''}:v${params.vendor ?? ''}:st${params.status ?? ''}`;
+  return `report:${reportId}:p${params.page ?? 1}:s${params.pageSize ?? 50}:${params.from ?? ''}:${params.to ?? ''}:v${params.vendor ?? ''}:st${params.status ?? ''}`;
 }
 
 class UpstashCacheProvider implements CacheProvider {

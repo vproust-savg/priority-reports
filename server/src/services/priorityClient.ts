@@ -4,7 +4,7 @@
 //          required headers, rate limiting, and error handling.
 //          All Priority requests go through this client.
 // USED BY: routes/reports.ts, routes/filters.ts
-// EXPORTS: priorityClient, ODataParams, PriorityResponse
+// EXPORTS: queryPriority, ODataParams, PriorityResponse
 // ═══════════════════════════════════════════════════════════════
 
 import { getPriorityConfig } from '../config/priority';
