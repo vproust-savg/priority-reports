@@ -24,9 +24,9 @@ export interface CacheProvider {
 // Otherwise different pages of the same report return wrong cached data.
 export function buildCacheKey(
   reportId: string,
-  params: { page?: number; pageSize?: number; from?: string; to?: string }
+  params: { page?: number; pageSize?: number; from?: string; to?: string; vendor?: string; status?: string }
 ): string {
-  return `report:${reportId}:p${params.page ?? 1}:s${params.pageSize ?? 25}:${params.from ?? ''}:${params.to ?? ''}`;
+  return `report:${reportId}:p${params.page ?? 1}:s${params.pageSize ?? 25}:${params.from ?? ''}:${params.to ?? ''}:v${params.vendor ?? ''}:st${params.status ?? ''}`;
 }
 
 class UpstashCacheProvider implements CacheProvider {

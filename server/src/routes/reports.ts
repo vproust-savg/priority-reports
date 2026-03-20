@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/src/routes/reports.ts
-// PURPOSE: Report data API endpoints. Serves mock data (Spec 01)
-//          or real Priority data (Spec 02+). Every handler follows
-//          the same pattern: validate → cache check → fetch → cache → respond.
+// PURPOSE: Report data API endpoints. Fetches real Priority data
+//          via the report registry. Each report defines its own
+//          entity, query, and transform — this route orchestrates.
 // USED BY: index.ts (mounted at /api/v1/reports)
 // EXPORTS: createReportsRouter
 // ═══════════════════════════════════════════════════════════════
@@ -11,15 +11,23 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { CacheProvider } from '../services/cache';
 import { buildCacheKey } from '../services/cache';
-import { MOCK_REPORTS } from '../services/mockData';
+import { getReport, reportRegistry } from '../config/reportRegistry';
+import { queryPriority } from '../services/priorityClient';
 import { logApiCall } from '../services/logger';
 import type { ApiResponse } from '@shared/types';
 
+// WHY: Import report definitions so they self-register into reportRegistry
+import '../reports/grvLog';
+
 const QueryParamsSchema = z.object({
   page: z.coerce.number().min(1).default(1),
-  pageSize: z.coerce.number().min(1).max(1000).default(25),
+  // WHY: Default changed from 25 (Spec 01) to 50 — matches frontend ReportTableWidget default
+  pageSize: z.coerce.number().min(1).max(1000).default(50),
   from: z.string().optional(),
   to: z.string().optional(),
+  // WHY: Regex prevents OData injection — only alphanumeric, dash, underscore allowed
+  vendor: z.string().regex(/^[a-zA-Z0-9_-]+$/).optional(),
+  status: z.string().regex(/^[a-zA-Z0-9_ -]+$/).optional(),
 });
 
 export function createReportsRouter(cache: CacheProvider): Router {
@@ -27,19 +35,19 @@ export function createReportsRouter(cache: CacheProvider): Router {
 
   // GET /list — returns array of available report IDs + names
   router.get('/list', (_req, res) => {
-    const reports = Object.entries(MOCK_REPORTS).map(([id, report]) => ({
+    const reports = Array.from(reportRegistry.entries()).map(([id, config]) => ({
       id,
-      name: report.name,
+      name: config.name,
     }));
     res.json({ reports });
   });
 
-  // GET /:reportId — returns ApiResponse with mock data
+  // GET /:reportId — returns ApiResponse with real Priority data
   router.get('/:reportId', async (req, res) => {
     const startTime = Date.now();
     const { reportId } = req.params;
 
-    const report = MOCK_REPORTS[reportId];
+    const report = getReport(reportId);
     if (!report) {
       res.status(404).json({ error: `Report not found: ${reportId}` });
       return;
@@ -60,9 +68,26 @@ export function createReportsRouter(cache: CacheProvider): Router {
       return;
     }
 
-    // Paginate mock data
-    const startIdx = (params.page - 1) * params.pageSize;
-    const pageData = report.data.slice(startIdx, startIdx + params.pageSize);
+    // Fetch from Priority
+    let priorityData;
+    try {
+      const oDataParams = report.buildQuery(params);
+      priorityData = await queryPriority(report.entity, oDataParams);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      console.error(`[reports] Priority fetch failed for ${reportId}: ${message}`);
+      res.status(502).json({ error: `Failed to fetch from Priority: ${message}` });
+      return;
+    }
+    const rows = priorityData.value.map(report.transformRow);
+
+    // WHY: Priority may not support $count=true. Estimate totalCount:
+    // if fewer rows than pageSize, we're on the last page.
+    const pageSize = params.pageSize;
+    const isLastPage = rows.length < pageSize;
+    const totalCount = isLastPage
+      ? (params.page - 1) * pageSize + rows.length
+      : (params.page - 1) * pageSize + rows.length + 1;
 
     const response: ApiResponse = {
       meta: {
@@ -71,14 +96,14 @@ export function createReportsRouter(cache: CacheProvider): Router {
         generatedAt: new Date().toISOString(),
         cache: 'miss',
         executionTimeMs: Date.now() - startTime,
-        source: 'mock',
+        source: 'priority-odata',
       },
-      data: pageData,
+      data: rows,
       pagination: {
         page: params.page,
-        pageSize: params.pageSize,
-        totalCount: report.data.length,
-        totalPages: Math.ceil(report.data.length / params.pageSize),
+        pageSize,
+        totalCount,
+        totalPages: Math.ceil(totalCount / pageSize),
       },
       columns: report.columns,
     };
@@ -89,13 +114,13 @@ export function createReportsRouter(cache: CacheProvider): Router {
     logApiCall({
       level: 'info', event: 'report_fetch', reportId,
       durationMs: Date.now() - startTime, cacheHit: false,
-      rowCount: pageData.length, statusCode: 200,
+      rowCount: rows.length, statusCode: 200,
     });
 
     res.json(response);
   });
 
-  // POST /:reportId/refresh — invalidates cache, re-fetches
+  // POST /:reportId/refresh — invalidates cache
   router.post('/:reportId/refresh', async (req, res) => {
     const { reportId } = req.params;
     const params = QueryParamsSchema.parse(req.query);
