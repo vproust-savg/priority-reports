@@ -9,6 +9,7 @@
 
 import { Redis } from '@upstash/redis';
 import { env } from '../config/environment';
+import type { QueryRequest } from '@shared/types';
 
 // WHY: Abstraction layer so we can swap from Upstash to Railway Redis
 // or any other provider by implementing one file. Business code
@@ -27,6 +28,14 @@ export function buildCacheKey(
   params: { page?: number; pageSize?: number; from?: string; to?: string; vendor?: string; status?: string }
 ): string {
   return `report:${reportId}:p${params.page ?? 1}:s${params.pageSize ?? 50}:${params.from ?? ''}:${params.to ?? ''}:v${params.vendor ?? ''}:st${params.status ?? ''}`;
+}
+
+// WHY: POST bodies can't use the same cache key format as GET params.
+// JSON.stringify deterministically serializes the filter tree.
+// Same filters in same order = same cache key.
+export function buildQueryCacheKey(reportId: string, body: QueryRequest): string {
+  const filterHash = JSON.stringify(body.filterGroup);
+  return `query:${reportId}:p${body.page}:s${body.pageSize}:${filterHash}`;
 }
 
 class UpstashCacheProvider implements CacheProvider {
