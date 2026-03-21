@@ -6,10 +6,12 @@
 // EXPORTS: FilterConditionRow
 // ═══════════════════════════════════════════════════════════════
 
-import { X } from 'lucide-react';
+import { GripVertical, X } from 'lucide-react';
 import type { FilterCondition, ColumnFilterMeta, FiltersResponse } from '@shared/types';
 import { OPERATORS_BY_TYPE, FILTER_INPUT_CLASS } from '../../config/filterConstants';
 import FilterValueInput from './FilterValueInput';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface FilterConditionRowProps {
   condition: FilterCondition;
@@ -23,6 +25,16 @@ interface FilterConditionRowProps {
 export default function FilterConditionRow({
   condition, onChange, onDelete, columns, filterOptions, filterOptionsLoading,
 }: FilterConditionRowProps) {
+  const {
+    attributes, listeners, setNodeRef, transform, transition, isDragging,
+  } = useSortable({ id: condition.id });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
   const selectedColumn = columns.find((c) => c.key === condition.field);
   const operators = selectedColumn ? OPERATORS_BY_TYPE[selectedColumn.filterType] : [];
   const hideValue = condition.operator === 'isEmpty' || condition.operator === 'isNotEmpty';
@@ -42,7 +54,18 @@ export default function FilterConditionRow({
   };
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div ref={setNodeRef} style={style} className="flex items-center gap-2 flex-wrap group/row">
+      {/* Drag handle — visible on hover */}
+      <button
+        {...attributes}
+        {...listeners}
+        aria-label="Drag to reorder"
+        className="cursor-grab active:cursor-grabbing p-0.5 text-slate-300 hover:text-slate-400
+          opacity-0 group-hover/row:opacity-100 transition-opacity touch-none flex-shrink-0"
+      >
+        <GripVertical size={14} />
+      </button>
+
       {/* Field selector */}
       <select
         value={condition.field}
