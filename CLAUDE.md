@@ -40,7 +40,9 @@ Backend and frontend are built in **separate Claude Code sessions** that share `
 
 **Development:** Run both `npm run dev` commands in separate terminals. The Vite dev server proxies `/api` requests to Express.
 
-**Deploy:** Push to `main` on GitHub → Railway auto-deploys. Railway runs `cd server && npm run build && npm start`. The Express server builds and serves the React client in production.
+**Deploy:** Push to `main` on GitHub → Railway auto-deploys via `Dockerfile` (multi-stage build). Express serves the React client in production.
+
+**Local Docker test:** `docker build -t priority-dashboard . && docker run --rm -p 3001:3001 -e NODE_ENV=production -e PORT=3001 priority-dashboard`
 
 ## Project Structure
 
@@ -52,6 +54,8 @@ Backend and frontend are built in **separate Claude Code sessions** that share `
 │   ├── 02a-backend/ ← Backend spec + plan (current)
 │   ├── 02b-frontend/← Frontend spec + plan (current)
 │   └── done/        ← Completed specs (archived)
+├── Dockerfile       ← Multi-stage Docker build (Railway deployment)
+├── .dockerignore    ← Excludes node_modules, .env, .git from Docker context
 ├── tools/           ← Reference files (Priority XML metadata map — READ ONLY)
 └── CLAUDE.md        ← You are here
 ```
@@ -147,3 +151,6 @@ This code is maintained exclusively by LLMs. Every decision optimizes for AI rea
 - Using Airtable field names instead of field IDs
 - Interpolating user input directly into OData `$filter` queries — validate with `z.string().regex(/^[a-zA-Z0-9_-]+$/)`
 - Changing the `ApiResponse` envelope shape without reviewing all consumers
+- Using `app.get('*', ...)` for SPA catch-all — Express 5 requires `app.get('/{*path}', ...)` (path-to-regexp v8 needs named params)
+- Using `$expand` on DOCUMENTS_P — Priority/CloudFront truncates the response. Use two-step fetch: query parent, then `querySubform()` per row
+- Modifying Dockerfile paths without checking `__dirname` math — server at `/app/server/dist/server/src/` serves client from `../../../../client/dist` (4 levels up to `/app/`)
