@@ -82,8 +82,13 @@ function buildQuery(filters: ReportFilters): ODataParams {
 // text sub-form individually. Batched in groups of 10 for rate limit safety.
 async function enrichRows(rows: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
   const BATCH_SIZE = 10;
+  // WHY: 200ms delay between batches keeps us under Priority's 100 calls/min
+  // rate limit. At 10 parallel calls per batch, this limits throughput to
+  // ~50 calls/sec burst with ~5 calls/sec sustained average.
+  const BATCH_DELAY_MS = 200;
 
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    if (i > 0) await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
     const batch = rows.slice(i, i + BATCH_SIZE);
     const results = await Promise.all(
       batch.map((row) =>
