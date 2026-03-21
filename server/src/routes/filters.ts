@@ -77,7 +77,10 @@ export function createFiltersRouter(cache: CacheProvider): Router {
         reportId,
         generatedAt: new Date().toISOString(),
       },
-      filters: { vendors, statuses },
+      // WHY: warehouses/users/columns added in Spec 03a. Stubbed here so
+      // the build passes until that spec is implemented.
+      filters: { vendors, statuses, warehouses: [], users: [] },
+      columns: [],
     };
 
     // WHY: Cache filter options for 5 min — they change infrequently
