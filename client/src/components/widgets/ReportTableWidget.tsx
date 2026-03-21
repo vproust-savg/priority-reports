@@ -10,7 +10,8 @@
 import { useReportQuery } from '../../hooks/useReportQuery';
 import { useFiltersQuery } from '../../hooks/useFiltersQuery';
 import { useFilterState } from '../../hooks/useFilterState';
-import { applyClientFilters, hasAnyClientConditions } from '../../utils/clientFilter';
+import { applyClientFilters, hasAnyClientConditions, hasSkippedOrGroups } from '../../utils/clientFilter';
+import { AlertTriangle } from 'lucide-react';
 import { countActiveFilters } from '../../config/filterConstants';
 import FilterToolbar from '../FilterToolbar';
 import FilterBuilder from '../filter/FilterBuilder';
@@ -29,6 +30,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   // WHY: Fetch more rows when client-side filters are active — the
   // backend can't filter HTML-parsed columns, so we filter locally
   const hasClientFilters = hasAnyClientConditions(debouncedGroup, filterColumns);
+  const hasSkippedOr = hasSkippedOrGroups(debouncedGroup, filterColumns);
   const fetchPageSize = hasClientFilters ? 500 : 50;
 
   const { data, isLoading, error, refetch } = useReportQuery(reportId, {
@@ -72,6 +74,13 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
           filterOptions={filtersQuery.data?.filters}
           filterOptionsLoading={filtersQuery.isLoading}
         />
+      )}
+
+      {hasSkippedOr && (
+        <div className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-amber-700 bg-amber-50/80 border border-amber-200/60 rounded-lg">
+          <AlertTriangle size={14} className="shrink-0 text-amber-500" />
+          <span>Some OR-group filters can't be fully applied. Results may include extra rows.</span>
+        </div>
       )}
 
       {isLoading && (
