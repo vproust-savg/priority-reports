@@ -12,6 +12,7 @@ import path from 'path';
 import { env } from './config/environment';
 import { createCacheProvider } from './services/cache';
 import { createHealthRouter } from './routes/health';
+import { createQueryRouter } from './routes/query';
 import { createReportsRouter } from './routes/reports';
 import { createFiltersRouter } from './routes/filters';
 import { logStartup } from './services/logger';
@@ -24,7 +25,9 @@ app.use(express.json());
 const cache = createCacheProvider();
 
 // Mount API routes
+// WHY: Query router before reports router — more specific path first.
 app.use('/api/v1/health', createHealthRouter(cache));
+app.use('/api/v1/reports', createQueryRouter(cache));
 app.use('/api/v1/reports', createReportsRouter(cache));
 app.use('/api/v1/reports', createFiltersRouter(cache));
 
