@@ -7,7 +7,7 @@
 // EXPORTS: ReportConfig, ReportFilters, reportRegistry, getReport
 // ═══════════════════════════════════════════════════════════════
 
-import type { ColumnDefinition } from '@shared/types';
+import type { ColumnDefinition, ColumnFilterMeta } from '@shared/types';
 import type { ODataParams } from '../services/priorityClient';
 
 export interface ReportFilters {
@@ -24,6 +24,9 @@ export interface ReportConfig {
   name: string;
   entity: string;
   columns: ColumnDefinition[];
+  // WHY: Column filter metadata tells the frontend what operators/inputs
+  // each column supports and whether filtering happens server-side or client-side.
+  filterColumns: ColumnFilterMeta[];
   buildQuery: (filters: ReportFilters) => ODataParams;
   transformRow: (raw: Record<string, unknown>) => Record<string, unknown>;
   // WHY: Priority's $expand truncates responses for some entities (DOCUMENTS_P).

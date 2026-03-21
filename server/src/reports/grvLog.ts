@@ -7,7 +7,7 @@
 // EXPORTS: (none — self-registers into reportRegistry)
 // ═══════════════════════════════════════════════════════════════
 
-import type { ColumnDefinition } from '@shared/types';
+import type { ColumnDefinition, ColumnFilterMeta } from '@shared/types';
 import type { ODataParams } from '../services/priorityClient';
 import type { ReportFilters } from '../config/reportRegistry';
 import { reportRegistry } from '../config/reportRegistry';
@@ -36,6 +36,23 @@ const columns: ColumnDefinition[] = [
   { key: 'truckCondition', label: 'Truck Condition', type: 'string' },
   { key: 'comments', label: 'Comments', type: 'string' },
   { key: 'receivedBy', label: 'Received By', type: 'string' },
+];
+
+const filterColumns: ColumnFilterMeta[] = [
+  { key: 'date', label: 'Date', filterType: 'date', filterLocation: 'server', odataField: 'CURDATE' },
+  { key: 'docNo', label: 'GRV #', filterType: 'text', filterLocation: 'server', odataField: 'DOCNO' },
+  { key: 'vendor', label: 'Vendor', filterType: 'enum', filterLocation: 'server', odataField: 'SUPNAME', enumKey: 'vendors' },
+  { key: 'warehouse', label: 'Warehouse', filterType: 'enum', filterLocation: 'server', odataField: 'TOWARHSNAME', enumKey: 'warehouses' },
+  { key: 'status', label: 'Status', filterType: 'enum', filterLocation: 'server', odataField: 'STATDES', enumKey: 'statuses' },
+  { key: 'total', label: 'Total', filterType: 'currency', filterLocation: 'server', odataField: 'TOTPRICE' },
+  { key: 'driverId', label: 'Driver ID', filterType: 'text', filterLocation: 'client' },
+  { key: 'licensePlate', label: 'License Plate', filterType: 'text', filterLocation: 'client' },
+  { key: 'truckTemp', label: 'Truck Temp °F', filterType: 'text', filterLocation: 'client' },
+  { key: 'productTemp', label: 'Product Temp °F', filterType: 'text', filterLocation: 'client' },
+  { key: 'productCondition', label: 'Product Condition', filterType: 'text', filterLocation: 'client' },
+  { key: 'truckCondition', label: 'Truck Condition', filterType: 'text', filterLocation: 'client' },
+  { key: 'comments', label: 'Comments', filterType: 'text', filterLocation: 'client' },
+  { key: 'receivedBy', label: 'Received By', filterType: 'text', filterLocation: 'server', odataField: 'OWNERLOGIN' },
 ];
 
 function buildQuery(filters: ReportFilters): ODataParams {
@@ -109,6 +126,7 @@ reportRegistry.set('grv-log', {
   name: 'GRV Log',
   entity: 'DOCUMENTS_P',
   columns,
+  filterColumns,
   buildQuery,
   transformRow,
   enrichRows,
