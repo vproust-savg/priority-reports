@@ -4,7 +4,7 @@
 //          could not handle: client-side columns (HTML-parsed fields)
 //          and text-search operators (contains, startsWith, endsWith).
 // USED BY: ReportTableWidget.tsx
-// EXPORTS: applyClientFilters, hasAnyClientConditions
+// EXPORTS: applyClientFilters, hasAnyClientConditions, hasSkippedOrGroups
 // ═══════════════════════════════════════════════════════════════
 
 import type { FilterCondition, FilterGroup, ColumnFilterMeta } from '@shared/types';
@@ -94,4 +94,25 @@ export function applyClientFilters(
 ): Record<string, unknown>[] {
   if (!hasAnyClientConditions(filterGroup, filterColumns)) return rows;
   return rows.filter((row) => evaluateGroup(row, filterGroup, filterColumns));
+}
+
+// WHY: The backend's odataFilterBuilder silently skips entire OR groups
+// that contain any client-side condition (correct safety behavior — partial
+// OR = data loss). This function detects when that happens so the UI can
+// warn the user that results may include extra rows.
+export function hasSkippedOrGroups(
+  group: FilterGroup,
+  columns: ColumnFilterMeta[],
+): boolean {
+  // Check if THIS group is an OR with any client-side condition
+  if (group.conjunction === 'or') {
+    for (const c of group.conditions) {
+      if (c.field && isClientCondition(c, columns)) return true;
+    }
+  }
+  // Recurse into child groups
+  for (const g of group.groups) {
+    if (hasSkippedOrGroups(g, columns)) return true;
+  }
+  return false;
 }
