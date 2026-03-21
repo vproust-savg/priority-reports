@@ -43,21 +43,23 @@ export function createQueryRouter(cache: CacheProvider): Router {
     }
 
     const cacheKey = buildQueryCacheKey(reportId, body);
+
+    // WHY: Compute odataFilter before cache check so both log calls
+    // (cache hit + cache miss) can include it for Railway debugging.
+    const baseParams = report.buildQuery({ page: body.page, pageSize: body.pageSize });
+    const odataFilter = buildODataFilter(body.filterGroup, report.filterColumns);
+
     const cached = await cache.get<ApiResponse>(cacheKey);
     if (cached) {
       logApiCall({
         level: 'info', event: 'query_fetch', reportId,
         durationMs: Date.now() - startTime, cacheHit: true,
         rowCount: cached.data.length, statusCode: 200,
+        odataFilter: odataFilter ?? 'none',
       });
       res.json(cached);
       return;
     }
-
-    // WHY: Reuse report's $select and $orderby without duplicating them.
-    // Call buildQuery with dummy params to get the base config.
-    const baseParams = report.buildQuery({ page: body.page, pageSize: body.pageSize });
-    const odataFilter = buildODataFilter(body.filterGroup, report.filterColumns);
 
     let priorityData;
     try {
@@ -119,6 +121,7 @@ export function createQueryRouter(cache: CacheProvider): Router {
       level: 'info', event: 'query_fetch', reportId,
       durationMs: Date.now() - startTime, cacheHit: false,
       rowCount: rows.length, statusCode: 200,
+      odataFilter: odataFilter ?? 'none',
     });
 
     res.json(response);
