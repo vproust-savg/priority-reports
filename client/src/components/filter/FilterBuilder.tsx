@@ -11,6 +11,9 @@ import type { FilterCondition, FilterGroup, ColumnFilterMeta, FiltersResponse } 
 import { createEmptyCondition, createEmptyGroup, FILTER_LABEL_CLASS } from '../../config/filterConstants';
 import FilterConditionRow from './FilterConditionRow';
 import FilterGroupPanel from './FilterGroupPanel';
+import { DndContext, DragOverlay, useDroppable, closestCorners } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useFilterDrag } from '../../hooks/useFilterDrag';
 
 interface FilterBuilderProps {
   filterGroup: FilterGroup;
@@ -74,53 +77,81 @@ export default function FilterBuilder({
 
   const sharedRowProps = { columns, filterOptions, filterOptionsLoading };
 
+  const { activeId, sensors, handleDragStart, handleDragOver, handleDragEnd } =
+    useFilterDrag(filterGroup, onChange);
+  const { setNodeRef: setRootDroppable } = useDroppable({ id: filterGroup.id });
+  const activeCondition = activeId
+    ? [...filterGroup.conditions, ...filterGroup.groups.flatMap((g) => g.conditions)]
+        .find((c) => c.id === activeId)
+    : null;
+
   return (
-    <div className="bg-white border-b border-slate-200 px-5 py-4">
-      {/* Root conditions */}
-      {filterGroup.conditions.map((condition, idx) => (
-        <div key={condition.id}>
-          {idx === 0 ? (
-            <span className={`${FILTER_LABEL_CLASS} block mb-1`}>Where</span>
-          ) : (
-            <button
-              onClick={toggleConjunction}
-              className="text-xs font-medium px-2 py-0.5 rounded cursor-pointer select-none
-                text-slate-400 bg-slate-100 hover:bg-slate-200 transition-colors my-1 block"
-            >
-              {filterGroup.conjunction}
-            </button>
-          )}
-          <FilterConditionRow
-            condition={condition}
-            onChange={(updated) => updateCondition(condition.id, updated)}
-            onDelete={() => deleteCondition(condition.id)}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="bg-white border-b border-slate-200 px-5 py-4">
+        {/* Root conditions — sortable + droppable container */}
+        <div ref={setRootDroppable}>
+          <SortableContext items={filterGroup.conditions.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+            {filterGroup.conditions.map((condition, idx) => (
+              <div key={condition.id}>
+                {idx === 0 ? (
+                  <span className={`${FILTER_LABEL_CLASS} block mb-1`}>Where</span>
+                ) : (
+                  <button
+                    onClick={toggleConjunction}
+                    className="text-xs font-medium px-2 py-0.5 rounded cursor-pointer select-none
+                      text-slate-400 bg-slate-100 hover:bg-slate-200 transition-colors my-1 block"
+                  >
+                    {filterGroup.conjunction}
+                  </button>
+                )}
+                <FilterConditionRow
+                  condition={condition}
+                  onChange={(updated) => updateCondition(condition.id, updated)}
+                  onDelete={() => deleteCondition(condition.id)}
+                  {...sharedRowProps}
+                />
+              </div>
+            ))}
+          </SortableContext>
+        </div>
+
+        {/* Nested groups */}
+        {filterGroup.groups.map((group) => (
+          <FilterGroupPanel
+            key={group.id}
+            group={group}
+            onUpdate={(updated) => updateNestedGroup(group.id, updated)}
+            onDelete={() => deleteNestedGroup(group.id)}
             {...sharedRowProps}
           />
+        ))}
+
+        {/* Add buttons */}
+        <div className="flex gap-4 mt-3">
+          <button onClick={addCondition}
+            className="text-xs font-medium text-primary hover:text-primary/70 transition-colors">
+            + Add condition
+          </button>
+          <button onClick={addGroup}
+            className="text-xs font-medium text-primary hover:text-primary/70 transition-colors">
+            + Add group
+          </button>
         </div>
-      ))}
-
-      {/* Nested groups */}
-      {filterGroup.groups.map((group) => (
-        <FilterGroupPanel
-          key={group.id}
-          group={group}
-          onUpdate={(updated) => updateNestedGroup(group.id, updated)}
-          onDelete={() => deleteNestedGroup(group.id)}
-          {...sharedRowProps}
-        />
-      ))}
-
-      {/* Add buttons */}
-      <div className="flex gap-4 mt-3">
-        <button onClick={addCondition}
-          className="text-xs font-medium text-primary hover:text-primary/70 transition-colors">
-          + Add condition
-        </button>
-        <button onClick={addGroup}
-          className="text-xs font-medium text-primary hover:text-primary/70 transition-colors">
-          + Add group
-        </button>
       </div>
-    </div>
+
+      <DragOverlay>
+        {activeCondition ? (
+          <div className="bg-white shadow-lg rounded-lg px-3 py-2 text-sm text-slate-600 border border-slate-200">
+            {columns.find((c) => c.key === activeCondition.field)?.label ?? 'New condition'}
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
