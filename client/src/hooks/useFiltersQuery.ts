@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: client/src/hooks/useFiltersQuery.ts
-// PURPOSE: TanStack Query hook for fetching report filter options.
-//          Returns vendor and status lists for dropdown population.
-//          Cached for 5 minutes — filter options change infrequently.
+// PURPOSE: Fetches filter options and column metadata for a report.
+//          Response includes enum dropdown values (vendors, statuses,
+//          warehouses, users) and column filter configuration.
 // USED BY: ReportTableWidget
 // EXPORTS: useFiltersQuery
 // ═══════════════════════════════════════════════════════════════
@@ -18,7 +18,6 @@ export function useFiltersQuery(reportId: string) {
       if (!response.ok) throw new Error(`Filters fetch failed: ${response.status}`);
       return response.json();
     },
-    // WHY: 5 minutes — filter options (vendor list, status list) change infrequently
     staleTime: 5 * 60 * 1000,
   });
 }

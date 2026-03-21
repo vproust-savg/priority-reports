@@ -29,9 +29,9 @@ const PageConfigSchema = z.object({
 // instead of silently rendering nothing.
 export const pages = z.array(PageConfigSchema).parse([
   {
-    id: 'qc',
-    name: 'Quality Control',
-    path: '/qc',
+    id: 'receiving-log',
+    name: 'Receiving Log',
+    path: '/receiving-log',
     widgets: [
       {
         id: 'grv-log',
