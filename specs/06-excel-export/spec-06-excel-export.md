@@ -309,12 +309,7 @@ The hook returns toast state — it does NOT render any components. `ReportTable
 
 **File:** `client/src/components/TableToolbar.tsx` (modify)
 
-Add a third button after the Columns button:
-- Icon: `Download` from lucide-react (or `Loader2` with `animate-spin` class when exporting)
-- Label: "Export"
-- When `isExporting`: shows spinner icon, button is disabled
-- Styling: same `baseClass`/`inactiveClass` pattern as Filter and Columns buttons
-- No chevron (unlike Filter and Columns — this is an action button, not a toggle)
+Add a third button after the Columns button, visually separated because Export is an **action** (triggers download) while Filter/Columns are **toggles** (open/close panels).
 
 **New props:**
 ```typescript
@@ -324,6 +319,35 @@ interface TableToolbarProps {
   onExport: () => void;
 }
 ```
+
+**Layout change:** Add a `ml-auto` spacer so the Export button floats to the right side of the toolbar, visually separating it from the toggle buttons:
+```
+<div className="px-5 py-2 border-b border-slate-100 flex items-center gap-1">
+  {/* Filter button */}  ...
+  {/* Columns button */} ...
+
+  {/* Export button — pushed right */}
+  <button
+    onClick={onExport}
+    disabled={isExporting}
+    className={`ml-auto ${baseClass} ${inactiveClass}
+      disabled:opacity-50 disabled:cursor-not-allowed`}
+  >
+    {isExporting
+      ? <Loader2 size={16} className="animate-spin" />
+      : <Download size={16} />}
+    <span>{isExporting ? 'Exporting...' : 'Export'}</span>
+  </button>
+</div>
+```
+
+**Design details:**
+- Icon: `Download` from lucide-react (size 16, matching other toolbar icons)
+- Exporting state: `Loader2` (size 16) with `animate-spin` class, label changes to "Exporting..."
+- Disabled during export: `opacity-50 cursor-not-allowed` (matches the `disabled:` pattern in `Pagination.tsx`)
+- No chevron — this is an action, not a panel toggle
+- Always uses `inactiveClass` (`text-slate-500 hover:text-slate-700 hover:bg-slate-50`) — it has no "active" state
+- `ml-auto` pushes it right, creating clear visual separation from the toggle group
 
 ### 3.8 Frontend: Toast Component
 
@@ -340,13 +364,48 @@ interface ToastProps {
 }
 ```
 
+**Visual design** (follows existing Apple/Stripe aesthetic):
+```
+Container (fixed, bottom-right):
+  fixed bottom-4 right-4 z-50
+  bg-white
+  rounded-xl
+  shadow-[0_4px_12px_rgba(0,0,0,0.08)]
+  border border-slate-200/60
+  animate-toast-slide-up
+
+Inner layout:
+  flex items-center gap-3
+  px-4 py-3
+
+Icon (size 18, lucide-react):
+  Success: CheckCircle2, text-emerald-500
+  Error:   XCircle,      text-red-500
+
+Message text:
+  text-sm text-slate-700 font-medium
+
+Close button (X icon, size 14):
+  text-slate-400 hover:text-slate-600
+  transition-colors
+  p-0.5 ml-2
+```
+
+**Animation** — add a CSS keyframe in `index.css`:
+```css
+@keyframes toast-slide-up {
+  from { transform: translateY(8px); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
+}
+```
+Apply via Tailwind v4 utility: `animate-toast-slide-up` (define in `@theme` or use inline `style={{ animation: 'toast-slide-up 200ms ease-out' }}`).
+
 **Behavior:**
-- Renders at bottom-right of the viewport (fixed position)
-- Appears with a slide-up animation
-- Auto-dismisses after 3 seconds (calls `onDismiss`)
-- Two variants: `success` (green accent) and `error` (red accent)
-- Small, non-intrusive: matches the existing UI's subtle style
-- Shows a small close button (X icon) for manual dismiss
+- Auto-dismisses after 3 seconds via `useEffect` with `setTimeout(() => onDismiss(), 3000)`
+- Close button calls `onDismiss` for manual dismiss
+- Only one toast visible at a time (controlled by `useExport` hook state)
+
+**Design rationale:** The toast mirrors the existing widget card aesthetic (`bg-white`, `rounded-xl`, subtle shadow, `border-slate-200/60`). The `shadow-[0_4px_12px_rgba(0,0,0,0.08)]` is slightly stronger than the card default shadow (`0.04`) to make the toast stand out from the page. Colors use `emerald-500`/`red-500` for success/error — distinct from the primary blue (`#007AFF`) which is reserved for interactive elements.
 
 ### 3.9 Frontend: ReportTableWidget Update
 
