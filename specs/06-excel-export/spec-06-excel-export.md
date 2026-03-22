@@ -256,18 +256,19 @@ The logic is identical to `clientFilter.ts` — only evaluates conditions on `fi
      if allRawRows.length >= 5000 → break (hard cap)
      page++
    ```
-6. Run `report.enrichRows(allRawRows)` if defined (with existing 200ms inter-batch delay)
-7. Transform rows: `allRawRows.map(report.transformRow)`
-8. Apply server-side client filters: `applyServerClientFilters(transformedRows, body.filterGroup, report.filterColumns)`
-9. Get template via `getTemplate(reportId)`
-10. Generate Excel:
+6. **Hard cap check:** If `allRawRows.length >= 5000` AND the last page was full (`response.value.length === 1000`), there are more rows than the cap allows. Return `400 { error: "Export limited to 5,000 rows. Apply filters to reduce the dataset." }`. If the total is <= 5000 and the last page was partial, proceed normally (the data naturally fit within the cap).
+7. Run `report.enrichRows(allRawRows)` if defined (with existing 200ms inter-batch delay)
+8. Transform rows: `allRawRows.map(report.transformRow)`
+9. Apply server-side client filters: `applyServerClientFilters(transformedRows, body.filterGroup, report.filterColumns)`
+10. Get template via `getTemplate(reportId)`
+11. Generate Excel:
     - If template exists AND `report.exportConfig` defined → template mode
     - Otherwise → fallback mode
-11. Set response headers:
+12. Set response headers:
     - `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
     - `Content-Disposition: attachment; filename="GRV-Log-2026-03-22.xlsx"`
-12. Send the buffer: `res.send(buffer)`
-13. Log the export via `logApiCall({ level: 'info', event: 'export', reportId, durationMs, cacheHit: false, rowCount: transformedRows.length, statusCode: 200, odataFilter: odataFilter ?? 'none' })`
+13. Send the buffer: `res.send(buffer)`
+14. Log the export via `logApiCall({ level: 'info', event: 'export', reportId, durationMs, cacheHit: false, rowCount: transformedRows.length, statusCode: 200, odataFilter: odataFilter ?? 'none' })`
 
 **Filename format:** `{report.name}-{YYYY-MM-DD}.xlsx` where the date is today's date. Spaces in the report name are replaced with hyphens.
 
