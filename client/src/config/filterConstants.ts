@@ -10,6 +10,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import type { ColumnFilterType, FilterCondition, FilterGroup, FilterOperator } from '@shared/types';
+import { getMonday, getSunday, toISODate } from '../utils/weekUtils';
 
 // --- Shared CSS classes ---
 
@@ -104,11 +105,11 @@ export function createEmptyGroup(): FilterGroup {
   };
 }
 
+// WHY: Default to "Date is in week [current week]" — a single condition
+// instead of two date-range conditions. Matches the most common use case.
 export function createDefaultFilterGroup(): FilterGroup {
-  const today = new Date().toISOString().split('T')[0];
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const fromDate = thirtyDaysAgo.toISOString().split('T')[0];
+  const monday = getMonday(new Date());
+  const sunday = getSunday(monday);
 
   return {
     id: 'root',
@@ -117,14 +118,9 @@ export function createDefaultFilterGroup(): FilterGroup {
       {
         id: crypto.randomUUID(),
         field: 'date',
-        operator: 'isOnOrAfter',
-        value: fromDate,
-      },
-      {
-        id: crypto.randomUUID(),
-        field: 'date',
-        operator: 'isOnOrBefore',
-        value: today,
+        operator: 'isInWeek',
+        value: toISODate(monday),
+        valueTo: toISODate(sunday),
       },
     ],
     groups: [],
