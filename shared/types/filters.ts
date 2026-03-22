@@ -21,7 +21,7 @@ export type FilterOperator =
   // Text — client-side only (Priority OData does not support these)
   | 'contains' | 'notContains' | 'startsWith' | 'endsWith'
   // Date
-  | 'isBefore' | 'isAfter' | 'isOnOrBefore' | 'isOnOrAfter' | 'isBetween'
+  | 'isBefore' | 'isAfter' | 'isOnOrBefore' | 'isOnOrAfter' | 'isBetween' | 'isInWeek'
   // Number / Currency
   | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual' | 'between';
 
@@ -32,7 +32,7 @@ export interface FilterCondition {
   field: string;             // Column key (e.g., 'vendor', 'date', 'truckTemp')
   operator: FilterOperator;
   value: string;             // Primary value (ISO date, text, number as string)
-  valueTo?: string;          // Second value for 'between' / 'isBetween' operators
+  valueTo?: string;          // Second value for 'between' / 'isBetween' / 'isInWeek' operators
 }
 
 export interface FilterGroup {

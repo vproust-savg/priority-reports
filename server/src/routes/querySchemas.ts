@@ -15,7 +15,7 @@ const FilterConditionSchema = z.object({
   operator: z.enum([
     'equals', 'notEquals', 'isEmpty', 'isNotEmpty',
     'contains', 'notContains', 'startsWith', 'endsWith',
-    'isBefore', 'isAfter', 'isOnOrBefore', 'isOnOrAfter', 'isBetween',
+    'isBefore', 'isAfter', 'isOnOrBefore', 'isOnOrAfter', 'isBetween', 'isInWeek',
     'greaterThan', 'lessThan', 'greaterOrEqual', 'lessOrEqual', 'between',
   ]),
   value: z.string().default(''),
