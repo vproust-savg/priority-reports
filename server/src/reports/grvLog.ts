@@ -135,4 +135,22 @@ reportRegistry.set('grv-log', {
   buildQuery,
   transformRow,
   enrichRows,
+  // WHY: Maps GRV Log Excel template columns (A-M) to transformRow output fields.
+  // Columns B (Time) and F (Driver Name) are omitted — no data field exists.
+  exportConfig: {
+    mapping: {
+      'A': 'date',
+      'C': 'docNo',
+      'D': 'vendor',
+      'E': 'driverId',
+      'G': 'licensePlate',
+      'H': 'truckTemp',
+      'I': 'productTemp',
+      'J': 'productCondition',
+      'K': 'truckCondition',
+      'L': 'receivedBy',
+      'M': 'comments',
+    },
+    dataStartRow: 5,
+  },
 });
