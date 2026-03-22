@@ -43,6 +43,7 @@ export const OPERATORS_BY_TYPE: Record<ColumnFilterType, { value: FilterOperator
     { value: 'isOnOrBefore', label: 'is on or before' },
     { value: 'isOnOrAfter', label: 'is on or after' },
     { value: 'isBetween', label: 'is between' },
+    { value: 'isInWeek', label: 'is in week' },
     { value: 'isEmpty', label: 'is empty' },
     { value: 'isNotEmpty', label: 'is not empty' },
   ],
