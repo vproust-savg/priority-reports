@@ -72,4 +72,28 @@ describe('parseGrvRemarks', () => {
     expect(result.truckCondition).toBe('Test line 6');
     expect(result.comments).toBe('Test line 7');
   });
+
+  it('returns all nulls for whitespace-only string', () => {
+    const result = parseGrvRemarks('   \n  ');
+    expect(result.driverId).toBeNull();
+    expect(result.comments).toBeNull();
+  });
+
+  it('handles <br> tags with data attributes', () => {
+    // WHY: Priority's <br> tags often have data-* attributes
+    const html = 'Driver ID : DRV-1<br data-abc="true">Licence Plate : XYZ-999';
+    const result = parseGrvRemarks(html);
+    expect(result.driverId).toBe('DRV-1');
+    expect(result.licensePlate).toBe('XYZ-999');
+  });
+
+  it('ignores lines without colons', () => {
+    const html = '<p>No colon here</p><p>Driver ID : DRV-99</p>';
+    expect(parseGrvRemarks(html).driverId).toBe('DRV-99');
+  });
+
+  it('handles colons in values (e.g., time format)', () => {
+    const html = '<p>Comments : Arrived at 10:30 AM</p>';
+    expect(parseGrvRemarks(html).comments).toBe('Arrived at 10:30 AM');
+  });
 });
