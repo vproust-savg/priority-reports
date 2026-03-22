@@ -78,6 +78,7 @@ function buildQuery(filters: ReportFilters): ODataParams {
 // each document's remarks ONCE, then reuse across all filter combinations.
 // Cleared on server restart. Prevents re-enrichment when filters change.
 const subformCache = new Map<string, Record<string, unknown> | null>();
+const SUBFORM_CACHE_MAX = 5000;
 
 // WHY: Priority's $expand truncates responses on DOCUMENTS_P (CloudFront
 // drops connection mid-body). Two-step fetch: get rows, then fetch each
@@ -117,6 +118,18 @@ async function enrichRows(rows: Record<string, unknown>[]): Promise<Record<strin
         const cacheKey = `${uncached[j].DOCNO}:${uncached[j].TYPE}`;
         subformCache.set(cacheKey, results[j]);
         uncached[j].DOCUMENTSTEXT_SUBFORM = results[j];
+      }
+
+      // WHY: FIFO eviction using Map insertion order. Delete oldest 20%
+      // to avoid evicting on every single insert after reaching the cap.
+      if (subformCache.size > SUBFORM_CACHE_MAX) {
+        const deleteCount = Math.floor(SUBFORM_CACHE_MAX * 0.2);
+        let count = 0;
+        for (const key of subformCache.keys()) {
+          if (count >= deleteCount) break;
+          subformCache.delete(key);
+          count++;
+        }
       }
     }
   }

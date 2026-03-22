@@ -145,7 +145,7 @@ function stripDateConditions(
 ): FilterGroup {
   const nonDateConditions = group.conditions.filter((c) => {
     if (!c.field) return false;
-    const col = columns.find((col) => col.key === c.field);
+    const col = columns.find((fc) => fc.key === c.field);
     return col?.filterType !== 'date';
   });
 

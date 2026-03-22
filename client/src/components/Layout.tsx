@@ -21,9 +21,11 @@ export default function Layout() {
             <h1 className="text-[28px] font-bold tracking-tight text-slate-900">
               Dashboard
             </h1>
-            <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
-              DEV
-            </span>
+            {import.meta.env.DEV && (
+              <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
+                DEV
+              </span>
+            )}
           </div>
 
           {/* Navigation tabs — auto-generated from pages config */}
