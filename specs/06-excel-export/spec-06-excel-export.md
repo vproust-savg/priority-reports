@@ -4,9 +4,9 @@
 
 **Goal:** Allow users to export all filtered report data as an Excel file, using per-report templates from Airtable when available, with a basic Excel fallback for reports without templates.
 
-**Architecture:** Backend-generated export. New POST endpoint receives the current filter state, fetches ALL matching rows from Priority (no pagination cap), applies both server-side and client-side filters, fills an Excel template (fetched from Airtable and cached), and streams the `.xlsx` file back. Frontend adds an Export button to the toolbar and handles the file download.
+**Architecture:** Backend-generated export. New POST endpoint receives the current filter state, fetches ALL matching rows from Priority (up to a 5,000-row hard cap), applies both server-side and client-side filters, fills an Excel template (fetched from Airtable and cached), and streams the `.xlsx` file back. Frontend adds an Export button to the toolbar and handles the file download with a 2-minute timeout.
 
-**Tech Stack:** ExcelJS (backend Excel generation), Express streaming response, Airtable REST API (template fetch), React + TanStack Query (frontend)
+**Tech Stack:** ExcelJS (backend Excel generation), Express streaming response, Airtable REST API (template fetch), React (frontend)
 
 **Date:** 2026-03-22
 **Status:** Ready for implementation planning
@@ -44,7 +44,7 @@
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `server/src/config/reportRegistry.ts` | Modify | Add optional `exportConfig` to `ReportConfig` interface |
+| `server/src/config/reportRegistry.ts` | Modify | Add `ExportConfig` interface and optional `exportConfig` to `ReportConfig` |
 | `server/src/reports/grvLog.ts` | Modify | Add `exportConfig` with column mapping for GRV Log template |
 | `server/src/services/templateService.ts` | Create | Fetch Excel templates from Airtable, in-memory cache with 24h TTL |
 | `server/src/services/excelExporter.ts` | Create | Fill template with data rows using ExcelJS, or generate fallback Excel |
@@ -57,10 +57,10 @@
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `client/src/hooks/useExport.ts` | Create | Export state management: trigger, loading, error, file download |
+| `client/src/hooks/useExport.ts` | Create | Export state management: trigger, loading, error, file download, toast state |
 | `client/src/components/TableToolbar.tsx` | Modify | Add Export button with download icon |
 | `client/src/components/Toast.tsx` | Create | Minimal toast notification component |
-| `client/src/components/widgets/ReportTableWidget.tsx` | Modify | Wire up `useExport` hook, pass props to TableToolbar |
+| `client/src/components/widgets/ReportTableWidget.tsx` | Modify | Wire up `useExport` hook, pass props to TableToolbar, render Toast |
 
 ### No Changes Needed
 
@@ -75,7 +75,7 @@
 
 ### 3.1 Report Export Config
 
-Extend `ReportConfig` in `reportRegistry.ts` with an optional `exportConfig`:
+Define `ExportConfig` in `server/src/config/reportRegistry.ts`, alongside the existing `ReportConfig` interface:
 
 ```typescript
 export interface ExportConfig {
@@ -140,22 +140,26 @@ Fetches Excel templates from the Airtable API Reports table and caches them.
 function getTemplate(reportId: string): Promise<Buffer | null>
 ```
 
+**Airtable API details:**
+- **Base URL:** `https://api.airtable.com/v0/`
+- **Auth header:** `Authorization: Bearer ${process.env.AIRTABLE_TOKEN}`
+- **Base ID:** `appjwOgR4HsXeGIda`
+- **Table ID:** `tblvqv3S31KQhKRU6`
+- **Template field ID:** `fldTbiJ7t4Ldd3cH9`
+- **Report ID field ID:** `fldrsiqwORzxJ6Ouq`
+
 **Flow:**
 1. Check in-memory cache (`Map<string, { buffer: Buffer; fetchedAt: number }>`)
 2. If cached and within 24h TTL → return cached buffer
 3. If miss or expired:
-   a. Call Airtable REST API: `GET /v0/{baseId}/{tableId}` filtered by Report ID
-   b. Extract Template attachment URL from the record
-   c. Download the `.xlsx` file from the attachment URL
-   d. Cache the buffer with current timestamp
-   e. Return the buffer
-4. If no Template attachment exists → return `null` (triggers fallback mode)
-
-**Airtable identifiers:**
-- Base: `appjwOgR4HsXeGIda`
-- Table: `tblvqv3S31KQhKRU6`
-- Template field: `fldTbiJ7t4Ldd3cH9`
-- Report ID field: `fldrsiqwORzxJ6Ouq`
+   a. Call Airtable REST API to list records, filtered by Report ID:
+      `GET /v0/appjwOgR4HsXeGIda/tblvqv3S31KQhKRU6?filterByFormula={fldrsiqwORzxJ6Ouq}=...`
+   b. The Template field (`fldTbiJ7t4Ldd3cH9`) is a `multipleAttachments` type — it returns an **array** of attachment objects: `[{ url, filename, size, type }]`
+   c. Pick the **first** attachment from the array (there should be exactly one template per report)
+   d. Download the `.xlsx` file from the attachment's `url` field using a plain HTTP GET
+   e. **Cache the downloaded file Buffer, NOT the Airtable attachment URL** (Airtable attachment URLs are temporary and expire after a few hours)
+   f. Return the buffer
+4. If no Template attachment exists (field is empty/missing) → return `null` (triggers fallback mode)
 
 **Error handling:** If Airtable or the download fails, log the error and return `null` (triggers fallback mode rather than failing the entire export).
 
@@ -163,18 +167,18 @@ function getTemplate(reportId: string): Promise<Buffer | null>
 
 **File:** `server/src/services/excelExporter.ts` (~120 lines)
 
-Two modes: template-based and fallback.
+Two modes: template-based and fallback. Expected output file size: ~50-100KB for 500 rows with 13 columns. Buffering the entire response is fine at these sizes.
 
 #### Template Mode
 
 Uses ExcelJS to load the template and fill in data:
 
-1. Load template Buffer into an ExcelJS `Workbook`
-2. Get target worksheet by `sheetIndex` (default: first sheet)
+1. Load template Buffer into an ExcelJS `Workbook` via `workbook.xlsx.load(buffer)`
+2. Get target worksheet by `sheetIndex` (default: first sheet, index 0)
 3. Identify the empty data region: rows from `dataStartRow` to just before the footer
 4. If data rows exceed the template's empty rows: use `worksheet.spliceRows()` to insert additional rows, shifting the footer (instructions, verification) down
 5. If data rows are fewer: leave extra template rows empty (or remove them)
-6. Fill each data row: iterate over `exportConfig.mapping`, write values to the corresponding column cells
+6. Fill each data row: iterate over `exportConfig.mapping`, for each entry convert the column letter to a column number (e.g., 'A' → 1, 'M' → 13) and write the value to `worksheet.getRow(rowNum).getCell(colNum)`
 7. Return the workbook buffer via `workbook.xlsx.writeBuffer()`
 
 **Date formatting:** Date fields should be written as Excel date values (not ISO strings) so they display correctly in the template's date format.
@@ -207,6 +211,8 @@ function applyServerClientFilters(
 ): Record<string, unknown>[]
 ```
 
+**`filterColumns` comes from:** `report.filterColumns` on the `ReportConfig`. This is the same source the query endpoint uses when calling `buildODataFilter()`.
+
 **Operators replicated:** `equals`, `notEquals`, `contains`, `notContains`, `startsWith`, `endsWith`, `isEmpty`, `isNotEmpty`, `greaterThan`, `lessThan`, `greaterOrEqual`, `lessOrEqual`, `between`, `isBefore`, `isAfter`, `isOnOrBefore`, `isOnOrAfter`, `isBetween`.
 
 The logic is identical to `clientFilter.ts` — only evaluates conditions on `filterLocation: 'client'` columns and client-only operators. The backend has already applied server-side filters via OData.
@@ -214,6 +220,8 @@ The logic is identical to `clientFilter.ts` — only evaluates conditions on `fi
 ### 3.5 Export Endpoint
 
 **File:** `server/src/routes/export.ts` (~90 lines)
+
+**Router factory:** `createExportRouter()` — takes **no arguments** (unlike `createQueryRouter(cache)`, because exports are always fresh, never cached).
 
 **Route:** `POST /api/v1/reports/:reportId/export`
 
@@ -224,15 +232,33 @@ The logic is identical to `clientFilter.ts` — only evaluates conditions on `fi
 }
 ```
 
+**Hard cap:** Maximum 5,000 rows per export. If the total fetched exceeds this, return `400 { error: "Export limited to 5,000 rows. Apply filters to reduce the dataset." }`.
+
 **Flow:**
 1. Validate request body with `ExportRequestSchema`
 2. Look up report in registry → 404 if not found
-3. Build OData filter from `filterGroup` (reuses `buildODataFilter`)
-4. Build base query params via `report.buildQuery()` — but override `$top` to a high limit (e.g., 10000) and `$skip` to 0
-5. Fetch ALL rows from Priority (loop with pagination if needed — fetch pages of 1000 until all rows are retrieved)
-6. Run `report.enrichRows()` if defined (with existing batch delay)
-7. Transform rows via `report.transformRow()`
-8. Apply server-side client filters via `applyServerClientFilters()`
+3. Call `report.buildQuery({ page: 1, pageSize: 1000 })` — this is ONLY used to extract `$select` and `$orderby` from the returned `ODataParams`. The `$top`, `$skip`, and `$filter` from `buildQuery` are ignored.
+4. Call `buildODataFilter(body.filterGroup, report.filterColumns)` to get the OData `$filter` string
+5. **Paginated fetch loop** — fetch ALL matching rows from Priority:
+   ```
+   allRawRows = []
+   page = 0
+   loop:
+     response = queryPriority(entity, {
+       $select: baseParams.$select,
+       $orderby: baseParams.$orderby,
+       $filter: odataFilter,          // from step 4
+       $top: 1000,
+       $skip: page * 1000,
+     })
+     allRawRows.push(...response.value)
+     if response.value.length < 1000 → break (last page)
+     if allRawRows.length >= 5000 → break (hard cap)
+     page++
+   ```
+6. Run `report.enrichRows(allRawRows)` if defined (with existing 200ms inter-batch delay)
+7. Transform rows: `allRawRows.map(report.transformRow)`
+8. Apply server-side client filters: `applyServerClientFilters(transformedRows, body.filterGroup, report.filterColumns)`
 9. Get template via `getTemplate(reportId)`
 10. Generate Excel:
     - If template exists AND `report.exportConfig` defined → template mode
@@ -240,38 +266,41 @@ The logic is identical to `clientFilter.ts` — only evaluates conditions on `fi
 11. Set response headers:
     - `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
     - `Content-Disposition: attachment; filename="GRV-Log-2026-03-22.xlsx"`
-12. Stream the buffer as the response body
-13. Log the export event via `logApiCall` with event: `'export'`
+12. Send the buffer: `res.send(buffer)`
+13. Log the export via `logApiCall({ level: 'info', event: 'export', reportId, durationMs, cacheHit: false, rowCount: transformedRows.length, statusCode: 200, odataFilter: odataFilter ?? 'none' })`
 
 **Filename format:** `{report.name}-{YYYY-MM-DD}.xlsx` where the date is today's date. Spaces in the report name are replaced with hyphens.
 
-**Rate limit safety:** The export fetches all rows, which could be many pages. The existing `enrichRows` batching with 200ms inter-batch delay applies. For the initial Priority fetch, use pages of 1000 rows to minimize API calls.
-
-**Timeout:** Large exports with enrichment (e.g., 500 rows × sub-form fetch) could take 20-30 seconds. The endpoint should not have a short timeout. Express default is fine (no explicit timeout needed).
+**Timing expectations:** For the GRV Log with 500 rows, the `enrichRows` step calls `querySubform` per row in batches of 10 with 200ms delay between batches. That's 50 batches * ~1-2 seconds per batch (API call time + delay) = **50-100 seconds**. The frontend must have a long timeout. For reports without `enrichRows`, the export takes only a few seconds.
 
 ### 3.6 Frontend: useExport Hook
 
-**File:** `client/src/hooks/useExport.ts` (~50 lines)
+**File:** `client/src/hooks/useExport.ts` (~60 lines)
 
 ```typescript
 interface UseExportReturn {
   isExporting: boolean;
+  toast: { message: string; variant: 'success' | 'error' } | null;
+  clearToast: () => void;
   triggerExport: () => Promise<void>;
 }
 
 function useExport(reportId: string, filterGroup: FilterGroup): UseExportReturn
 ```
 
+The hook returns toast state — it does NOT render any components. `ReportTableWidget` renders the `<Toast>` component using the returned `toast` state.
+
 **Flow:**
 1. `triggerExport()` sets `isExporting = true`
-2. Sends POST to `/api/v1/reports/${reportId}/export` with `{ filterGroup }` as JSON
-3. Response type: `blob`
-4. Extracts filename from `Content-Disposition` header (fallback: `export.xlsx`)
-5. Creates an invisible `<a>` element, sets `href = URL.createObjectURL(blob)`, sets `download = filename`, triggers click
-6. Revokes the object URL after download
-7. Shows success toast: "Export complete"
-8. On error: shows error toast: "Export failed — please try again"
-9. Sets `isExporting = false`
+2. Creates an `AbortController` with a **2-minute timeout** (`setTimeout(() => controller.abort(), 120_000)`)
+3. Sends POST to `/api/v1/reports/${reportId}/export` with `{ filterGroup }` as JSON body, `signal: controller.signal`
+4. Response type: `blob` (use `response.blob()`)
+5. Extracts filename from `Content-Disposition` header (parse `filename="..."` value; fallback: `export.xlsx`)
+6. Creates an invisible `<a>` element, sets `href = URL.createObjectURL(blob)`, sets `download = filename`, appends to body, triggers `.click()`, removes element
+7. Revokes the object URL via `URL.revokeObjectURL(href)`
+8. Sets toast: `{ message: 'Export complete', variant: 'success' }`
+9. On error: sets toast: `{ message: 'Export failed — please try again', variant: 'error' }`
+10. Clears the timeout, sets `isExporting = false` in `finally` block
 
 **No TanStack Query:** This is a one-shot action, not a cached query. Plain `fetch` + `useState` is appropriate.
 
@@ -280,11 +309,11 @@ function useExport(reportId: string, filterGroup: FilterGroup): UseExportReturn
 **File:** `client/src/components/TableToolbar.tsx` (modify)
 
 Add a third button after the Columns button:
-- Icon: `Download` from lucide-react
+- Icon: `Download` from lucide-react (or `Loader2` with `animate-spin` class when exporting)
 - Label: "Export"
-- When `isExporting`: shows a spinner icon (replace Download icon with `Loader2` + `animate-spin`)
-- Disabled during export
+- When `isExporting`: shows spinner icon, button is disabled
 - Styling: same `baseClass`/`inactiveClass` pattern as Filter and Columns buttons
+- No chevron (unlike Filter and Columns — this is an action button, not a toggle)
 
 **New props:**
 ```typescript
@@ -301,22 +330,32 @@ interface TableToolbarProps {
 
 Minimal toast notification for export feedback. Not a full toast system — just enough for this feature.
 
-**Approach:** A simple component rendered at the bottom-right of the viewport:
-- Appears with a slide-up animation
-- Auto-dismisses after 3 seconds
-- Two variants: `success` (green) and `error` (red)
-- Small, non-intrusive: matches the existing UI's subtle style
+**Props:**
+```typescript
+interface ToastProps {
+  message: string;
+  variant: 'success' | 'error';
+  onDismiss: () => void;
+}
+```
 
-**State management:** The `useExport` hook manages toast state internally and renders the Toast component. No global toast provider needed — YAGNI.
+**Behavior:**
+- Renders at bottom-right of the viewport (fixed position)
+- Appears with a slide-up animation
+- Auto-dismisses after 3 seconds (calls `onDismiss`)
+- Two variants: `success` (green accent) and `error` (red accent)
+- Small, non-intrusive: matches the existing UI's subtle style
+- Shows a small close button (X icon) for manual dismiss
 
 ### 3.9 Frontend: ReportTableWidget Update
 
 **File:** `client/src/components/widgets/ReportTableWidget.tsx` (modify)
 
 Wire up the export hook:
-1. Import and call `useExport(reportId, debouncedGroup)`
-2. Pass `isExporting` and `triggerExport` to `TableToolbar` as `isExporting` and `onExport`
-3. Render the Toast component (from `useExport` state)
+1. Import `useExport` and `Toast`
+2. Call `const { isExporting, toast, clearToast, triggerExport } = useExport(reportId, debouncedGroup)`
+3. Pass `isExporting` and `triggerExport` to `TableToolbar` as `isExporting` and `onExport`
+4. Render `{toast && <Toast message={toast.message} variant={toast.variant} onDismiss={clearToast} />}` at the bottom of the component's JSX
 
 ---
 
@@ -324,41 +363,46 @@ Wire up the export hook:
 
 ```
 User clicks "Export"
-       │
-       ▼
+       |
+       v
   useExport.triggerExport()
-       │
-       ▼
+       |
+       v
   POST /api/v1/reports/:reportId/export
   Body: { filterGroup }
-       │
-       ▼
-  ┌──────────────────────────────┐
-  │  export.ts endpoint          │
-  │                              │
-  │  1. Validate request         │
-  │  2. buildODataFilter()       │
-  │  3. Fetch ALL rows from      │
-  │     Priority (paginated)     │
-  │  4. enrichRows() if needed   │
-  │  5. transformRow() each      │
-  │  6. applyServerClientFilters │
-  │  7. getTemplate() from cache │
-  │     or Airtable              │
-  │  8. Generate Excel:          │
-  │     - Template mode OR       │
-  │     - Fallback mode          │
-  │  9. Stream .xlsx response    │
-  └──────────────────────────────┘
-       │
-       ▼
+  (AbortController: 2-minute timeout)
+       |
+       v
+  +------------------------------+
+  |  export.ts endpoint          |
+  |                              |
+  |  1. Validate request         |
+  |  2. buildODataFilter()       |
+  |  3. Paginated Priority fetch |
+  |     ($top=1000, loop until   |
+  |     page < 1000 or cap hit)  |
+  |  4. enrichRows() if needed   |
+  |     (50-100s for 500 rows)   |
+  |  5. transformRow() each      |
+  |  6. applyServerClientFilters |
+  |     (using report.           |
+  |      filterColumns)          |
+  |  7. getTemplate() from cache |
+  |     or Airtable REST API     |
+  |  8. Generate Excel:          |
+  |     - Template mode OR       |
+  |     - Fallback mode          |
+  |  9. Send .xlsx buffer        |
+  +------------------------------+
+       |
+       v
   Frontend receives blob
-       │
-       ▼
+       |
+       v
   Create <a> + trigger download
-       │
-       ▼
-  Show success toast
+       |
+       v
+  Show success toast (auto-dismiss 3s)
 ```
 
 ---
@@ -369,11 +413,13 @@ User clicks "Export"
 |----------|-----------------|------------------|
 | Report not found | 404 response | Error toast |
 | Priority API fails | 502 response with error message | Error toast |
+| Row cap exceeded (>5000) | 400 response: "Export limited to 5,000 rows" | Error toast |
 | Airtable template fetch fails | Falls back to basic Excel (no template) | Normal download (fallback file) |
 | ExcelJS template filling fails | Falls back to basic Excel, logs error | Normal download (fallback file) |
 | Zero rows match filters | Returns Excel with headers only (no data rows) | Normal download (empty file) |
 | Request body validation fails | 400 response | Error toast |
-| Network error during download | — | Error toast |
+| Network error during download | -- | Error toast |
+| Frontend timeout (2 min) | -- (request aborted) | Error toast |
 
 **Graceful degradation:** Template failures never block the export. If the template can't be fetched or filled, the export falls back to a basic Excel file with headers and data.
 
@@ -409,9 +455,10 @@ cd client && npx tsc --noEmit     # TypeScript compiles
 ```
 
 ### Manual Testing
-1. **Template export:** Apply filters to GRV Log → click Export → verify downloaded file matches template format with data filled in
-2. **Fallback export:** Test with a report that has no template → verify basic Excel with headers and data
-3. **Empty export:** Apply filters that return no rows → verify Excel file has headers but no data rows
-4. **Large export:** Export with minimal filters (hundreds of rows) → verify all rows appear, footer is pushed down correctly
-5. **Client-side filters:** Apply a client-side filter (e.g., Driver ID contains "X") → verify exported data matches what's shown in the dashboard
-6. **Loading state:** Click Export and observe button spinner → verify it disables during export and shows success toast on completion
+1. **Template export:** Apply filters to GRV Log -> click Export -> verify downloaded file matches template format with data filled in
+2. **Fallback export:** Test with a report that has no template -> verify basic Excel with headers and data
+3. **Empty export:** Apply filters that return no rows -> verify Excel file has headers but no data rows
+4. **Large export:** Export with minimal filters (hundreds of rows) -> verify all rows appear, footer is pushed down correctly
+5. **Client-side filters:** Apply a client-side filter (e.g., Driver ID contains "X") -> verify exported data matches what's shown in the dashboard
+6. **Loading state:** Click Export and observe button spinner -> verify it disables during export and shows success toast on completion
+7. **Row cap:** Test with unfiltered data that exceeds 5,000 rows -> verify error toast appears with cap message
