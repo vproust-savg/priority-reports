@@ -33,7 +33,7 @@
 - **Dropdown panel:** Opens/closes independently of the filter panel. Both can be open simultaneously.
 - **Search bar:** "Find a column..." — case-insensitive substring match. Filters the list visually.
 - **Toggle switches:** Blue = visible, gray = hidden. Click to toggle.
-- **First column locked:** The first column (index 0 in the API response) is always visible. Its toggle is disabled with `cursor-not-allowed` and reduced opacity.
+- **First column locked:** The first column (index 0 in the API response) is always visible AND always stays at index 0. Its toggle is disabled with `cursor-not-allowed` and reduced opacity. It cannot be dragged (drag is disabled for locked columns).
 - **Drag handles:** 6-dot grip (`GripVertical` from lucide-react) on the right side of each row, visible on hover. Reorders columns in the panel AND in the table.
 - **Drag disabled during search:** When search is active, drag handles are hidden and drag is disabled. Toggle still works.
 - **Bulk actions:** "Hide all" (hides everything except first column) and "Show all" buttons at the bottom.
@@ -137,8 +137,8 @@ export function useColumnManager(apiColumns: ColumnDefinition[] | undefined) {
     if (!apiColumns) return [];
     return managedColumns
       .filter((mc) => mc.visible)
-      .map((mc) => apiColumns.find((c) => c.key === mc.key)!)
-      .filter(Boolean);
+      .map((mc) => apiColumns.find((c) => c.key === mc.key))
+      .filter((col): col is ColumnDefinition => col !== undefined);
   }, [managedColumns, apiColumns]);
 
   const hiddenCount = managedColumns.filter((mc) => !mc.visible).length;
@@ -226,7 +226,8 @@ export default function ColumnRow({
 }: ColumnRowProps) {
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
-  } = useSortable({ id: column.key, disabled: isDragDisabled });
+  // WHY: Disable drag for locked first column AND during search
+  } = useSortable({ id: column.key, disabled: isDragDisabled || isLocked });
 
   const style = {
     transform: CSS.Translate.toString(transform),
@@ -368,6 +369,9 @@ export default function ColumnManagerPanel({
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
+  // WHY: closestCenter (not closestCorners) because this is a single-container
+  // vertical list. closestCorners is for multi-container setups like FilterBuilder.
+
   const isSearching = searchTerm.length > 0;
   const firstColumnKey = managedColumns[0]?.key;
 
@@ -415,6 +419,7 @@ export default function ColumnManagerPanel({
         collisionDetection={closestCenter}
         onDragStart={(e) => setActiveId(e.active.id as string)}
         onDragEnd={handleDragEnd}
+        onDragCancel={() => setActiveId(null)}
       >
         <SortableContext
           items={filteredColumns.map((c) => c.key)}
@@ -476,11 +481,11 @@ feat: add ColumnManagerPanel with search, toggles, and drag reorder
 
 ---
 
-### Task 5: Rename FilterToolbar → TableToolbar and add Columns button
+### Task 5: Rename FilterToolbar → TableToolbar, add Columns button, update ReportTableWidget import + JSX
 
 **Files:**
 - Rename + Modify: `client/src/components/FilterToolbar.tsx` → `client/src/components/TableToolbar.tsx`
-- Modify: `client/src/components/widgets/ReportTableWidget.tsx` (update import)
+- Modify: `client/src/components/widgets/ReportTableWidget.tsx` (update import + JSX to match new props)
 
 - [ ] **Step 1: Rename the file**
 
@@ -557,23 +562,44 @@ export default function TableToolbar({
 }
 ```
 
-- [ ] **Step 3: Update the import in ReportTableWidget.tsx**
+- [ ] **Step 3: Update ReportTableWidget import and JSX**
 
-Change line:
+WHY: The import rename AND JSX update happen together in this task so the codebase compiles after every commit. No intermediate broken state.
+
+Change the import:
 ```typescript
+// Before:
 import FilterToolbar from '../FilterToolbar';
-```
-To:
-```typescript
+// After:
 import TableToolbar from '../TableToolbar';
 ```
 
-Do NOT change the JSX yet — that happens in Task 6.
+Replace the JSX usage. Change:
+```typescript
+<FilterToolbar
+  activeFilterCount={countActiveFilters(filterGroup)}
+  isOpen={isFilterOpen}
+  onToggle={() => setIsFilterOpen(!isFilterOpen)}
+/>
+```
+To:
+```typescript
+<TableToolbar
+  activeFilterCount={countActiveFilters(filterGroup)}
+  isFilterOpen={isFilterOpen}
+  onFilterToggle={() => setIsFilterOpen(!isFilterOpen)}
+  hiddenColumnCount={0}
+  isColumnPanelOpen={false}
+  onColumnToggle={() => {}}
+/>
+```
+
+WHY: `hiddenColumnCount={0}` and `onColumnToggle={() => {}}` are temporary pass-throughs so the component compiles. Task 6 wires these to the real column manager state.
 
 - [ ] **Step 4: Verify TypeScript compiles**
 
 Run: `cd client && npx tsc --noEmit`
-Expected: Errors about mismatched props in ReportTableWidget (will fix in Task 6). Verify no OTHER errors.
+Expected: No errors
 
 - [ ] **Step 5: Commit**
 
@@ -583,7 +609,7 @@ refactor: rename FilterToolbar to TableToolbar, add Columns button
 
 ---
 
-### Task 6: Wire everything up in ReportTableWidget
+### Task 6: Wire column manager into ReportTableWidget
 
 **Files:**
 - Modify: `client/src/components/widgets/ReportTableWidget.tsx`
@@ -609,19 +635,19 @@ const {
 } = useColumnManager(data?.columns);
 ```
 
-- [ ] **Step 3: Update TableToolbar JSX**
+- [ ] **Step 3: Update TableToolbar props to use real column manager state**
 
-Replace the existing `<FilterToolbar ... />` with:
-
+Replace the temporary pass-throughs from Task 5:
 ```typescript
-<TableToolbar
-  activeFilterCount={countActiveFilters(filterGroup)}
-  isFilterOpen={isFilterOpen}
-  onFilterToggle={() => setIsFilterOpen(!isFilterOpen)}
-  hiddenColumnCount={hiddenCount}
-  isColumnPanelOpen={isColumnPanelOpen}
-  onColumnToggle={() => setIsColumnPanelOpen(!isColumnPanelOpen)}
-/>
+hiddenColumnCount={0}
+isColumnPanelOpen={false}
+onColumnToggle={() => {}}
+```
+With:
+```typescript
+hiddenColumnCount={hiddenCount}
+isColumnPanelOpen={isColumnPanelOpen}
+onColumnToggle={() => setIsColumnPanelOpen(!isColumnPanelOpen)}
 ```
 
 - [ ] **Step 4: Add ColumnManagerPanel below FilterBuilder**
