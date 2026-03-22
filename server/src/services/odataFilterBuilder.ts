@@ -63,6 +63,9 @@ function buildCondition(
     case 'isInWeek': // WHY: Falls through — isInWeek stores Monday/Sunday, same range as isBetween
     case 'isBetween': {
       if (!DATE_REGEX.test(c.value) || !c.valueTo || !DATE_REGEX.test(c.valueTo)) return undefined;
+      // WHY: Inverted range (start > end) returns 0 rows from Priority and wastes
+      // an API call. Skip the condition instead of generating a useless query.
+      if (c.value > c.valueTo) return undefined;
       return `${f} ge ${c.value}T00:00:00Z and ${f} le ${c.valueTo}T23:59:59Z`;
     }
     case 'greaterThan': case 'lessThan': case 'greaterOrEqual': case 'lessOrEqual': {
@@ -76,7 +79,7 @@ function buildCondition(
     case 'between': {
       const lo = parseFloat(c.value);
       const hi = c.valueTo ? parseFloat(c.valueTo) : NaN;
-      if (isNaN(lo) || isNaN(hi)) return undefined;
+      if (isNaN(lo) || isNaN(hi) || lo > hi) return undefined;
       return `${f} ge ${lo} and ${f} le ${hi}`;
     }
     default: return undefined;
