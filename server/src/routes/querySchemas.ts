@@ -2,8 +2,8 @@
 // FILE: server/src/routes/querySchemas.ts
 // PURPOSE: Zod validation schemas for the POST /query endpoint.
 //          Extracted from query.ts to keep files under 150 lines.
-// USED BY: routes/query.ts
-// EXPORTS: QueryRequestSchema
+// USED BY: routes/query.ts, routes/exportSchemas.ts
+// EXPORTS: QueryRequestSchema, FilterGroupSchema
 // ═══════════════════════════════════════════════════════════════
 
 import { z } from 'zod';
@@ -25,7 +25,7 @@ const FilterConditionSchema = z.object({
 // WHY: z.lazy for recursive type — FilterGroup contains FilterGroup[]
 // WHY: .max() limits prevent abuse — UI allows 1 nesting level, but we
 // cap at 10 groups / 50 conditions for defense-in-depth.
-const FilterGroupSchema: z.ZodType<FilterGroup> = z.lazy(() =>
+export const FilterGroupSchema: z.ZodType<FilterGroup> = z.lazy(() =>
   z.object({
     id: z.string(),
     conjunction: z.enum(['and', 'or']),
