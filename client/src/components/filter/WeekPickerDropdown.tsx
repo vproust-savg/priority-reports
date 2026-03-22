@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import {
-  getMonday, getSunday, toISODate, getCalendarWeeks,
+  getMonday, toISODate, getCalendarWeeks,
 } from '../../utils/weekUtils';
 
 interface WeekPickerDropdownProps {
