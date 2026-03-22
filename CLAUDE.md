@@ -16,8 +16,7 @@ Backend and frontend are built in **separate Claude Code sessions** that share `
 
 **Parallel session rules:** Backend session only writes to `server/`. Frontend session only writes to `client/`. Shared types in `shared/types/` must be created before either session starts. Neither session should modify `CLAUDE.md`.
 
-**Active:** `specs/02a-backend/` and `specs/02b-frontend/` (Spec 02 — real Priority API data)
-**Completed:** `specs/done/` (Spec 01 — foundation with mock data)
+**All specs archived:** `specs/done/` (Specs 01–08 complete)
 
 ## Tech Stack
 
@@ -44,6 +43,13 @@ Backend and frontend are built in **separate Claude Code sessions** that share `
 
 **Local Docker test:** `docker build -t priority-dashboard . && docker run --rm -p 3001:3001 -e NODE_ENV=production -e PORT=3001 priority-dashboard`
 
+**Pre-deploy checklist (run before pushing to `main`):**
+```bash
+cd client && npx tsc -b --noEmit   # Client TS build (catches unused vars, type errors)
+cd ../server && npx tsc --noEmit   # Server TS build
+```
+Both must pass cleanly — any TypeScript error kills the Railway Docker build.
+
 ## Project Structure
 
 ```
@@ -55,6 +61,7 @@ Backend and frontend are built in **separate Claude Code sessions** that share `
 │   ├── 02b-frontend/← Frontend spec + plan (current)
 │   └── done/        ← Completed specs (archived)
 ├── Dockerfile       ← Multi-stage Docker build (Railway deployment)
+├── railway.json     ← Railway config (builder=DOCKERFILE, healthcheck) — DO NOT DELETE
 ├── .dockerignore    ← Excludes node_modules, .env, .git from Docker context
 ├── tools/           ← Reference files (Priority XML metadata map — READ ONLY)
 └── CLAUDE.md        ← You are here
@@ -154,3 +161,5 @@ This code is maintained exclusively by LLMs. Every decision optimizes for AI rea
 - Using `app.get('*', ...)` for SPA catch-all — Express 5 requires `app.get('/{*path}', ...)` (path-to-regexp v8 needs named params)
 - Using `$expand` on DOCUMENTS_P — Priority/CloudFront truncates the response. Use two-step fetch: query parent, then `querySubform()` per row
 - Modifying Dockerfile paths without checking `__dirname` math — server at `/app/server/dist/server/src/` serves client from `../../../../client/dist` (4 levels up to `/app/`)
+- Leaving unused variables/destructured bindings — `noUnusedLocals: true` in `tsconfig.app.json` means `tsc -b` fails, killing the Railway Docker build. Always clean up unused destructured props.
+- Deleting `railway.json` — Railway needs this file to use the Dockerfile builder. Without it, deploy breaks.
