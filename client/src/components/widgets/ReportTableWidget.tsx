@@ -13,7 +13,7 @@ import { useFilterState } from '../../hooks/useFilterState';
 import { applyClientFilters, hasAnyClientConditions, hasSkippedOrGroups } from '../../utils/clientFilter';
 import { AlertTriangle } from 'lucide-react';
 import { countActiveFilters } from '../../config/filterConstants';
-import FilterToolbar from '../FilterToolbar';
+import TableToolbar from '../TableToolbar';
 import FilterBuilder from '../filter/FilterBuilder';
 import ReportTable from '../ReportTable';
 import Pagination from '../Pagination';
@@ -60,10 +60,13 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
 
   return (
     <>
-      <FilterToolbar
+      <TableToolbar
         activeFilterCount={countActiveFilters(filterGroup)}
-        isOpen={isFilterOpen}
-        onToggle={() => setIsFilterOpen(!isFilterOpen)}
+        isFilterOpen={isFilterOpen}
+        onFilterToggle={() => setIsFilterOpen(!isFilterOpen)}
+        hiddenColumnCount={0}
+        isColumnPanelOpen={false}
+        onColumnToggle={() => {}}
       />
 
       {isFilterOpen && (
