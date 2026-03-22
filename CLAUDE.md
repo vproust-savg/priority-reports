@@ -66,7 +66,7 @@ This code is maintained exclusively by LLMs. Every decision optimizes for AI rea
 
 1. **Intent block** at top of every file: `FILE`, `PURPOSE`, `USED BY`, `EXPORTS`
 2. **WHY comments** on non-obvious decisions. Never comment WHAT (LLMs can read code).
-3. **Every file under 150 lines.** Split if approaching 200.
+3. **Every file under 200 lines.** Split if approaching 250.
 4. **Import order:** React/libraries → hooks → components → utils → types
 5. **Identical patterns** for identical things — all pages, all routes, all widgets.
 6. **Descriptive greppable names:** `formatCurrencyValue()` not `fmt()`
@@ -146,7 +146,7 @@ This code is maintained exclusively by LLMs. Every decision optimizes for AI rea
 - Using `useEffect` for data fetching instead of TanStack Query
 - Hardcoding Tailwind colors instead of the design token palette
 - Dynamic Tailwind classes like `` col-span-${n} `` — use the `COL_SPAN_CLASSES` map
-- Making files longer than 150 lines instead of splitting
+- Making files longer than 200 lines instead of splitting
 - Forgetting the intent block at top of new files
 - Using Airtable field names instead of field IDs
 - Interpolating user input directly into OData `$filter` queries — validate with `z.string().regex(/^[a-zA-Z0-9_-]+$/)`

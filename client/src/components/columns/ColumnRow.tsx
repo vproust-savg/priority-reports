@@ -36,7 +36,8 @@ export default function ColumnRow({
     <div ref={setNodeRef} style={style} className="flex items-center gap-2.5 py-1.5 px-1 group/row">
       {/* Toggle switch */}
       <button
-        onClick={isLocked ? undefined : onToggle}
+        onClick={onToggle}
+        disabled={isLocked}
         aria-label={`${column.visible ? 'Hide' : 'Show'} ${column.label} column`}
         className={`relative w-8 h-[18px] rounded-full transition-colors flex-shrink-0 ${
           column.visible ? 'bg-primary' : 'bg-slate-200'

@@ -43,7 +43,10 @@ export function useColumnManager(apiColumns: ColumnDefinition[] | undefined) {
       .filter((col): col is ColumnDefinition => col !== undefined);
   }, [managedColumns, apiColumns]);
 
-  const hiddenCount = managedColumns.filter((mc) => !mc.visible).length;
+  const hiddenCount = useMemo(
+    () => managedColumns.filter((mc) => !mc.visible).length,
+    [managedColumns],
+  );
 
   const toggleColumn = (key: string) => {
     setManagedColumns((prev) => {
