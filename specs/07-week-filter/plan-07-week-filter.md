@@ -486,7 +486,8 @@ export default function WeekPicker({ value, valueTo, onChange }: WeekPickerProps
   const [hoveredMonday, setHoveredMonday] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Click outside closes dropdown
+  // WHY: Single useEffect for both close handlers — click outside + Escape.
+  // Both depend on isOpen, so merging avoids duplicate listener setup/teardown.
   useEffect(() => {
     if (!isOpen) return;
     const handleClick = (e: MouseEvent) => {
@@ -494,18 +495,15 @@ export default function WeekPicker({ value, valueTo, onChange }: WeekPickerProps
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [isOpen]);
-
-  // Escape key closes dropdown
-  useEffect(() => {
-    if (!isOpen) return;
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setIsOpen(false);
     };
+    document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
   }, [isOpen]);
 
   const selectWeek = (monday: Date) => {
@@ -537,7 +535,12 @@ export default function WeekPicker({ value, valueTo, onChange }: WeekPickerProps
       {/* Trigger button */}
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          // WHY: Sync displayMonth on open so the calendar shows the selected
+          // week's month, not whatever month the user last navigated to.
+          if (!isOpen && value) setDisplayMonth(new Date(value + 'T00:00:00'));
+          setIsOpen(!isOpen);
+        }}
         className={`${FILTER_INPUT_CLASS} w-52 flex items-center gap-2 cursor-pointer`}
       >
         <Calendar size={16} className="text-slate-400 shrink-0" />

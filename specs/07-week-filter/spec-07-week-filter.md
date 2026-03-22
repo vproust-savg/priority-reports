@@ -49,7 +49,7 @@
 | `client/src/components/filter/WeekPicker.tsx` | **Create** | Dropdown week picker component (~120 lines) |
 | `client/src/utils/weekUtils.ts` | **Create** | Pure date helpers: getMonday, getSunday, formatWeekRange, getCalendarWeeks (~60 lines) |
 | `client/src/utils/clientFilter.ts` | Modify | Add `case 'isInWeek':` falling through to `isBetween` |
-| `client/tests/weekUtils.test.ts` | **Create** | Unit tests for week utility functions |
+| `client/src/utils/weekUtils.test.ts` | **Create** | Unit tests for week utility functions (co-located) |
 
 ---
 
@@ -152,8 +152,8 @@ interface WeekPickerProps {
 - Style: `bg-white rounded-xl border border-slate-200 shadow-lg`
 - Width: `w-72` (fixed width for calendar grid)
 - Open/close animation: CSS transition on `opacity` and `scale` (`transition-all duration-150`)
-- Click outside closes (via `useEffect` + `mousedown` listener on `document`)
-- Escape key closes
+- Click outside and Escape key close (single `useEffect` with both `mousedown` + `keydown` listeners)
+- **On open:** sync `displayMonth` to the selected week's month, so the calendar always shows the relevant month when the dropdown opens (prevents stale month after navigating away then using a shortcut)
 
 #### 3.5.3 Shortcut Buttons
 
@@ -282,7 +282,7 @@ These files need **no modifications**:
 
 ## 4. Tests
 
-**File:** `client/tests/weekUtils.test.ts`
+**File:** `client/src/utils/weekUtils.test.ts` (co-located, matches codebase convention)
 
 Unit tests for the pure utility functions in `weekUtils.ts`:
 
