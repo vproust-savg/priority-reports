@@ -13,13 +13,7 @@ import type { ReportFilters } from '../config/reportRegistry';
 import { reportRegistry } from '../config/reportRegistry';
 import { querySubform } from '../services/priorityClient';
 import { parseGrvRemarks } from '../services/htmlParser';
-
-// WHY: OData string literals use single quotes. A bare quote in a value
-// breaks the query. Doubling escapes it: O'Brien → O''Brien.
-// Zod regex blocks quotes today, but this is defense in depth.
-function escapeODataString(value: string): string {
-  return value.replace(/'/g, "''");
-}
+import { escapeODataString } from '../services/odataFilterBuilder';
 
 const columns: ColumnDefinition[] = [
   { key: 'date', label: 'Date', type: 'date' },
@@ -42,7 +36,9 @@ const filterColumns: ColumnFilterMeta[] = [
   { key: 'date', label: 'Date', filterType: 'date', filterLocation: 'server', odataField: 'CURDATE' },
   { key: 'docNo', label: 'GRV #', filterType: 'text', filterLocation: 'server', odataField: 'DOCNO' },
   { key: 'vendor', label: 'Vendor', filterType: 'enum', filterLocation: 'server', odataField: 'SUPNAME', enumKey: 'vendors' },
-  { key: 'warehouse', label: 'Warehouse', filterType: 'enum', filterLocation: 'server', odataField: 'TOWARHSNAME', enumKey: 'warehouses' },
+  // WHY: TOWARHSDES (description) is in $select and matches dropdown values.
+  // TOWARHSNAME (code) is not in $select and would cause filter mismatch.
+  { key: 'warehouse', label: 'Warehouse', filterType: 'enum', filterLocation: 'server', odataField: 'TOWARHSDES', enumKey: 'warehouses' },
   { key: 'status', label: 'Status', filterType: 'enum', filterLocation: 'server', odataField: 'STATDES', enumKey: 'statuses' },
   { key: 'total', label: 'Total', filterType: 'currency', filterLocation: 'server', odataField: 'TOTPRICE' },
   { key: 'driverId', label: 'Driver ID', filterType: 'text', filterLocation: 'client' },
