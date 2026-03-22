@@ -27,7 +27,7 @@ export async function generateTemplateExcel(
   config: ExportConfig,
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(templateBuffer);
+  await workbook.xlsx.load(templateBuffer as unknown as ArrayBuffer);
 
   // WHY: workbook.worksheets is 0-indexed positional array matching the visible
   // tab order. getWorksheet(number) retrieves by internal worksheet ID which can
