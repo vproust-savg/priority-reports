@@ -58,18 +58,18 @@ export function createFiltersRouter(cache: CacheProvider): Router {
       return;
     }
 
-    // WHY: Deduplicate by SUPNAME — Priority may return duplicates across pages
-    const vendorMap = new Map<string, string>();
+    // WHY: Deduplicate by CDES (vendor description) — this is the value used
+    // in both OData filtering (odataField: 'CDES') and row data (transformRow
+    // maps vendor: raw.CDES). Using CDES as the dropdown value ensures
+    // client-side filtering matches: row.vendor === condition.value.
+    const vendorSet = new Set<string>();
     for (const row of vendorData.value) {
-      const code = row.SUPNAME as string;
       const name = row.CDES as string;
-      if (code && name && !vendorMap.has(code)) {
-        vendorMap.set(code, name);
-      }
+      if (name) vendorSet.add(name);
     }
 
-    const vendors: FilterOption[] = Array.from(vendorMap.entries())
-      .map(([value, label]) => ({ value, label }))
+    const vendors: FilterOption[] = Array.from(vendorSet)
+      .map((name) => ({ value: name, label: name }))
       .sort((a, b) => a.label.localeCompare(b.label));
 
     const statuses: FilterOption[] = [

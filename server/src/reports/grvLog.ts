@@ -35,7 +35,10 @@ const columns: ColumnDefinition[] = [
 const filterColumns: ColumnFilterMeta[] = [
   { key: 'date', label: 'Date', filterType: 'date', filterLocation: 'server', odataField: 'CURDATE' },
   { key: 'docNo', label: 'GRV #', filterType: 'text', filterLocation: 'server', odataField: 'DOCNO' },
-  { key: 'vendor', label: 'Vendor', filterType: 'enum', filterLocation: 'server', odataField: 'SUPNAME', enumKey: 'vendors' },
+  // WHY: odataField must match transformRow output (vendor: raw.CDES) so that
+  // client-side filtering in base dataset mode compares the same values.
+  // SUPNAME is the vendor code; CDES is the display name shown in the table.
+  { key: 'vendor', label: 'Vendor', filterType: 'enum', filterLocation: 'server', odataField: 'CDES', enumKey: 'vendors' },
   // WHY: TOWARHSDES (description) is in $select and matches dropdown values.
   // TOWARHSNAME (code) is not in $select and would cause filter mismatch.
   { key: 'warehouse', label: 'Warehouse', filterType: 'enum', filterLocation: 'server', odataField: 'TOWARHSDES', enumKey: 'warehouses' },
