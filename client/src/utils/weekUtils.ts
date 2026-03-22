@@ -3,7 +3,7 @@
 // PURPOSE: Pure date utility functions for week calculations.
 //          Used by WeekPicker component and FilterConditionRow
 //          for the isInWeek operator.
-// USED BY: WeekPicker.tsx, FilterConditionRow.tsx
+// USED BY: WeekPickerDropdown.tsx, FilterConditionRow.tsx, config/filterConstants.ts
 // EXPORTS: getMonday, getSunday, toISODate, formatWeekRange,
 //          getCalendarWeeks
 // ═══════════════════════════════════════════════════════════════

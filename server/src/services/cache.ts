@@ -3,8 +3,8 @@
 // PURPOSE: Cache abstraction with Upstash Redis implementation.
 //          The interface is the contract — swap implementations
 //          without touching any business code.
-// USED BY: routes/reports.ts, routes/filters.ts
-// EXPORTS: CacheProvider, buildCacheKey, createCacheProvider
+// USED BY: routes/reports.ts, routes/filters.ts, routes/query.ts
+// EXPORTS: CacheProvider, buildCacheKey, buildQueryCacheKey, buildBaseCacheKey, createCacheProvider
 // ═══════════════════════════════════════════════════════════════
 
 import { Redis } from '@upstash/redis';

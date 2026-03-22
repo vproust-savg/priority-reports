@@ -4,7 +4,7 @@
 //          could not handle: client-side columns (HTML-parsed fields)
 //          and text-search operators (contains, startsWith, endsWith).
 // USED BY: ReportTableWidget.tsx
-// EXPORTS: applyClientFilters, hasAnyClientConditions, hasSkippedOrGroups
+// EXPORTS: applyClientFilters, hasAnyClientConditions, hasSkippedOrGroups, applyAllFilters
 // ═══════════════════════════════════════════════════════════════
 
 import type { FilterCondition, FilterGroup, ColumnFilterMeta } from '@shared/types';

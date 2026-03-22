@@ -3,7 +3,7 @@
 // PURPOSE: Manages column visibility and display order for a
 //          single table widget. Session-only state — resets on
 //          page reload. Reinitializes when API columns change.
-// USED BY: ReportTableWidget
+// USED BY: ReportTableWidget, ColumnManagerPanel (ManagedColumn type), ColumnRow (ManagedColumn type)
 // EXPORTS: useColumnManager, ManagedColumn (type)
 // ═══════════════════════════════════════════════════════════════
 

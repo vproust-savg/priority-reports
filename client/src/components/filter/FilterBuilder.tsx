@@ -7,13 +7,13 @@
 // EXPORTS: FilterBuilder
 // ═══════════════════════════════════════════════════════════════
 
-import type { FilterCondition, FilterGroup, ColumnFilterMeta, FiltersResponse } from '@shared/types';
-import { createEmptyCondition, createEmptyGroup, FILTER_LABEL_CLASS } from '../../config/filterConstants';
-import FilterConditionRow from './FilterConditionRow';
-import FilterGroupPanel from './FilterGroupPanel';
 import { DndContext, DragOverlay, useDroppable, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useFilterDrag } from '../../hooks/useFilterDrag';
+import FilterConditionRow from './FilterConditionRow';
+import FilterGroupPanel from './FilterGroupPanel';
+import { createEmptyCondition, createEmptyGroup, FILTER_LABEL_CLASS } from '../../config/filterConstants';
+import type { FilterCondition, FilterGroup, ColumnFilterMeta, FiltersResponse } from '@shared/types';
 
 interface FilterBuilderProps {
   filterGroup: FilterGroup;

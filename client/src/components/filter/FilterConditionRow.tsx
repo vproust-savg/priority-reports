@@ -7,12 +7,12 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { GripVertical, X } from 'lucide-react';
-import type { FilterCondition, ColumnFilterMeta, FiltersResponse } from '@shared/types';
-import { OPERATORS_BY_TYPE, FILTER_INPUT_CLASS } from '../../config/filterConstants';
-import FilterValueInput from './FilterValueInput';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import FilterValueInput from './FilterValueInput';
+import { OPERATORS_BY_TYPE, FILTER_INPUT_CLASS } from '../../config/filterConstants';
 import { getMonday, getSunday, toISODate } from '../../utils/weekUtils';
+import type { FilterCondition, ColumnFilterMeta, FiltersResponse } from '@shared/types';
 
 interface FilterConditionRowProps {
   condition: FilterCondition;

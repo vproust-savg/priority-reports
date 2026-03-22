@@ -7,11 +7,11 @@
 // EXPORTS: FilterGroupPanel
 // ═══════════════════════════════════════════════════════════════
 
-import type { FilterGroup, ColumnFilterMeta, FiltersResponse } from '@shared/types';
-import { createEmptyCondition } from '../../config/filterConstants';
-import FilterConditionRow from './FilterConditionRow';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
+import FilterConditionRow from './FilterConditionRow';
+import { createEmptyCondition } from '../../config/filterConstants';
+import type { FilterGroup, ColumnFilterMeta, FiltersResponse } from '@shared/types';
 
 interface FilterGroupPanelProps {
   group: FilterGroup;

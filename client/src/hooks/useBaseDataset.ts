@@ -86,7 +86,13 @@ export function useBaseDataset(
           baseMode: true,
         }),
       });
-      if (!response.ok) throw new Error(`Base query failed: ${response.status}`);
+      if (!response.ok) {
+        // WHY: Read the response body to surface the server's error message
+        // (e.g., "Sub-form data fetch failed") instead of a generic status code.
+        const errorData = await response.json().catch(() => null);
+        const detail = (errorData as { error?: string })?.error ?? `status ${response.status}`;
+        throw new Error(`Base query failed: ${detail}`);
+      }
       return response.json();
     },
     staleTime: 15 * 60 * 1000,

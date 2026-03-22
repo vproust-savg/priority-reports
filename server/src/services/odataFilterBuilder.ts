@@ -3,7 +3,7 @@
 // PURPOSE: Converts a FilterGroup tree into an OData $filter string.
 //          Only translates server-side columns with OData-compatible
 //          operators. Client-side conditions are silently skipped.
-// USED BY: routes/query.ts
+// USED BY: routes/query.ts, routes/export.ts, reports/grvLog.ts
 // EXPORTS: buildODataFilter, escapeODataString
 // ═══════════════════════════════════════════════════════════════
 
