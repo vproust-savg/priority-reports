@@ -8,6 +8,7 @@
 
 import type { ColumnFilterMeta, FilterOperator, FilterOption, FiltersResponse } from '@shared/types';
 import { FILTER_INPUT_CLASS } from '../../config/filterConstants';
+import WeekPicker from './WeekPicker';
 
 interface FilterValueInputProps {
   column: ColumnFilterMeta;
@@ -49,6 +50,15 @@ export default function FilterValueInput({
   }
 
   if (column.filterType === 'date') {
+    if (operator === 'isInWeek') {
+      return (
+        <WeekPicker
+          value={value}
+          valueTo={valueTo}
+          onChange={(monday, sunday) => onChange(monday, sunday)}
+        />
+      );
+    }
     if (isBetweenOp) {
       return (
         <div className="flex items-center gap-1">
