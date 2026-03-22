@@ -52,7 +52,11 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   // WHY: enabled only after quick query loads — both share the Priority
   // rate limiter, so running them simultaneously makes both slow.
   const baseQuery = useBaseDataset(reportId, debouncedGroup, filterColumns, !!quickQuery.data);
-  const isBaseReady = !!baseQuery.data && !baseQuery.isError;
+  // WHY: isPlaceholderData is true when keepPreviousData is showing stale rows
+  // from a different date range. Fall back to quick query during transitions
+  // so users see correct data faster (50-row fetch) instead of waiting 15-20s
+  // for the full 1000-row base query to resolve.
+  const isBaseReady = !!baseQuery.data && !baseQuery.isError && !baseQuery.isPlaceholderData;
 
   // WHY: Use base dataset when available for instant filtering,
   // fall back to quick query for immediate display
