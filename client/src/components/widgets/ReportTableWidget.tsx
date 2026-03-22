@@ -1,8 +1,9 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: client/src/components/widgets/ReportTableWidget.tsx
-// PURPOSE: Report widget orchestrator. Manages filter state, data
-//          fetching, client-side filtering, and renders FilterToolbar,
-//          FilterBuilder, ReportTable, and Pagination.
+// PURPOSE: Report widget orchestrator. Manages filter state, column
+//          visibility/order, data fetching, client-side filtering,
+//          and renders TableToolbar, FilterBuilder, ColumnManagerPanel,
+//          ReportTable, and Pagination.
 // USED BY: widgetRegistry.ts (registered as 'table' type)
 // EXPORTS: ReportTableWidget
 // ═══════════════════════════════════════════════════════════════
@@ -15,6 +16,8 @@ import { AlertTriangle } from 'lucide-react';
 import { countActiveFilters } from '../../config/filterConstants';
 import TableToolbar from '../TableToolbar';
 import FilterBuilder from '../filter/FilterBuilder';
+import ColumnManagerPanel from '../columns/ColumnManagerPanel';
+import { useColumnManager } from '../../hooks/useColumnManager';
 import ReportTable from '../ReportTable';
 import Pagination from '../Pagination';
 
@@ -39,8 +42,12 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
     pageSize: fetchPageSize,
   });
 
-  // WHY: If filter options fail to load, the filter builder still works
-  // for non-enum fields — enum dropdowns just show "Loading..."
+  const {
+    managedColumns, visibleColumns, hiddenCount,
+    isColumnPanelOpen, setIsColumnPanelOpen,
+    toggleColumn, reorderColumns, showAll, hideAll,
+  } = useColumnManager(data?.columns);
+
   if (filtersQuery.error) console.warn('Failed to load filter options:', filtersQuery.error);
 
   // Client-side filtering
@@ -64,9 +71,9 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         activeFilterCount={countActiveFilters(filterGroup)}
         isFilterOpen={isFilterOpen}
         onFilterToggle={() => setIsFilterOpen(!isFilterOpen)}
-        hiddenColumnCount={0}
-        isColumnPanelOpen={false}
-        onColumnToggle={() => {}}
+        hiddenColumnCount={hiddenCount}
+        isColumnPanelOpen={isColumnPanelOpen}
+        onColumnToggle={() => setIsColumnPanelOpen(!isColumnPanelOpen)}
       />
 
       {isFilterOpen && (
@@ -76,6 +83,16 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
           columns={filterColumns}
           filterOptions={filtersQuery.data?.filters}
           filterOptionsLoading={filtersQuery.isLoading}
+        />
+      )}
+
+      {isColumnPanelOpen && (
+        <ColumnManagerPanel
+          managedColumns={managedColumns}
+          onToggle={toggleColumn}
+          onReorder={reorderColumns}
+          onShowAll={showAll}
+          onHideAll={hideAll}
         />
       )}
 
@@ -117,7 +134,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
 
       {data && displayData.length > 0 && (
         <>
-          <ReportTable columns={data.columns} data={displayData} />
+          <ReportTable columns={visibleColumns.length > 0 ? visibleColumns : data.columns} data={displayData} />
           <Pagination
             page={page}
             pageSize={50}
