@@ -30,7 +30,12 @@ export function createFiltersRouter(cache: CacheProvider): Router {
     }
 
     const cacheKey = `filters:${reportId}`;
-    const cached = await cache.get<FiltersResponse>(cacheKey);
+    let cached: FiltersResponse | null = null;
+    try {
+      cached = await cache.get<FiltersResponse>(cacheKey);
+    } catch (err) {
+      console.warn(`[filters] Cache read failed for ${cacheKey}, continuing as miss:`, err);
+    }
     if (cached) {
       res.json(cached);
       return;
@@ -84,7 +89,9 @@ export function createFiltersRouter(cache: CacheProvider): Router {
     };
 
     // WHY: Cache filter options for 5 min — they change infrequently
-    cache.set(cacheKey, response, 300).catch(() => {});
+    cache.set(cacheKey, response, 300).catch((err) => {
+      console.warn(`[filters] Cache write failed for ${cacheKey}:`, err);
+    });
 
     res.json(response);
   });

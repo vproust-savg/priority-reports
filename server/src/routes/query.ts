@@ -54,7 +54,12 @@ export function createQueryRouter(cache: CacheProvider): Router {
     const baseParams = report.buildQuery({ page: body.page, pageSize: body.pageSize });
     const odataFilter = buildODataFilter(body.filterGroup, report.filterColumns);
 
-    const cached = await cache.get<ApiResponse>(cacheKey);
+    let cached: ApiResponse | null = null;
+    try {
+      cached = await cache.get<ApiResponse>(cacheKey);
+    } catch (err) {
+      console.warn(`[query] Cache read failed for ${cacheKey}, continuing as miss:`, err);
+    }
     if (cached) {
       logApiCall({
         level: 'info', event: 'query_fetch', reportId,
@@ -122,7 +127,9 @@ export function createQueryRouter(cache: CacheProvider): Router {
       columns: report.columns,
     };
 
-    cache.set(cacheKey, response, cacheTtl).catch(() => {});
+    cache.set(cacheKey, response, cacheTtl).catch((err) => {
+      console.warn(`[query] Cache write failed for ${cacheKey}:`, err);
+    });
 
     logApiCall({
       level: 'info', event: 'query_fetch', reportId,

@@ -54,11 +54,22 @@ export function createReportsRouter(cache: CacheProvider): Router {
       return;
     }
 
-    const params = QueryParamsSchema.parse(req.query);
+    let params;
+    try {
+      params = QueryParamsSchema.parse(req.query);
+    } catch (err) {
+      res.status(400).json({ error: 'Invalid query parameters', details: err });
+      return;
+    }
     const cacheKey = buildCacheKey(reportId, params);
 
-    // Check cache
-    const cached = await cache.get<ApiResponse>(cacheKey);
+    // WHY: Redis failure should degrade to cache miss, not crash the route
+    let cached: ApiResponse | null = null;
+    try {
+      cached = await cache.get<ApiResponse>(cacheKey);
+    } catch (err) {
+      console.warn(`[reports] Cache read failed for ${cacheKey}, continuing as miss:`, err);
+    }
     if (cached) {
       logApiCall({
         level: 'info', event: 'report_fetch', reportId,
@@ -123,7 +134,9 @@ export function createReportsRouter(cache: CacheProvider): Router {
     };
 
     // WHY: Fire-and-forget cache write — never block response on cache failure
-    cache.set(cacheKey, response, 300).catch(() => {});
+    cache.set(cacheKey, response, 300).catch((err) => {
+      console.warn(`[reports] Cache write failed for ${cacheKey}:`, err);
+    });
 
     logApiCall({
       level: 'info', event: 'report_fetch', reportId,
@@ -137,10 +150,20 @@ export function createReportsRouter(cache: CacheProvider): Router {
   // POST /:reportId/refresh — invalidates cache
   router.post('/:reportId/refresh', async (req, res) => {
     const { reportId } = req.params;
-    const params = QueryParamsSchema.parse(req.query);
+    let params;
+    try {
+      params = QueryParamsSchema.parse(req.query);
+    } catch (err) {
+      res.status(400).json({ error: 'Invalid query parameters', details: err });
+      return;
+    }
     const cacheKey = buildCacheKey(reportId, params);
 
-    await cache.invalidate(cacheKey);
+    try {
+      await cache.invalidate(cacheKey);
+    } catch (err) {
+      console.warn(`[reports] Cache invalidate failed for ${cacheKey}:`, err);
+    }
     res.json({ message: `Cache invalidated for ${reportId}` });
   });
 
