@@ -137,6 +137,13 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         </div>
       )}
 
+      {activeData?.warnings && activeData.warnings.length > 0 && activeData.warnings.map((msg, i) => (
+        <div key={`warn-${i}`} className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-amber-700 bg-amber-50/80 border border-amber-200/60 rounded-lg">
+          <AlertTriangle size={14} className="shrink-0 text-amber-500" />
+          <span>{msg}</span>
+        </div>
+      ))}
+
       {/* WHY: Subtle loading bar during background refetches.
           keepPreviousData means old data stays visible — no skeleton flash. */}
       {isFetching && !isLoading && (

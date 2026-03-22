@@ -94,14 +94,16 @@ export function createReportsRouter(cache: CacheProvider): Router {
     // WHY: Some reports need sub-form data that can't use $expand (e.g. GRV Log).
     // enrichRows fetches sub-forms individually before transformRow parses them.
     let rawRows = priorityData.value;
+    const warnings: string[] = [];
     if (report.enrichRows) {
       try {
         rawRows = await report.enrichRows(rawRows);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         console.error(`[reports] Sub-form enrichment failed for ${reportId}: ${message}`);
-        // WHY: Continue with un-enriched rows rather than failing the request.
-        // The transform will produce null fields for the missing sub-form data.
+        // WHY: Continue with un-enriched rows — partial data with a warning
+        // is better UX than failing entirely. The transform produces null fields.
+        warnings.push('Sub-form data unavailable — some columns may be blank');
       }
     }
     const rows = rawRows.map(report.transformRow);
@@ -131,6 +133,7 @@ export function createReportsRouter(cache: CacheProvider): Router {
         totalPages: Math.ceil(totalCount / pageSize),
       },
       columns: report.columns,
+      warnings: warnings.length > 0 ? warnings : undefined,
     };
 
     // WHY: Fire-and-forget cache write — never block response on cache failure

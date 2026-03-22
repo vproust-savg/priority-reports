@@ -96,12 +96,14 @@ export function createQueryRouter(cache: CacheProvider): Router {
     // WHY: Some reports need sub-form data that can't use $expand.
     // enrichRows fetches sub-forms individually before transformRow parses them.
     let rawRows = priorityData.value;
+    const warnings: string[] = [];
     if (report.enrichRows) {
       try {
         rawRows = await report.enrichRows(rawRows);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         console.error(`[query] Sub-form enrichment failed for ${reportId}: ${message}`);
+        warnings.push('Sub-form data unavailable — some columns may be blank');
       }
     }
     const rows = rawRows.map(report.transformRow);
@@ -125,6 +127,7 @@ export function createQueryRouter(cache: CacheProvider): Router {
         totalPages: isBase ? 1 : Math.ceil(totalCount / body.pageSize),
       },
       columns: report.columns,
+      warnings: warnings.length > 0 ? warnings : undefined,
     };
 
     cache.set(cacheKey, response, cacheTtl).catch((err) => {
