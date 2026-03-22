@@ -7,21 +7,24 @@
 // EXPORTS: ReportTableWidget
 // ═══════════════════════════════════════════════════════════════
 
+import { useMemo } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { useReportQuery } from '../../hooks/useReportQuery';
 import { useFiltersQuery } from '../../hooks/useFiltersQuery';
 import { useFilterState } from '../../hooks/useFilterState';
 import { useBaseDataset } from '../../hooks/useBaseDataset';
-import { applyAllFilters, applyClientFilters, hasAnyClientConditions, hasSkippedOrGroups } from '../../utils/clientFilter';
-import { AlertTriangle } from 'lucide-react';
-import { countActiveFilters } from '../../config/filterConstants';
+import { useColumnManager } from '../../hooks/useColumnManager';
+import { useExport } from '../../hooks/useExport';
 import TableToolbar from '../TableToolbar';
 import FilterBuilder from '../filter/FilterBuilder';
 import ColumnManagerPanel from '../columns/ColumnManagerPanel';
-import { useColumnManager } from '../../hooks/useColumnManager';
-import { useExport } from '../../hooks/useExport';
 import ReportTable from '../ReportTable';
 import Pagination from '../Pagination';
 import Toast from '../Toast';
+import { applyAllFilters, applyClientFilters, hasAnyClientConditions, hasSkippedOrGroups } from '../../utils/clientFilter';
+import { countActiveFilters } from '../../config/filterConstants';
+
+const CLIENT_PAGE_SIZE = 50;
 
 export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const {
@@ -67,35 +70,39 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
 
   const { isExporting, toast, clearToast, triggerExport } = useExport(reportId, debouncedGroup);
 
-  if (filtersQuery.error) console.warn('Failed to load filter options:', filtersQuery.error);
+  // WHY: Filter endpoint failure cascades — empty filterColumns breaks
+  // extractDateConditions in useBaseDataset and shows a blank filter panel.
+  // Surface the error so the user knows why filters aren't working.
+  const filterLoadError = filtersQuery.error;
 
   // --- Row filtering and pagination ---
   const allRows = activeData?.data ?? [];
-  let filteredRows: Record<string, unknown>[];
-  let displayData: Record<string, unknown>[];
-  let totalCount: number;
-  let totalPages: number;
 
-  if (isBaseReady) {
-    // WHY: Base dataset has ALL rows for date range — apply ALL non-date
-    // filters client-side for instant response.
-    filteredRows = applyAllFilters(allRows, debouncedGroup, filterColumns);
-    displayData = filteredRows.slice((page - 1) * 50, page * 50);
-    totalCount = filteredRows.length;
-    totalPages = Math.ceil(filteredRows.length / 50);
-  } else if (hasClientFilters) {
-    // Phase 1 with client-side filters (same as before base dataset)
-    filteredRows = applyClientFilters(allRows, debouncedGroup, filterColumns);
-    displayData = filteredRows.slice((page - 1) * 50, page * 50);
-    totalCount = filteredRows.length;
-    totalPages = Math.ceil(filteredRows.length / 50);
-  } else {
-    // Phase 1 without client-side filters — server handles pagination
-    filteredRows = allRows;
-    displayData = allRows;
-    totalCount = quickQuery.data?.pagination.totalCount ?? 0;
-    totalPages = quickQuery.data?.pagination.totalPages ?? 0;
-  }
+  const { filteredRows, displayData, totalCount, totalPages } = useMemo(() => {
+    let filtered: Record<string, unknown>[];
+    let display: Record<string, unknown>[];
+    let count: number;
+    let pages: number;
+
+    if (isBaseReady || hasClientFilters) {
+      // WHY: Base dataset has ALL rows — apply ALL non-date filters client-side.
+      // Phase 1 with client filters uses the same client-side path.
+      filtered = isBaseReady
+        ? applyAllFilters(allRows, debouncedGroup, filterColumns)
+        : applyClientFilters(allRows, debouncedGroup, filterColumns);
+      display = filtered.slice((page - 1) * CLIENT_PAGE_SIZE, page * CLIENT_PAGE_SIZE);
+      count = filtered.length;
+      pages = Math.ceil(filtered.length / CLIENT_PAGE_SIZE);
+    } else {
+      // Phase 1 without client-side filters — server handles pagination
+      filtered = allRows;
+      display = allRows;
+      count = quickQuery.data?.pagination.totalCount ?? 0;
+      pages = quickQuery.data?.pagination.totalPages ?? 0;
+    }
+
+    return { filteredRows: filtered, displayData: display, totalCount: count, totalPages: pages };
+  }, [allRows, debouncedGroup, filterColumns, page, isBaseReady, hasClientFilters, quickQuery.data?.pagination]);
 
   return (
     <>
@@ -130,6 +137,16 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         />
       )}
 
+      {filterLoadError && (
+        <div className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-red-700 bg-red-50/80 border border-red-200/60 rounded-lg">
+          <AlertTriangle size={14} className="shrink-0 text-red-500" />
+          <span>Failed to load filter options. Try refreshing the page.</span>
+        </div>
+      )}
+
+      {/* WHY: OR-group warning only needed in Phase 1 — the backend skips mixed OR
+          groups, causing over-fetching. In Phase 2 (isBaseReady), applyAllFilters
+          handles all conditions client-side with full OR support, so no data is lost. */}
       {!isBaseReady && hasSkippedOr && (
         <div className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-amber-700 bg-amber-50/80 border border-amber-200/60 rounded-lg">
           <AlertTriangle size={14} className="shrink-0 text-amber-500" />
@@ -186,7 +203,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
           <ReportTable columns={visibleColumns.length > 0 ? visibleColumns : activeData.columns} data={displayData} />
           <Pagination
             page={page}
-            pageSize={50}
+            pageSize={CLIENT_PAGE_SIZE}
             totalCount={totalCount}
             totalPages={totalPages}
             onPageChange={setPage}
