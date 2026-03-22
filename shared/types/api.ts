@@ -36,6 +36,7 @@ export interface ApiResponse<T = Record<string, unknown>> {
   data: T[];
   pagination: PaginationMeta;
   columns: ColumnDefinition[];
+  warnings?: string[];  // WHY: Degraded data quality indicators (e.g., sub-form fetch failed)
 }
 
 export interface HealthResponse {
