@@ -64,6 +64,8 @@ The `isInWeek` operator reuses the existing `FilterCondition` shape:
 
 This is intentionally identical to `isBetween`. The filter engines treat them the same way — `isInWeek` is a range filter with a specialized UI.
 
+**Note:** Update the `valueTo` comment in `shared/types/filters.ts` (line 35) to include `isInWeek` alongside `between` / `isBetween`.
+
 **Week definition:** Monday through Sunday (ISO 8601 week convention).
 
 ### 3.2 Operator Placement
