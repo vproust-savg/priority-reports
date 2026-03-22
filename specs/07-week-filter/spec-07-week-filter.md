@@ -44,9 +44,12 @@
 | `server/src/services/odataFilterBuilder.ts` | Modify | Add `case 'isInWeek':` falling through to `isBetween` |
 | `server/src/services/serverClientFilter.ts` | Modify | Add `case 'isInWeek':` falling through to `isBetween` |
 | `client/src/config/filterConstants.ts` | Modify | Add `{ value: 'isInWeek', label: 'is in week' }` to `OPERATORS_BY_TYPE.date` |
+| `client/src/components/filter/FilterConditionRow.tsx` | Modify | Pre-populate current week dates when operator changes to `isInWeek` |
 | `client/src/components/filter/FilterValueInput.tsx` | Modify | Render `WeekPicker` when operator is `isInWeek` |
-| `client/src/components/filter/WeekPicker.tsx` | **Create** | Dropdown week picker component (~150–180 lines) |
+| `client/src/components/filter/WeekPicker.tsx` | **Create** | Dropdown week picker component (~120 lines) |
+| `client/src/utils/weekUtils.ts` | **Create** | Pure date helpers: getMonday, getSunday, formatWeekRange, getCalendarWeeks (~60 lines) |
 | `client/src/utils/clientFilter.ts` | Modify | Add `case 'isInWeek':` falling through to `isBetween` |
+| `client/tests/weekUtils.test.ts` | **Create** | Unit tests for week utility functions |
 
 ---
 
@@ -73,11 +76,14 @@ is, is not, is before, is after, is on or before, is on or after, is between, is
 
 ### 3.3 Default Behavior
 
-When the user selects the `isInWeek` operator, the WeekPicker auto-selects the current week (the week containing today). This means:
+When the user changes the operator to `isInWeek`, the filter condition is pre-populated with the current week. This happens in `FilterConditionRow.tsx`'s operator change handler — when the new operator is `isInWeek`, it sets `value` to the Monday of the current week and `valueTo` to the corresponding Sunday, instead of resetting to empty strings.
 
-- `value` is set to the Monday of the current week
-- `valueTo` is set to the Sunday of the current week
+This means:
+- The WeekPicker trigger immediately shows "Mar 17–23, 2026" (no "Select week..." empty state on initial selection)
 - Results filter immediately (via the existing 400ms debounce)
+- The WeekPicker still handles an empty `value` gracefully (shows "Select week...") in case the condition is loaded from a saved state with missing data
+
+**Why in FilterConditionRow, not WeekPicker:** Pre-populating at the operator-change site is explicit and avoids mount-time side effects in the WeekPicker component. The WeekPicker is a pure controlled component — it renders what it's given.
 
 ### 3.4 Filter Engine Integration
 
@@ -110,6 +116,8 @@ case 'isBetween': {
 **Zod schema** (`querySchemas.ts`): Add `'isInWeek'` to the operator enum array.
 
 **Shared types** (`filters.ts`): Add `| 'isInWeek'` to the Date group in the `FilterOperator` union.
+
+**Note on CLIENT_ONLY_OPERATORS:** `isInWeek` is NOT added to `CLIENT_ONLY_OPERATORS` in any file. It is a server-side operator (translates to OData range query), just like `isBetween`. The `isFullyServerSide` check in `odataFilterBuilder.ts` correctly allows it through — a date column with `filterLocation: 'server'` using `isInWeek` gets full OData translation.
 
 ### 3.5 WeekPicker Component
 
@@ -204,12 +212,17 @@ When the user clicks a week row:
 
 #### 3.5.7 Date Utility Functions
 
-Pure helper functions at the top of `WeekPicker.tsx` (or extracted to a small util if needed):
+**File:** `client/src/utils/weekUtils.ts` (~60 lines)
+
+Extracted to a separate file to keep `WeekPicker.tsx` under the 200-line limit and to make these pure functions independently testable.
 
 - `getMonday(date: Date): Date` — returns the Monday of the week containing `date`
 - `getSunday(monday: Date): Date` — returns Monday + 6 days
 - `formatWeekRange(monday: Date, sunday: Date): string` — produces the display string
 - `getCalendarWeeks(year: number, month: number): Date[][]` — returns 6 rows of 7 dates for the grid
+- `toISODate(date: Date): string` — returns `YYYY-MM-DD` string (used by WeekPicker and FilterConditionRow)
+
+These are also imported by `FilterConditionRow.tsx` for the operator-change pre-population (needs `getMonday`, `getSunday`, `toISODate`).
 
 ### 3.6 FilterValueInput Integration
 
@@ -229,11 +242,32 @@ if (operator === 'isInWeek') {
 
 This goes before the `isBetweenOp` check so `isInWeek` is handled separately from the dual date-input layout.
 
-### 3.7 What Doesn't Change
+### 3.7 FilterConditionRow: Operator Change Pre-population
+
+`FilterConditionRow.tsx` line 85 resets `value: ''` and `valueTo: undefined` when the operator changes. For `isInWeek`, we override this to pre-populate the current week:
+
+```typescript
+// In the operator onChange handler:
+const newOp = e.target.value as FilterCondition['operator'];
+if (newOp === 'isInWeek') {
+  const monday = getMonday(new Date());
+  onChange({
+    ...condition,
+    operator: newOp,
+    value: toISODate(monday),
+    valueTo: toISODate(getSunday(monday)),
+  });
+} else {
+  onChange({ ...condition, operator: newOp, value: '', valueTo: undefined });
+}
+```
+
+This requires importing `getMonday`, `getSunday`, `toISODate` from `../../utils/weekUtils`.
+
+### 3.8 What Doesn't Change
 
 These files need **no modifications**:
 
-- `FilterConditionRow.tsx` — reads `OPERATORS_BY_TYPE` dynamically, delegates to `FilterValueInput`
 - `FilterBuilder.tsx` — manages the filter tree, agnostic to operator types
 - `FilterGroupPanel.tsx` — same
 - `useFilterState.ts` — passes filter groups through, no operator awareness
@@ -244,7 +278,23 @@ These files need **no modifications**:
 
 ---
 
-## 4. Verification
+## 4. Tests
+
+**File:** `client/tests/weekUtils.test.ts`
+
+Unit tests for the pure utility functions in `weekUtils.ts`:
+
+- `getMonday`: given a Wednesday, returns the preceding Monday; given a Monday, returns that Monday; given a Sunday, returns the Monday 6 days prior
+- `getSunday`: given a Monday, returns the Sunday 6 days later
+- `formatWeekRange`: same-month week ("Mar 17–23, 2026"), cross-month week ("Mar 31 – Apr 6, 2026"), cross-year week ("Dec 30, 2025 – Jan 5, 2026")
+- `getCalendarWeeks`: returns exactly 6 rows of 7 dates; first date is always a Monday; covers the entire displayed month
+- `toISODate`: returns `YYYY-MM-DD` format
+
+Edge cases: leap year week boundaries (Feb 29), year boundary (Dec 31 / Jan 1), months starting on Monday vs Sunday.
+
+---
+
+## 5. Verification
 
 ```bash
 cd server && npx tsc --noEmit          # Shared types + backend compile
