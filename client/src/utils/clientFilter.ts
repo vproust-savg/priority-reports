@@ -56,6 +56,7 @@ function evaluateCondition(row: Record<string, unknown>, condition: FilterCondit
     case 'isAfter': return new Date(String(cellValue)) > new Date(condition.value);
     case 'isOnOrBefore': return new Date(String(cellValue)) <= new Date(condition.value);
     case 'isOnOrAfter': return new Date(String(cellValue)) >= new Date(condition.value);
+    case 'isInWeek': // Falls through — same date range check as isBetween
     case 'isBetween': {
       const d = new Date(String(cellValue));
       return d >= new Date(condition.value) && d <= new Date(condition.valueTo ?? condition.value);

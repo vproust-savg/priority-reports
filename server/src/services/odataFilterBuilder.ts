@@ -60,6 +60,7 @@ function buildCondition(
       const d = dateOps[c.operator];
       return `${f} ${d.op} ${c.value}${d.suffix}`;
     }
+    case 'isInWeek': // WHY: Falls through — isInWeek stores Monday/Sunday, same range as isBetween
     case 'isBetween': {
       if (!DATE_REGEX.test(c.value) || !c.valueTo || !DATE_REGEX.test(c.valueTo)) return undefined;
       return `${f} ge ${c.value}T00:00:00Z and ${f} le ${c.valueTo}T23:59:59Z`;
