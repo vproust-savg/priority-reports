@@ -78,7 +78,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   // --- Row filtering and pagination ---
   const allRows = activeData?.data ?? [];
 
-  const { filteredRows, displayData, totalCount, totalPages } = useMemo(() => {
+  const { displayData, totalCount, totalPages } = useMemo(() => {
     let filtered: Record<string, unknown>[];
     let display: Record<string, unknown>[];
     let count: number;
@@ -101,7 +101,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
       pages = quickQuery.data?.pagination.totalPages ?? 0;
     }
 
-    return { filteredRows: filtered, displayData: display, totalCount: count, totalPages: pages };
+    return { displayData: display, totalCount: count, totalPages: pages };
   }, [allRows, debouncedGroup, filterColumns, page, isBaseReady, hasClientFilters, quickQuery.data?.pagination]);
 
   return (
