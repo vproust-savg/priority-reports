@@ -2,8 +2,8 @@
 // FILE: client/src/components/widgets/ReportTableWidget.tsx
 // PURPOSE: Report widget orchestrator. Manages filter state, column
 //          visibility/order, data fetching, client-side filtering,
-//          and renders TableToolbar, FilterBuilder, ColumnManagerPanel,
-//          ReportTable, and Pagination.
+//          export, and renders TableToolbar, FilterBuilder,
+//          ColumnManagerPanel, ReportTable, Pagination, and Toast.
 // USED BY: widgetRegistry.ts (registered as 'table' type)
 // EXPORTS: ReportTableWidget
 // ═══════════════════════════════════════════════════════════════
@@ -18,8 +18,10 @@ import TableToolbar from '../TableToolbar';
 import FilterBuilder from '../filter/FilterBuilder';
 import ColumnManagerPanel from '../columns/ColumnManagerPanel';
 import { useColumnManager } from '../../hooks/useColumnManager';
+import { useExport } from '../../hooks/useExport';
 import ReportTable from '../ReportTable';
 import Pagination from '../Pagination';
+import Toast from '../Toast';
 
 export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const {
@@ -48,6 +50,8 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
     toggleColumn, reorderColumns, showAll, hideAll,
   } = useColumnManager(data?.columns);
 
+  const { isExporting, toast, clearToast, triggerExport } = useExport(reportId, debouncedGroup);
+
   if (filtersQuery.error) console.warn('Failed to load filter options:', filtersQuery.error);
 
   // Client-side filtering
@@ -74,6 +78,8 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         hiddenColumnCount={hiddenCount}
         isColumnPanelOpen={isColumnPanelOpen}
         onColumnToggle={() => setIsColumnPanelOpen(!isColumnPanelOpen)}
+        isExporting={isExporting}
+        onExport={triggerExport}
       />
 
       {isFilterOpen && (
@@ -143,6 +149,10 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
             onPageChange={setPage}
           />
         </>
+      )}
+
+      {toast && (
+        <Toast message={toast.message} variant={toast.variant} onDismiss={clearToast} />
       )}
     </>
   );

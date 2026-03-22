@@ -6,7 +6,7 @@
 // EXPORTS: TableToolbar
 // ═══════════════════════════════════════════════════════════════
 
-import { SlidersHorizontal, Columns3, ChevronDown } from 'lucide-react';
+import { SlidersHorizontal, Columns3, ChevronDown, Download, Loader2 } from 'lucide-react';
 
 interface TableToolbarProps {
   activeFilterCount: number;
@@ -15,11 +15,14 @@ interface TableToolbarProps {
   hiddenColumnCount: number;
   isColumnPanelOpen: boolean;
   onColumnToggle: () => void;
+  isExporting: boolean;
+  onExport: () => void;
 }
 
 export default function TableToolbar({
   activeFilterCount, isFilterOpen, onFilterToggle,
   hiddenColumnCount, isColumnPanelOpen, onColumnToggle,
+  isExporting, onExport,
 }: TableToolbarProps) {
   const hasFilters = activeFilterCount > 0;
   const hasHiddenColumns = hiddenColumnCount > 0;
@@ -56,6 +59,19 @@ export default function TableToolbar({
           size={14}
           className={`transition-transform duration-200 ${isColumnPanelOpen ? 'rotate-180' : ''}`}
         />
+      </button>
+
+      {/* Export button — action (not a toggle), pushed right */}
+      <button
+        onClick={onExport}
+        disabled={isExporting}
+        className={`ml-auto ${baseClass} ${inactiveClass}
+          disabled:opacity-50 disabled:cursor-not-allowed`}
+      >
+        {isExporting
+          ? <Loader2 size={16} className="animate-spin" />
+          : <Download size={16} />}
+        <span>{isExporting ? 'Exporting...' : 'Export'}</span>
       </button>
     </div>
   );
