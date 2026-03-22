@@ -59,8 +59,8 @@
 | File | Action | What Changes |
 |------|--------|-------------|
 | `client/src/hooks/useColumnManager.ts` | Create | Column visibility + order state hook (~65 lines) |
-| `client/src/components/columns/ColumnManagerPanel.tsx` | Create | Dropdown panel: search, column list, bulk actions (~100 lines) |
-| `client/src/components/columns/ColumnRow.tsx` | Create | Single row: toggle + label + drag handle (~55 lines) |
+| `client/src/components/columns/ColumnManagerPanel.tsx` | Create | Dropdown panel: search, column list, bulk actions (~135 lines) |
+| `client/src/components/columns/ColumnRow.tsx` | Create | Single row: toggle + label + drag handle (~70 lines) |
 | `client/src/components/columns/ColumnDragOverlay.tsx` | Create | DragOverlay pill component (~20 lines) |
 | `client/src/components/FilterToolbar.tsx` | Rename → `TableToolbar.tsx` + Modify | Add Columns button with badge (~75 lines total) |
 | `client/src/components/widgets/ReportTableWidget.tsx` | Modify | Wire useColumnManager, pass visibleColumns to ReportTable (~145 lines total) |
@@ -152,6 +152,8 @@ export function useColumnManager(apiColumns: ColumnDefinition[] | undefined) {
   };
 
   const reorderColumns = (fromIndex: number, toIndex: number) => {
+    // WHY: First column (index 0) is locked — prevent moves to/from index 0
+    if (fromIndex === 0 || toIndex === 0) return;
     setManagedColumns((prev) => arrayMove(prev, fromIndex, toIndex));
   };
 
@@ -257,8 +259,8 @@ export default function ColumnRow({
         {column.label}
       </span>
 
-      {/* Drag handle — hidden during search */}
-      {!isDragDisabled && (
+      {/* Drag handle — hidden during search and for locked first column */}
+      {!isDragDisabled && !isLocked && (
         <button
           {...attributes}
           {...listeners}
@@ -614,7 +616,18 @@ refactor: rename FilterToolbar to TableToolbar, add Columns button
 **Files:**
 - Modify: `client/src/components/widgets/ReportTableWidget.tsx`
 
-- [ ] **Step 1: Add imports**
+- [ ] **Step 1: Update the intent block**
+
+Update the PURPOSE comment at the top of the file to reflect the new dependencies:
+
+```typescript
+// PURPOSE: Report widget orchestrator. Manages filter state, column
+//          visibility/order, data fetching, client-side filtering,
+//          and renders TableToolbar, FilterBuilder, ColumnManagerPanel,
+//          ReportTable, and Pagination.
+```
+
+- [ ] **Step 2: Add imports**
 
 Add at the top, after existing imports:
 
@@ -623,7 +636,7 @@ import { useColumnManager } from '../../hooks/useColumnManager';
 import ColumnManagerPanel from '../columns/ColumnManagerPanel';
 ```
 
-- [ ] **Step 2: Add useColumnManager hook**
+- [ ] **Step 3: Add useColumnManager hook**
 
 After the existing `const filtersQuery = ...` block (around line 28), add:
 
@@ -635,7 +648,7 @@ const {
 } = useColumnManager(data?.columns);
 ```
 
-- [ ] **Step 3: Update TableToolbar props to use real column manager state**
+- [ ] **Step 4: Update TableToolbar props to use real column manager state**
 
 Replace the temporary pass-throughs from Task 5:
 ```typescript
@@ -650,7 +663,7 @@ isColumnPanelOpen={isColumnPanelOpen}
 onColumnToggle={() => setIsColumnPanelOpen(!isColumnPanelOpen)}
 ```
 
-- [ ] **Step 4: Add ColumnManagerPanel below FilterBuilder**
+- [ ] **Step 5: Add ColumnManagerPanel below FilterBuilder**
 
 After the `{isFilterOpen && (...)}` block, add:
 
@@ -666,7 +679,7 @@ After the `{isFilterOpen && (...)}` block, add:
 )}
 ```
 
-- [ ] **Step 5: Pass visibleColumns to ReportTable**
+- [ ] **Step 6: Pass visibleColumns to ReportTable**
 
 Change line:
 ```typescript
@@ -679,16 +692,16 @@ To:
 
 WHY: `visibleColumns` may be empty before the hook initializes from the API response. Fall back to `data.columns` during the first render.
 
-- [ ] **Step 6: Verify file stays under 150 lines**
+- [ ] **Step 7: Verify file stays under 150 lines**
 
-The file should be ~145 lines after these changes. If it approaches 150, the ColumnManagerPanel JSX block can be extracted into a small wrapper.
+The file should be ~148 lines after these changes. If it exceeds 150, extract the ColumnManagerPanel JSX block into a small wrapper.
 
-- [ ] **Step 7: Verify TypeScript compiles**
+- [ ] **Step 8: Verify TypeScript compiles**
 
 Run: `cd client && npx tsc --noEmit`
 Expected: No errors
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```
 feat: wire column manager into ReportTableWidget
