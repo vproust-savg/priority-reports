@@ -21,3 +21,10 @@
 /* WHY: tabular-nums ensures numbers in tables/KPIs align in columns.
    Without this, $1,234 and $999 would have different widths. */
 .tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* WHY: Slide-up animation for the Toast component.
+   Subtle 200ms ease-out — matches the Apple/Stripe micro-interaction aesthetic. */
+@keyframes toast-slide-up {
+  from { transform: translateY(8px); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
+}
