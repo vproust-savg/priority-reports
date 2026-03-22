@@ -1,9 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: client/src/components/widgets/ReportTableWidget.tsx
-// PURPOSE: Report widget orchestrator. Manages filter state, column
-//          visibility/order, data fetching, client-side filtering,
-//          export, and renders TableToolbar, FilterBuilder,
-//          ColumnManagerPanel, ReportTable, Pagination, and Toast.
+// PURPOSE: Report widget orchestrator. Two-phase loading: shows
+//          quick results via useReportQuery, then switches to
+//          base dataset for instant client-side filtering.
 // USED BY: widgetRegistry.ts (registered as 'table' type)
 // EXPORTS: ReportTableWidget
 // ═══════════════════════════════════════════════════════════════
@@ -11,7 +10,8 @@
 import { useReportQuery } from '../../hooks/useReportQuery';
 import { useFiltersQuery } from '../../hooks/useFiltersQuery';
 import { useFilterState } from '../../hooks/useFilterState';
-import { applyClientFilters, hasAnyClientConditions, hasSkippedOrGroups } from '../../utils/clientFilter';
+import { useBaseDataset } from '../../hooks/useBaseDataset';
+import { applyAllFilters, applyClientFilters, hasAnyClientConditions, hasSkippedOrGroups } from '../../utils/clientFilter';
 import { AlertTriangle } from 'lucide-react';
 import { countActiveFilters } from '../../config/filterConstants';
 import TableToolbar from '../TableToolbar';
@@ -32,42 +32,70 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const filtersQuery = useFiltersQuery(reportId);
   const filterColumns = filtersQuery.data?.columns ?? [];
 
-  // WHY: Fetch more rows when client-side filters are active — the
-  // backend can't filter HTML-parsed columns, so we filter locally
+  // --- Phase 1: Quick display (50 rows, fast) ---
   const hasClientFilters = hasAnyClientConditions(debouncedGroup, filterColumns);
   const hasSkippedOr = hasSkippedOrGroups(debouncedGroup, filterColumns);
   const fetchPageSize = hasClientFilters ? 500 : 50;
 
-  const { data, isLoading, error, refetch } = useReportQuery(reportId, {
+  const quickQuery = useReportQuery(reportId, {
     filterGroup: debouncedGroup,
     page: hasClientFilters ? 1 : page,
     pageSize: fetchPageSize,
   });
 
+  // --- Phase 2: Base dataset (all rows for date range, background) ---
+  // WHY: Once the base dataset loads, ALL non-date filter changes become
+  // instant (client-side). Until then, Phase 1 handles display.
+  // WHY: enabled only after quick query loads — both share the Priority
+  // rate limiter, so running them simultaneously makes both slow.
+  const baseQuery = useBaseDataset(reportId, debouncedGroup, filterColumns, !!quickQuery.data);
+  const isBaseReady = !!baseQuery.data && !baseQuery.isError;
+
+  // WHY: Use base dataset when available for instant filtering,
+  // fall back to quick query for immediate display
+  const activeData = isBaseReady ? baseQuery.data : quickQuery.data;
+  const isLoading = !isBaseReady && quickQuery.isLoading;
+  const isFetching = isBaseReady ? baseQuery.isFetching : quickQuery.isFetching;
+  const error = isBaseReady ? baseQuery.error : quickQuery.error;
+  const refetch = isBaseReady ? baseQuery.refetch : quickQuery.refetch;
+
   const {
     managedColumns, visibleColumns, hiddenCount,
     isColumnPanelOpen, setIsColumnPanelOpen,
     toggleColumn, reorderColumns, showAll, hideAll,
-  } = useColumnManager(data?.columns);
+  } = useColumnManager(activeData?.columns);
 
   const { isExporting, toast, clearToast, triggerExport } = useExport(reportId, debouncedGroup);
 
   if (filtersQuery.error) console.warn('Failed to load filter options:', filtersQuery.error);
 
-  // Client-side filtering
-  const allRows = data?.data ?? [];
-  const filteredRows = hasClientFilters
-    ? applyClientFilters(allRows, debouncedGroup, filterColumns)
-    : allRows;
-  const displayData = hasClientFilters
-    ? filteredRows.slice((page - 1) * 50, page * 50)
-    : filteredRows;
-  const totalCount = hasClientFilters
-    ? filteredRows.length
-    : data?.pagination.totalCount ?? 0;
-  const totalPages = hasClientFilters
-    ? Math.ceil(filteredRows.length / 50)
-    : data?.pagination.totalPages ?? 0;
+  // --- Row filtering and pagination ---
+  const allRows = activeData?.data ?? [];
+  let filteredRows: Record<string, unknown>[];
+  let displayData: Record<string, unknown>[];
+  let totalCount: number;
+  let totalPages: number;
+
+  if (isBaseReady) {
+    // WHY: Base dataset has ALL rows for date range — apply ALL non-date
+    // filters client-side for instant response.
+    filteredRows = applyAllFilters(allRows, debouncedGroup, filterColumns);
+    displayData = filteredRows.slice((page - 1) * 50, page * 50);
+    totalCount = filteredRows.length;
+    totalPages = Math.ceil(filteredRows.length / 50);
+  } else if (hasClientFilters) {
+    // Phase 1 with client-side filters (same as before base dataset)
+    filteredRows = applyClientFilters(allRows, debouncedGroup, filterColumns);
+    displayData = filteredRows.slice((page - 1) * 50, page * 50);
+    totalCount = filteredRows.length;
+    totalPages = Math.ceil(filteredRows.length / 50);
+  } else {
+    // Phase 1 without client-side filters — server handles pagination
+    filteredRows = allRows;
+    displayData = allRows;
+    totalCount = quickQuery.data?.pagination.totalCount ?? 0;
+    totalPages = quickQuery.data?.pagination.totalPages ?? 0;
+  }
 
   return (
     <>
@@ -102,10 +130,18 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         />
       )}
 
-      {hasSkippedOr && (
+      {!isBaseReady && hasSkippedOr && (
         <div className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-amber-700 bg-amber-50/80 border border-amber-200/60 rounded-lg">
           <AlertTriangle size={14} className="shrink-0 text-amber-500" />
           <span>Some OR-group filters can't be fully applied. Results may include extra rows.</span>
+        </div>
+      )}
+
+      {/* WHY: Subtle loading bar during background refetches.
+          keepPreviousData means old data stays visible — no skeleton flash. */}
+      {isFetching && !isLoading && (
+        <div className="mx-5 mt-2 h-0.5 bg-primary/20 rounded-full overflow-hidden">
+          <div className="h-full bg-primary/60 rounded-full animate-pulse w-2/3" />
         </div>
       )}
 
@@ -138,9 +174,9 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         </div>
       )}
 
-      {data && displayData.length > 0 && (
+      {activeData && displayData.length > 0 && (
         <>
-          <ReportTable columns={visibleColumns.length > 0 ? visibleColumns : data.columns} data={displayData} />
+          <ReportTable columns={visibleColumns.length > 0 ? visibleColumns : activeData.columns} data={displayData} />
           <Pagination
             page={page}
             pageSize={50}

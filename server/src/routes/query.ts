@@ -10,7 +10,7 @@
 
 import { Router } from 'express';
 import type { CacheProvider } from '../services/cache';
-import { buildQueryCacheKey } from '../services/cache';
+import { buildQueryCacheKey, buildBaseCacheKey } from '../services/cache';
 import { getReport } from '../config/reportRegistry';
 import { queryPriority } from '../services/priorityClient';
 import { buildODataFilter } from '../services/odataFilterBuilder';
@@ -42,10 +42,15 @@ export function createQueryRouter(cache: CacheProvider): Router {
       return;
     }
 
-    const cacheKey = buildQueryCacheKey(reportId, body);
+    // WHY: Base mode fetches ALL rows for the date range, caches for 15 min,
+    // and lets the frontend apply non-date filters client-side instantly.
+    // Standard mode works as before for backward compatibility.
+    const isBase = body.baseMode === true;
+    const cacheKey = isBase
+      ? buildBaseCacheKey(reportId, body.filterGroup)
+      : buildQueryCacheKey(reportId, body);
+    const cacheTtl = isBase ? 900 : 300;
 
-    // WHY: Compute odataFilter before cache check so both log calls
-    // (cache hit + cache miss) can include it for Railway debugging.
     const baseParams = report.buildQuery({ page: body.page, pageSize: body.pageSize });
     const odataFilter = buildODataFilter(body.filterGroup, report.filterColumns);
 
@@ -56,10 +61,16 @@ export function createQueryRouter(cache: CacheProvider): Router {
         durationMs: Date.now() - startTime, cacheHit: true,
         rowCount: cached.data.length, statusCode: 200,
         odataFilter: odataFilter ?? 'none',
+        baseMode: isBase,
       });
       res.json(cached);
       return;
     }
+
+    // WHY: In base mode, fetch up to 1000 rows (the full date range)
+    // so the frontend has everything it needs for client-side filtering.
+    const fetchTop = isBase ? 1000 : body.pageSize;
+    const fetchSkip = isBase ? 0 : (body.page - 1) * body.pageSize;
 
     let priorityData;
     try {
@@ -67,8 +78,8 @@ export function createQueryRouter(cache: CacheProvider): Router {
         $select: baseParams.$select,
         $orderby: baseParams.$orderby,
         $filter: odataFilter,
-        $top: body.pageSize,
-        $skip: (body.page - 1) * body.pageSize,
+        $top: fetchTop,
+        $skip: fetchSkip,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -90,11 +101,7 @@ export function createQueryRouter(cache: CacheProvider): Router {
     }
     const rows = rawRows.map(report.transformRow);
 
-    const pageSize = body.pageSize;
-    const isLastPage = rows.length < pageSize;
-    const totalCount = isLastPage
-      ? (body.page - 1) * pageSize + rows.length
-      : (body.page - 1) * pageSize + rows.length + 1;
+    const totalCount = rows.length;
 
     const response: ApiResponse = {
       meta: {
@@ -107,21 +114,22 @@ export function createQueryRouter(cache: CacheProvider): Router {
       },
       data: rows,
       pagination: {
-        page: body.page,
-        pageSize,
+        page: isBase ? 1 : body.page,
+        pageSize: isBase ? totalCount : body.pageSize,
         totalCount,
-        totalPages: Math.ceil(totalCount / pageSize),
+        totalPages: isBase ? 1 : Math.ceil(totalCount / body.pageSize),
       },
       columns: report.columns,
     };
 
-    cache.set(cacheKey, response, 300).catch(() => {});
+    cache.set(cacheKey, response, cacheTtl).catch(() => {});
 
     logApiCall({
       level: 'info', event: 'query_fetch', reportId,
       durationMs: Date.now() - startTime, cacheHit: false,
       rowCount: rows.length, statusCode: 200,
       odataFilter: odataFilter ?? 'none',
+      baseMode: isBase,
     });
 
     res.json(response);

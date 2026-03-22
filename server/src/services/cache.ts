@@ -9,7 +9,7 @@
 
 import { Redis } from '@upstash/redis';
 import { env } from '../config/environment';
-import type { QueryRequest } from '@shared/types';
+import type { QueryRequest, FilterGroup } from '@shared/types';
 
 // WHY: Abstraction layer so we can swap from Upstash to Railway Redis
 // or any other provider by implementing one file. Business code
@@ -36,6 +36,14 @@ export function buildCacheKey(
 export function buildQueryCacheKey(reportId: string, body: QueryRequest): string {
   const filterHash = JSON.stringify(body.filterGroup);
   return `query:${reportId}:p${body.page}:s${body.pageSize}:${filterHash}`;
+}
+
+// WHY: Base mode caches by date conditions only so that changing a vendor
+// or status filter doesn't bust the cache. The expensive enrichment
+// (sub-form fetches) only runs once per date range, not per filter combo.
+export function buildBaseCacheKey(reportId: string, dateFilterGroup: FilterGroup): string {
+  const dateHash = JSON.stringify(dateFilterGroup);
+  return `base:${reportId}:${dateHash}`;
 }
 
 class UpstashCacheProvider implements CacheProvider {

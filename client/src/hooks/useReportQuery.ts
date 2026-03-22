@@ -6,7 +6,7 @@
 // EXPORTS: useReportQuery
 // ═══════════════════════════════════════════════════════════════
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import type { ApiResponse, FilterGroup, QueryRequest } from '@shared/types';
 
 interface ReportQueryParams {
@@ -35,5 +35,10 @@ export function useReportQuery(reportId: string, params: ReportQueryParams) {
       return response.json();
     },
     staleTime: 5 * 60 * 1000,
+    // WHY: Shows previous results while new data loads instead of flashing
+    // a skeleton on every filter change. Makes filter changes feel instant.
+    placeholderData: keepPreviousData,
+    // WHY: Prevents unnecessary refetches when user switches browser tabs
+    refetchOnWindowFocus: false,
   });
 }

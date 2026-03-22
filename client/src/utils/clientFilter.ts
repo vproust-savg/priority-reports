@@ -97,6 +97,66 @@ export function applyClientFilters(
   return rows.filter((row) => evaluateGroup(row, filterGroup, filterColumns));
 }
 
+// WHY: In base dataset mode, the backend only applies date filters via OData.
+// ALL other filters (vendor, status, text search, etc.) are applied here.
+// Unlike evaluateGroup which skips server-side conditions, this evaluates
+// every condition with a field and value.
+function evaluateAllConditions(
+  row: Record<string, unknown>,
+  group: FilterGroup,
+): boolean {
+  const activeConditions = group.conditions.filter(
+    (c) => c.field && (c.operator === 'isEmpty' || c.operator === 'isNotEmpty' || c.value),
+  );
+
+  const conditionResults = activeConditions.map((c) => evaluateCondition(row, c));
+  const groupResults = group.groups.map((g) => evaluateAllConditions(row, g));
+  const allResults = [...conditionResults, ...groupResults];
+
+  if (allResults.length === 0) return true;
+
+  return group.conjunction === 'and'
+    ? allResults.every(Boolean)
+    : allResults.some(Boolean);
+}
+
+// WHY: Used with base dataset pattern — evaluates ALL non-date conditions
+// client-side (not just filterLocation: 'client' ones). Date conditions are
+// already applied server-side via OData, so we skip them here.
+export function applyAllFilters(
+  rows: Record<string, unknown>[],
+  filterGroup: FilterGroup,
+  filterColumns: ColumnFilterMeta[],
+): Record<string, unknown>[] {
+  // WHY: Strip out date conditions — they're already handled by the base query.
+  // Only evaluate non-date conditions client-side.
+  const nonDateGroup = stripDateConditions(filterGroup, filterColumns);
+  const hasActive = nonDateGroup.conditions.some(
+    (c) => c.field && (c.operator === 'isEmpty' || c.operator === 'isNotEmpty' || c.value),
+  ) || nonDateGroup.groups.length > 0;
+
+  if (!hasActive) return rows;
+  return rows.filter((row) => evaluateAllConditions(row, nonDateGroup));
+}
+
+function stripDateConditions(
+  group: FilterGroup,
+  columns: ColumnFilterMeta[],
+): FilterGroup {
+  const nonDateConditions = group.conditions.filter((c) => {
+    if (!c.field) return false;
+    const col = columns.find((col) => col.key === c.field);
+    return col?.filterType !== 'date';
+  });
+
+  return {
+    id: group.id,
+    conjunction: group.conjunction,
+    conditions: nonDateConditions,
+    groups: group.groups.map((g) => stripDateConditions(g, columns)),
+  };
+}
+
 // WHY: The backend's odataFilterBuilder silently skips entire OR groups
 // that contain any client-side condition (correct safety behavior — partial
 // OR = data loss). This function detects when that happens so the UI can

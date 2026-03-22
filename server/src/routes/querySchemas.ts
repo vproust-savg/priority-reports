@@ -38,4 +38,7 @@ export const QueryRequestSchema = z.object({
   filterGroup: FilterGroupSchema,
   page: z.number().min(1).default(1),
   pageSize: z.number().min(1).max(1000).default(50),
+  // WHY: Base mode fetches all rows for the date range, caches longer,
+  // and lets the frontend apply non-date filters client-side instantly.
+  baseMode: z.boolean().optional().default(false),
 });

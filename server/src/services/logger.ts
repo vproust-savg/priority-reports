@@ -15,6 +15,7 @@ export function logApiCall(entry: {
   rowCount?: number;
   statusCode: number;
   odataFilter?: string;
+  baseMode?: boolean;
 }): void {
   // WHY: Structured JSON logs so Railway captures them as searchable fields.
   console.log(JSON.stringify({ ...entry, timestamp: new Date().toISOString() }));

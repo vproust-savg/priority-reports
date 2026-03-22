@@ -77,30 +77,51 @@ function buildQuery(filters: ReportFilters): ODataParams {
   };
 }
 
+// WHY: Per-document sub-form cache. Sub-form data (driver ID, temps, comments)
+// doesn't change between filter changes — caching it means we only fetch
+// each document's remarks ONCE, then reuse across all filter combinations.
+// Cleared on server restart. Prevents re-enrichment when filters change.
+const subformCache = new Map<string, Record<string, unknown> | null>();
+
 // WHY: Priority's $expand truncates responses on DOCUMENTS_P (CloudFront
 // drops connection mid-body). Two-step fetch: get rows, then fetch each
 // text sub-form individually. Batched in groups of 10 for rate limit safety.
 async function enrichRows(rows: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
   const BATCH_SIZE = 10;
-  // WHY: 200ms delay between batches keeps us under Priority's 100 calls/min
-  // rate limit. At 10 parallel calls per batch, this limits throughput to
-  // ~50 calls/sec burst with ~5 calls/sec sustained average.
   const BATCH_DELAY_MS = 200;
 
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    if (i > 0) await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
     const batch = rows.slice(i, i + BATCH_SIZE);
-    const results = await Promise.all(
-      batch.map((row) =>
-        querySubform(
-          'DOCUMENTS_P',
-          { DOCNO: row.DOCNO as string, TYPE: row.TYPE as string },
-          'DOCUMENTSTEXT_SUBFORM',
+
+    // WHY: Split batch into cached (instant) and uncached (needs API call).
+    // After a few filter changes, most documents are cached — enrichment
+    // becomes near-instant instead of making hundreds of API calls.
+    const uncached: Record<string, unknown>[] = [];
+    for (const row of batch) {
+      const cacheKey = `${row.DOCNO}:${row.TYPE}`;
+      if (subformCache.has(cacheKey)) {
+        row.DOCUMENTSTEXT_SUBFORM = subformCache.get(cacheKey);
+      } else {
+        uncached.push(row);
+      }
+    }
+
+    if (uncached.length > 0) {
+      if (i > 0) await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
+      const results = await Promise.all(
+        uncached.map((row) =>
+          querySubform(
+            'DOCUMENTS_P',
+            { DOCNO: row.DOCNO as string, TYPE: row.TYPE as string },
+            'DOCUMENTSTEXT_SUBFORM',
+          ),
         ),
-      ),
-    );
-    for (let j = 0; j < batch.length; j++) {
-      batch[j].DOCUMENTSTEXT_SUBFORM = results[j];
+      );
+      for (let j = 0; j < uncached.length; j++) {
+        const cacheKey = `${uncached[j].DOCNO}:${uncached[j].TYPE}`;
+        subformCache.set(cacheKey, results[j]);
+        uncached[j].DOCUMENTSTEXT_SUBFORM = results[j];
+      }
     }
   }
 
