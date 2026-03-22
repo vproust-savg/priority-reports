@@ -11,6 +11,18 @@ import ExcelJS from 'exceljs';
 import type { ColumnDefinition } from '@shared/types';
 import type { ExportConfig } from '../config/reportRegistry';
 
+// WHY: Detects ISO date strings (e.g., "2026-01-15" or "2026-01-15T00:00:00Z")
+// and converts them to Date objects so ExcelJS writes proper Excel serial dates.
+// Without this, date columns show raw ISO strings instead of formatted dates.
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}.*)?$/;
+
+function toExcelValue(value: unknown): ExcelJS.CellValue {
+  if (typeof value === 'string' && ISO_DATE_PATTERN.test(value)) {
+    return new Date(value);
+  }
+  return value as ExcelJS.CellValue;
+}
+
 // WHY: Converts column letter (A, B, ..., Z, AA, AB) to 1-based column number.
 // ExcelJS uses 1-based column numbers: A=1, B=2, ..., Z=26, AA=27.
 function columnLetterToNumber(letter: string): number {
@@ -77,7 +89,7 @@ export async function generateTemplateExcel(
     for (const { colNum, fieldKey } of colMap) {
       const value = rows[i][fieldKey];
       if (value != null) {
-        excelRow.getCell(colNum).value = value as ExcelJS.CellValue;
+        excelRow.getCell(colNum).value = toExcelValue(value);
       }
     }
     excelRow.commit();

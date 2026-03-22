@@ -92,6 +92,9 @@ export function createExportRouter(): Router {
     }
 
     // --- Enrich rows (sub-form fetch, e.g., GRV Log remarks) ---
+    // WHY: Fail the export if enrichment fails — for GRV Log, enrichRows
+    // populates most columns (driverId, temps, conditions, comments).
+    // Silently continuing would produce a mostly-empty export.
     let enrichedRows = allRawRows;
     if (report.enrichRows) {
       try {
@@ -99,6 +102,8 @@ export function createExportRouter(): Router {
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         console.error(`[export] Sub-form enrichment failed for ${reportId}: ${message}`);
+        res.status(502).json({ error: `Sub-form data fetch failed: ${message}` });
+        return;
       }
     }
 
@@ -139,6 +144,7 @@ export function createExportRouter(): Router {
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(excelBuffer);
 
     logApiCall({
       level: 'info', event: 'export', reportId,
@@ -146,8 +152,6 @@ export function createExportRouter(): Router {
       rowCount: filteredRows.length, statusCode: 200,
       odataFilter: odataFilter ?? 'none',
     });
-
-    res.send(excelBuffer);
   });
 
   return router;

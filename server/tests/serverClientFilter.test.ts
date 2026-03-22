@@ -16,6 +16,7 @@ const testColumns: ColumnFilterMeta[] = [
   { key: 'amount', label: 'Amount', filterType: 'currency', filterLocation: 'server', odataField: 'AMOUNT' },
   { key: 'date', label: 'Date', filterType: 'date', filterLocation: 'server', odataField: 'CURDATE' },
   { key: 'temp', label: 'Temp', filterType: 'text', filterLocation: 'client' },
+  { key: 'received', label: 'Received', filterType: 'date', filterLocation: 'client' },
 ];
 
 function makeGroup(overrides: Partial<FilterGroup> = {}): FilterGroup {
@@ -29,9 +30,9 @@ function makeGroup(overrides: Partial<FilterGroup> = {}): FilterGroup {
 }
 
 const rows = [
-  { name: 'Alice', notes: 'Good delivery', amount: 100, date: '2026-01-15', temp: '34' },
-  { name: 'Bob', notes: 'Damaged items', amount: 200, date: '2026-02-20', temp: '38' },
-  { name: 'Carol', notes: '', amount: 0, date: '2026-03-10', temp: '36' },
+  { name: 'Alice', notes: 'Good delivery', amount: 100, date: '2026-01-15', temp: '34', received: '2026-01-15' },
+  { name: 'Bob', notes: 'Damaged items', amount: 200, date: '2026-02-20', temp: '38', received: '2026-02-20' },
+  { name: 'Carol', notes: '', amount: 0, date: '2026-03-10', temp: '36', received: '2026-03-10' },
 ];
 
 describe('applyServerClientFilters', () => {
@@ -184,5 +185,94 @@ describe('applyServerClientFilters', () => {
     });
     const result = applyServerClientFilters(rows, group, testColumns);
     expect(result).toHaveLength(3);
+  });
+
+  // --- Numeric operators (temp: '34', '38', '36') ---
+
+  it('filters by greaterThan operator', () => {
+    const group = makeGroup({
+      conditions: [{ id: '1', field: 'temp', operator: 'greaterThan', value: '36' }],
+    });
+    const result = applyServerClientFilters(rows, group, testColumns);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('Bob');
+  });
+
+  it('filters by lessThan operator', () => {
+    const group = makeGroup({
+      conditions: [{ id: '1', field: 'temp', operator: 'lessThan', value: '36' }],
+    });
+    const result = applyServerClientFilters(rows, group, testColumns);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('Alice');
+  });
+
+  it('filters by greaterOrEqual operator', () => {
+    const group = makeGroup({
+      conditions: [{ id: '1', field: 'temp', operator: 'greaterOrEqual', value: '36' }],
+    });
+    const result = applyServerClientFilters(rows, group, testColumns);
+    expect(result).toHaveLength(2);
+  });
+
+  it('filters by lessOrEqual operator', () => {
+    const group = makeGroup({
+      conditions: [{ id: '1', field: 'temp', operator: 'lessOrEqual', value: '36' }],
+    });
+    const result = applyServerClientFilters(rows, group, testColumns);
+    expect(result).toHaveLength(2);
+  });
+
+  it('filters by between operator', () => {
+    const group = makeGroup({
+      conditions: [{ id: '1', field: 'temp', operator: 'between', value: '35', valueTo: '37' }],
+    });
+    const result = applyServerClientFilters(rows, group, testColumns);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('Carol');
+  });
+
+  // --- Date operators (received: '2026-01-15', '2026-02-20', '2026-03-10') ---
+
+  it('filters by isBefore operator', () => {
+    const group = makeGroup({
+      conditions: [{ id: '1', field: 'received', operator: 'isBefore', value: '2026-02-01' }],
+    });
+    const result = applyServerClientFilters(rows, group, testColumns);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('Alice');
+  });
+
+  it('filters by isAfter operator', () => {
+    const group = makeGroup({
+      conditions: [{ id: '1', field: 'received', operator: 'isAfter', value: '2026-02-28' }],
+    });
+    const result = applyServerClientFilters(rows, group, testColumns);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('Carol');
+  });
+
+  it('filters by isOnOrBefore operator', () => {
+    const group = makeGroup({
+      conditions: [{ id: '1', field: 'received', operator: 'isOnOrBefore', value: '2026-02-20' }],
+    });
+    const result = applyServerClientFilters(rows, group, testColumns);
+    expect(result).toHaveLength(2);
+  });
+
+  it('filters by isOnOrAfter operator', () => {
+    const group = makeGroup({
+      conditions: [{ id: '1', field: 'received', operator: 'isOnOrAfter', value: '2026-02-20' }],
+    });
+    const result = applyServerClientFilters(rows, group, testColumns);
+    expect(result).toHaveLength(2);
+  });
+
+  it('filters by isBetween operator', () => {
+    const group = makeGroup({
+      conditions: [{ id: '1', field: 'received', operator: 'isBetween', value: '2026-01-01', valueTo: '2026-02-28' }],
+    });
+    const result = applyServerClientFilters(rows, group, testColumns);
+    expect(result).toHaveLength(2);
   });
 });
