@@ -12,6 +12,7 @@ import { OPERATORS_BY_TYPE, FILTER_INPUT_CLASS } from '../../config/filterConsta
 import FilterValueInput from './FilterValueInput';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { getMonday, getSunday, toISODate } from '../../utils/weekUtils';
 
 interface FilterConditionRowProps {
   condition: FilterCondition;
@@ -82,7 +83,17 @@ export default function FilterConditionRow({
       {condition.field && (
         <select
           value={condition.operator}
-          onChange={(e) => onChange({ ...condition, operator: e.target.value as FilterCondition['operator'], value: '', valueTo: undefined })}
+          onChange={(e) => {
+            const newOp = e.target.value as FilterCondition['operator'];
+            // WHY: Pre-populate isInWeek with current week so the user sees
+            // results immediately. All other operators reset to blank.
+            if (newOp === 'isInWeek') {
+              const monday = getMonday(new Date());
+              onChange({ ...condition, operator: newOp, value: toISODate(monday), valueTo: toISODate(getSunday(monday)) });
+            } else {
+              onChange({ ...condition, operator: newOp, value: '', valueTo: undefined });
+            }
+          }}
           className={`${FILTER_INPUT_CLASS} min-w-[140px]`}
         >
           {operators.map((op) => (
