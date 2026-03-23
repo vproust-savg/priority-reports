@@ -1,24 +1,83 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: client/src/components/CheeseLoader.tsx
-// PURPOSE: Loading animation placeholder. Will be replaced with
-//          a cheese wheel animation (designed via Claude artifact).
-//          For now, wraps TableSkeleton with a centered message.
+// PURPOSE: Branded cheese wheel loading animation. SVG wheel with
+//          two animation variants: trailing sweep and slice cut.
+//          Pure CSS keyframes — no Framer Motion, no external libs.
 // USED BY: ReportTableWidget
 // EXPORTS: CheeseLoader (default)
 // ═══════════════════════════════════════════════════════════════
 
 import TableSkeleton from './TableSkeleton';
 
+// WHY: 6 wedges at 60deg each. Pre-computed arc endpoints for a circle
+// centered at (40,40) with radius 36. Formula: (40 + 36*sin(angle), 40 - 36*cos(angle))
+const WEDGE_PATHS = [
+  'M40,40 L40,4 A36,36 0 0,1 71.18,22 Z',
+  'M40,40 L71.18,22 A36,36 0 0,1 71.18,58 Z',
+  'M40,40 L71.18,58 A36,36 0 0,1 40,76 Z',
+  'M40,40 L40,76 A36,36 0 0,1 8.82,58 Z',
+  'M40,40 L8.82,58 A36,36 0 0,1 8.82,22 Z',
+  'M40,40 L8.82,22 A36,36 0 0,1 40,4 Z',
+];
+
+// WHY: Holes are subtle texture (15-30% opacity lighter gold), NOT opaque
+// white cartoon cutouts. Varying sizes and opacities for organic feel.
+const HOLES = [
+  { cx: 48, cy: 18, r: 2.5, opacity: 0.25 },
+  { cx: 58, cy: 32, r: 2, opacity: 0.2 },
+  { cx: 55, cy: 48, r: 3, opacity: 0.3 },
+  { cx: 35, cy: 25, r: 1.5, opacity: 0.15 },
+  { cx: 28, cy: 42, r: 2.5, opacity: 0.25 },
+  { cx: 42, cy: 58, r: 2, opacity: 0.2 },
+  { cx: 22, cy: 55, r: 1.5, opacity: 0.15 },
+  { cx: 50, cy: 24, r: 1.5, opacity: 0.2 },
+];
+
 export default function CheeseLoader() {
   return (
-    <div>
-      <div className="flex items-center justify-center py-4">
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-          <span>Loading data...</span>
-        </div>
+    <div role="status" aria-label="Loading data">
+      <div className="flex flex-col items-center justify-center py-16">
+        <svg
+          viewBox="0 0 80 80"
+          width="96"
+          height="96"
+          style={{ filter: 'drop-shadow(0 2px 8px rgba(180, 140, 50, 0.15))' }}
+        >
+          <defs>
+            <radialGradient id="cheese-gradient" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#DCBA5C" />
+              <stop offset="100%" stopColor="#C89A30" />
+            </radialGradient>
+          </defs>
+
+          {WEDGE_PATHS.map((d, i) => (
+            <path
+              key={i}
+              d={d}
+              fill="url(#cheese-gradient)"
+              stroke="#B8912E"
+              strokeWidth="0.5"
+            />
+          ))}
+
+          {HOLES.map((h, i) => (
+            <circle
+              key={`hole-${i}`}
+              cx={h.cx}
+              cy={h.cy}
+              r={h.r}
+              fill="#E0BE6A"
+              fillOpacity={h.opacity}
+              stroke="#C49B38"
+              strokeWidth="0.3"
+            />
+          ))}
+        </svg>
+        <p className="mt-4 text-sm text-slate-500">Preparing your report...</p>
       </div>
-      <TableSkeleton />
+      <div className="opacity-50">
+        <TableSkeleton />
+      </div>
     </div>
   );
 }
