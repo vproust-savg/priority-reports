@@ -6,8 +6,9 @@
 // EXPORTS: Layout
 // ═══════════════════════════════════════════════════════════════
 
-import { Link, useLocation, Outlet } from 'react-router-dom';
+import { useLocation, Outlet } from 'react-router-dom';
 import { pages } from '../config/pages';
+import NavTabs from './NavTabs';
 
 export default function Layout() {
   const location = useLocation();
@@ -29,24 +30,7 @@ export default function Layout() {
           </div>
 
           {/* Navigation tabs — auto-generated from pages config */}
-          <nav className="flex gap-6 -mb-px">
-            {pages.map((page) => {
-              const isActive = location.pathname === page.path;
-              return (
-                <Link
-                  key={page.id}
-                  to={page.path}
-                  className={`pb-3 text-sm font-medium transition-colors duration-150 ${
-                    isActive
-                      ? 'text-primary border-b-2 border-primary'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  {page.name}
-                </Link>
-              );
-            })}
-          </nav>
+          <NavTabs pages={pages} currentPath={location.pathname} />
         </div>
       </header>
 
