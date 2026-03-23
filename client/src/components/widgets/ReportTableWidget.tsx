@@ -149,6 +149,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
           <ReportTable
             columns={visibleColumns.length > 0 ? visibleColumns : data!.columns}
             data={displayData}
+            rowStyleField={data?.meta?.rowStyleField}
           />
           <Pagination
             page={page}
