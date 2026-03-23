@@ -111,16 +111,29 @@ export async function generateFallbackExcel(
   const headerRow = worksheet.addRow(columns.map((c) => c.label));
   headerRow.font = { bold: true };
 
+  // WHY: Track which columns are dates so we can apply numFmt after writing.
+  const dateColIndices: number[] = [];
+  columns.forEach((c, i) => { if (c.type === 'date') dateColIndices.push(i + 1); });
+
   // Data rows
   for (const row of rows) {
-    worksheet.addRow(columns.map((c) => {
+    const excelRow = worksheet.addRow(columns.map((c) => {
       const val = row[c.key];
       // WHY: Write numbers as numbers so Excel can format/sort them.
       if ((c.type === 'currency' || c.type === 'number') && val != null) {
         return typeof val === 'number' ? val : parseFloat(String(val));
       }
+      // WHY: Convert ISO date strings to Date objects so Excel stores them
+      // as serial dates (sortable, formattable) instead of raw text.
+      if (c.type === 'date' && val != null) {
+        return toExcelValue(val);
+      }
       return val ?? '';
     }));
+    // WHY: Apply MM/DD/YY format to date cells in this row.
+    for (const colIdx of dateColIndices) {
+      excelRow.getCell(colIdx).numFmt = 'MM/DD/YY';
+    }
   }
 
   // WHY: Auto-width columns based on header + data content.
