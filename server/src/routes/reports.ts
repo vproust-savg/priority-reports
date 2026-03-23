@@ -18,6 +18,8 @@ import type { ApiResponse } from '@shared/types';
 
 // WHY: Import report definitions so they self-register into reportRegistry
 import '../reports/grvLog';
+// WHY: Temporarily commented until bbdReport.ts exists (Task 4).
+// import '../reports/bbdReport';
 
 const QueryParamsSchema = z.object({
   page: z.coerce.number().min(1).default(1),
@@ -108,7 +110,13 @@ export function createReportsRouter(cache: CacheProvider): Router {
         warnings.push('Sub-form data unavailable — some columns may be blank');
       }
     }
-    const rows = rawRows.map(report.transformRow);
+    let rows = rawRows.map(report.transformRow);
+
+    // WHY: Post-transform row exclusion. BBD uses this to remove items
+    // with balance <= 0 or without a flagged expiration status.
+    if (report.filterRows) {
+      rows = report.filterRows(rows);
+    }
 
     // WHY: Priority may not support $count=true. Estimate totalCount:
     // if fewer rows than pageSize, we're on the last page.
@@ -126,6 +134,7 @@ export function createReportsRouter(cache: CacheProvider): Router {
         cache: 'miss',
         executionTimeMs: Date.now() - startTime,
         source: 'priority-odata',
+        rowStyleField: report.rowStyleField,
       },
       data: rows,
       pagination: {

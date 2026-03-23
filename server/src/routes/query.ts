@@ -22,6 +22,8 @@ import type { ApiResponse } from '@shared/types';
 
 // WHY: Import report definitions so they self-register into reportRegistry
 import '../reports/grvLog';
+// WHY: Temporarily commented until bbdReport.ts exists (Task 4).
+// import '../reports/bbdReport';
 
 export function createQueryRouter(cache: CacheProvider): Router {
   const router = Router();
@@ -68,21 +70,32 @@ export function createQueryRouter(cache: CacheProvider): Router {
       return;
     }
 
-    // WHY: When client-only filters are active, OData can't filter those
-    // columns. Fetch more rows, apply post-enrichment filter, then
-    // paginate server-side. $skip=0 because we paginate after filtering.
     const hasClientFilters = hasClientOnlyConditions(body.filterGroup, report.filterColumns);
-    const fetchTop = hasClientFilters ? CLIENT_FILTER_MAX_FETCH : body.pageSize;
-    const fetchSkip = hasClientFilters ? 0 : (body.page - 1) * body.pageSize;
-
     const baseParams = report.buildQuery({ page: body.page, pageSize: body.pageSize });
+
+    // WHY: Merge the report's base $filter (e.g., BBD's EXPIRYDATE cutoff) with
+    // UI-generated OData filter. Both are ANDed when present.
+    const combinedFilter = [baseParams.$filter, odataFilter].filter(Boolean).join(' and ') || undefined;
+
+    // WHY: clientSidePagination reports (like BBD) use the report's own $top/$skip
+    // because post-fetch filtering (filterRows) makes OData pagination unreliable.
+    // Standard reports use query.ts-controlled pagination.
+    let fetchTop: number;
+    let fetchSkip: number;
+    if (report.clientSidePagination) {
+      fetchTop = baseParams.$top ?? 2000;
+      fetchSkip = baseParams.$skip ?? 0;
+    } else {
+      fetchTop = hasClientFilters ? CLIENT_FILTER_MAX_FETCH : body.pageSize;
+      fetchSkip = hasClientFilters ? 0 : (body.page - 1) * body.pageSize;
+    }
 
     let priorityData;
     try {
       priorityData = await queryPriority(report.entity, {
         $select: baseParams.$select,
         $orderby: baseParams.$orderby,
-        $filter: odataFilter,
+        $filter: combinedFilter,
         $top: fetchTop,
         $skip: fetchSkip,
       });
@@ -106,28 +119,36 @@ export function createQueryRouter(cache: CacheProvider): Router {
     }
     let rows = rawRows.map(report.transformRow);
 
+    // WHY: Post-transform row exclusion. BBD uses this to remove items
+    // with balance <= 0 or without a flagged expiration status.
+    if (report.filterRows) {
+      rows = report.filterRows(rows);
+    }
+
     // WHY: Apply post-enrichment filtering for client-only columns.
     // OData can't filter on fields that come from HTML sub-form parsing.
     if (hasClientFilters) {
       rows = applyServerClientFilters(rows, body.filterGroup, report.filterColumns);
     }
 
-    // WHY: When client-only filters are active, we fetched all matching
-    // rows (up to 500) and filtered server-side. Now paginate manually.
+    // WHY: Pagination depends on the report's strategy.
+    // clientSidePagination: all rows returned, frontend paginates.
+    // Standard: server-side pagination with client filter support.
     const totalBeforePagination = rows.length;
-    if (hasClientFilters) {
+    let totalCount: number;
+
+    if (report.clientSidePagination) {
+      // WHY: All filtered rows returned to frontend. Frontend handles pagination.
+      totalCount = totalBeforePagination;
+    } else if (hasClientFilters) {
       const start = (body.page - 1) * body.pageSize;
       rows = rows.slice(start, start + body.pageSize);
-    }
-
-    // WHY: Priority OData doesn't reliably support $count=true.
-    // With client filters: we have the exact total from filtering.
-    // Without: estimate — if fewer rows than pageSize, last page.
-    const totalCount = hasClientFilters
-      ? totalBeforePagination
-      : rows.length < body.pageSize
+      totalCount = totalBeforePagination;
+    } else {
+      totalCount = rows.length < body.pageSize
         ? (body.page - 1) * body.pageSize + rows.length
         : (body.page - 1) * body.pageSize + rows.length + 1;
+    }
 
     const response: ApiResponse = {
       meta: {
@@ -137,6 +158,7 @@ export function createQueryRouter(cache: CacheProvider): Router {
         cache: 'miss',
         executionTimeMs: Date.now() - startTime,
         source: 'priority-odata',
+        rowStyleField: report.rowStyleField,
       },
       data: rows,
       pagination: {
