@@ -25,6 +25,7 @@ import ReportTable from '../ReportTable';
 import Pagination from '../Pagination';
 import Toast from '../Toast';
 import TableSkeleton from '../TableSkeleton';
+import LoadingBar from '../LoadingBar';
 import { applyAllFilters, applyClientFilters, hasAnyClientConditions, hasSkippedOrGroups } from '../../utils/clientFilter';
 import { countActiveFilters } from '../../config/filterConstants';
 
@@ -69,6 +70,12 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const isFetching = isBaseReady ? baseQuery.isFetching : quickQuery.isFetching;
   const error = isBaseReady ? baseQuery.error : quickQuery.error;
   const refetch = isBaseReady ? baseQuery.refetch : quickQuery.refetch;
+
+  // WHY: Compute loading phase for the gradient progress bar.
+  // 'quick' = initial load, 'base' = background fetching base dataset, 'idle' = done.
+  const loadingPhase = isLoading ? 'quick' as const
+    : isFetching ? 'base' as const
+    : 'idle' as const;
 
   const {
     managedColumns, visibleColumns, hiddenCount,
@@ -115,6 +122,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
 
   return (
     <>
+      <LoadingBar phase={loadingPhase} />
       <TableToolbar
         activeFilterCount={countActiveFilters(filterGroup)}
         isFilterOpen={isFilterOpen}
@@ -191,14 +199,6 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
           <span>{msg}</span>
         </div>
       ))}
-
-      {/* WHY: Subtle loading bar during background refetches.
-          keepPreviousData means old data stays visible — no skeleton flash. */}
-      {isFetching && !isLoading && (
-        <div className="mx-5 mt-2 h-0.5 bg-primary/20 rounded-full overflow-hidden">
-          <div className="h-full bg-primary/60 rounded-full animate-pulse w-2/3" />
-        </div>
-      )}
 
       {isLoading && <TableSkeleton />}
 
