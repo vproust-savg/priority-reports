@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { motion } from 'framer-motion';
-import { SPRING_GENTLE } from '../config/animationConstants';
+import { EASE_DEFAULT } from '../config/animationConstants';
 
 // WHY: Only 'idle', 'quick', and 'base' are used by ReportTableWidget.
 // 'idle' = hidden, 'quick' = Phase 1 indeterminate pulse, 'base' = Phase 2 filling.
@@ -40,7 +40,7 @@ export default function LoadingBar({ phase }: LoadingBarProps) {
           style={{ background: BAR_GRADIENT }}
           initial={{ width: '60%' }}
           animate={{ width: '100%' }}
-          transition={SPRING_GENTLE}
+          transition={EASE_DEFAULT}
         />
       )}
     </div>

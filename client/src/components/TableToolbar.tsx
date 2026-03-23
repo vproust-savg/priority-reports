@@ -6,10 +6,7 @@
 // EXPORTS: TableToolbar
 // ═══════════════════════════════════════════════════════════════
 
-import { motion } from 'framer-motion';
 import { SlidersHorizontal, Columns3, ChevronDown, Download, Loader2 } from 'lucide-react';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-import { SPRING_STIFF } from '../config/animationConstants';
 
 interface TableToolbarProps {
   activeFilterCount: number;
@@ -27,8 +24,6 @@ export default function TableToolbar({
   hiddenColumnCount, isColumnPanelOpen, onColumnToggle,
   isExporting, onExport,
 }: TableToolbarProps) {
-  const reduced = useReducedMotion();
-  const tapAnimation = reduced ? undefined : { scale: 0.97 };
   const hasFilters = activeFilterCount > 0;
   const hasHiddenColumns = hiddenColumnCount > 0;
 
@@ -39,9 +34,8 @@ export default function TableToolbar({
   return (
     <div className="px-5 py-2 border-b border-slate-100 flex items-center gap-1">
       {/* Filter button */}
-      <motion.button
+      <button
         onClick={onFilterToggle}
-        whileTap={tapAnimation} transition={SPRING_STIFF}
         className={`${baseClass} ${hasFilters ? activeClass : inactiveClass}`}
       >
         <SlidersHorizontal size={16} />
@@ -51,12 +45,11 @@ export default function TableToolbar({
           size={14}
           className={`transition-transform duration-200 ${isFilterOpen ? 'rotate-180' : ''}`}
         />
-      </motion.button>
+      </button>
 
       {/* Columns button */}
-      <motion.button
+      <button
         onClick={onColumnToggle}
-        whileTap={tapAnimation} transition={SPRING_STIFF}
         className={`${baseClass} ${hasHiddenColumns ? activeClass : inactiveClass}`}
       >
         <Columns3 size={16} />
@@ -66,13 +59,12 @@ export default function TableToolbar({
           size={14}
           className={`transition-transform duration-200 ${isColumnPanelOpen ? 'rotate-180' : ''}`}
         />
-      </motion.button>
+      </button>
 
       {/* Export button — action (not a toggle), pushed right */}
-      <motion.button
+      <button
         onClick={onExport}
         disabled={isExporting}
-        whileTap={tapAnimation} transition={SPRING_STIFF}
         className={`ml-auto ${baseClass} ${inactiveClass}
           disabled:opacity-50 disabled:cursor-not-allowed`}
       >
@@ -80,7 +72,7 @@ export default function TableToolbar({
           ? <Loader2 size={16} className="animate-spin" />
           : <Download size={16} />}
         <span>{isExporting ? 'Exporting...' : 'Export'}</span>
-      </motion.button>
+      </button>
     </div>
   );
 }

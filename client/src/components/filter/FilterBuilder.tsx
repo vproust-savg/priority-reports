@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { SPRING_STIFF } from '../../config/animationConstants';
+import { EASE_FAST } from '../../config/animationConstants';
 import { DndContext, DragOverlay, useDroppable, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useFilterDrag } from '../../hooks/useFilterDrag';
@@ -103,11 +103,10 @@ export default function FilterBuilder({
             {filterGroup.conditions.map((condition, idx) => (
               <motion.div
                 key={condition.id}
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ opacity: { duration: 0.15 }, height: { duration: 0.2 } }}
-                style={{ overflow: 'hidden' }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={EASE_FAST}
               >
                 {idx === 0 ? (
                   <span className={`${FILTER_LABEL_CLASS} block mb-1`}>Where</span>
@@ -145,16 +144,14 @@ export default function FilterBuilder({
 
         {/* Add buttons */}
         <div className="flex gap-4 mt-3">
-          <motion.button onClick={addCondition}
-            whileTap={{ scale: 0.97 }} transition={SPRING_STIFF}
+          <button onClick={addCondition}
             className="text-xs font-medium text-primary hover:text-primary/70 transition-colors">
             + Add condition
-          </motion.button>
-          <motion.button onClick={addGroup}
-            whileTap={{ scale: 0.97 }} transition={SPRING_STIFF}
+          </button>
+          <button onClick={addGroup}
             className="text-xs font-medium text-primary hover:text-primary/70 transition-colors">
             + Add group
-          </motion.button>
+          </button>
         </div>
       </div>
 

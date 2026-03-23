@@ -8,7 +8,7 @@
 
 import { motion } from 'framer-motion';
 import { GripVertical } from 'lucide-react';
-import { SPRING_SNAPPY } from '../../config/animationConstants';
+import { EASE_DEFAULT } from '../../config/animationConstants';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { ManagedColumn } from '../../hooks/useColumnManager';
@@ -48,7 +48,7 @@ export default function ColumnRow({
         <motion.div
           className="absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow-sm"
           animate={{ x: column.visible ? 15 : 3 }}
-          transition={SPRING_SNAPPY}
+          transition={EASE_DEFAULT}
         />
       </button>
 

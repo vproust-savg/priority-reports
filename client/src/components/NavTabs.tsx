@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: client/src/components/NavTabs.tsx
-// PURPOSE: Animated navigation tabs with a sliding pill indicator.
+// PURPOSE: Navigation tabs with a sliding pill indicator.
 //          The pill glides between tabs using Framer Motion layout
 //          animation (layoutId), providing visual continuity.
 // USED BY: Layout.tsx
@@ -10,7 +10,7 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { SPRING_SNAPPY } from '../config/animationConstants';
+import { EASE_DEFAULT } from '../config/animationConstants';
 import type { PageConfig } from '@shared/types';
 
 interface NavTabsProps {
@@ -37,9 +37,7 @@ export default function NavTabs({ pages, currentPath }: NavTabsProps) {
               <motion.div
                 layoutId="nav-indicator"
                 className="absolute inset-0 bottom-1 bg-primary/10 rounded-lg"
-                transition={reduced ? { duration: 0 } : SPRING_SNAPPY}
-                // WHY: layout={false} when reduced motion prevents the
-                // sliding animation — pill just appears at the new position.
+                transition={reduced ? { duration: 0 } : EASE_DEFAULT}
                 layout={!reduced}
               />
             )}

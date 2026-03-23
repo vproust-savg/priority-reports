@@ -9,7 +9,7 @@
 import { useLocation, Outlet } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { FADE_SLIDE_UP, EASE_FADE, REDUCED_FADE, REDUCED_TRANSITION } from '../config/animationConstants';
+import { FADE_SLIDE_UP, EASE_FAST, REDUCED_FADE, REDUCED_TRANSITION } from '../config/animationConstants';
 import { pages } from '../config/pages';
 import NavTabs from './NavTabs';
 
@@ -44,7 +44,7 @@ export default function Layout() {
           <motion.div
             key={location.pathname}
             {...(reduced ? REDUCED_FADE : FADE_SLIDE_UP)}
-            transition={reduced ? REDUCED_TRANSITION : EASE_FADE}
+            transition={reduced ? REDUCED_TRANSITION : EASE_FAST}
           >
             <Outlet />
           </motion.div>

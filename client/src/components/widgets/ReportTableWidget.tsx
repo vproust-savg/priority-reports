@@ -14,10 +14,9 @@ import { useFilterState } from '../../hooks/useFilterState';
 import { useBaseDataset } from '../../hooks/useBaseDataset';
 import { useColumnManager } from '../../hooks/useColumnManager';
 import { useExport } from '../../hooks/useExport';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useFilteredData } from '../../hooks/useFilteredData';
 import { AnimatePresence, motion } from 'framer-motion';
-import { SPRING_SNAPPY, REDUCED_FADE, REDUCED_TRANSITION } from '../../config/animationConstants';
+import { EASE_FAST } from '../../config/animationConstants';
 import TableToolbar from '../TableToolbar';
 import FilterBuilder from '../filter/FilterBuilder';
 import ColumnManagerPanel from '../columns/ColumnManagerPanel';
@@ -72,7 +71,6 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   } = useColumnManager(activeData?.columns);
 
   const { isExporting, toast, clearToast, triggerExport } = useExport(reportId, debouncedGroup);
-  const reduced = useReducedMotion();
   const filterLoadError = filtersQuery.error;
 
   const allRows = activeData?.data ?? [];
@@ -100,11 +98,10 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         {isFilterOpen && (
           <motion.div
             key="filter-panel"
-            initial={reduced ? REDUCED_FADE.initial : { height: 0, opacity: 0 }}
-            animate={reduced ? REDUCED_FADE.animate : { height: 'auto', opacity: 1 }}
-            exit={reduced ? REDUCED_FADE.exit : { height: 0, opacity: 0 }}
-            transition={reduced ? REDUCED_TRANSITION : { height: SPRING_SNAPPY, opacity: { duration: 0.15 } }}
-            style={{ overflow: 'hidden' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={EASE_FAST}
           >
             <FilterBuilder
               filterGroup={filterGroup}
@@ -121,11 +118,10 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         {isColumnPanelOpen && (
           <motion.div
             key="column-panel"
-            initial={reduced ? REDUCED_FADE.initial : { height: 0, opacity: 0 }}
-            animate={reduced ? REDUCED_FADE.animate : { height: 'auto', opacity: 1 }}
-            exit={reduced ? REDUCED_FADE.exit : { height: 0, opacity: 0 }}
-            transition={reduced ? REDUCED_TRANSITION : { height: SPRING_SNAPPY, opacity: { duration: 0.15 } }}
-            style={{ overflow: 'hidden' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={EASE_FAST}
           >
             <ColumnManagerPanel
               managedColumns={managedColumns}
@@ -170,7 +166,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
 
       {activeData && displayData.length > 0 && (
         <>
-          <ReportTable columns={visibleColumns.length > 0 ? visibleColumns : activeData.columns} data={displayData} disableAnimation={reduced} />
+          <ReportTable columns={visibleColumns.length > 0 ? visibleColumns : activeData.columns} data={displayData} />
           <Pagination
             page={page}
             pageSize={50}
