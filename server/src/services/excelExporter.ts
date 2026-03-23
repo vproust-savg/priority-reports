@@ -37,6 +37,7 @@ export async function generateTemplateExcel(
   templateBuffer: Buffer,
   rows: Record<string, unknown>[],
   config: ExportConfig,
+  excelStyle?: ExcelStyle,
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(templateBuffer as unknown as ArrayBuffer);
@@ -94,6 +95,32 @@ export async function generateTemplateExcel(
     }
     excelRow.commit();
   }
+
+  // WHY: Override column widths from excelStyle for print-ready layout.
+  // These override any widths baked into the Airtable template.
+  if (excelStyle?.columnWidths) {
+    const colMap2 = Object.entries(config.mapping);
+    for (const [letter, fieldKey] of colMap2) {
+      const width = excelStyle.columnWidths[fieldKey];
+      if (width) {
+        worksheet.getColumn(columnLetterToNumber(letter.toUpperCase())).width = width;
+      }
+    }
+  }
+
+  // WHY: Print setup — same as fallback except printTitlesRow repeats the
+  // full header block (e.g., rows 1-4 for GRV Log) on every printed page.
+  worksheet.pageSetup.paperSize = 1;
+  worksheet.pageSetup.orientation = 'landscape';
+  worksheet.pageSetup.fitToPage = true;
+  worksheet.pageSetup.fitToWidth = 1;
+  worksheet.pageSetup.fitToHeight = 0;
+  worksheet.pageSetup.printTitlesRow = `1:${config.dataStartRow - 1}`;
+  worksheet.pageSetup.margins = {
+    left: 0.25, right: 0.25,
+    top: 0.25, bottom: 0.25,
+    header: 0.25, footer: 0.25,
+  };
 
   const arrayBuffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(arrayBuffer);

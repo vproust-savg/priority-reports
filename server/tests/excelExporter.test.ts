@@ -135,6 +135,29 @@ describe('generateTemplateExcel', () => {
     dataStartRow: 4,
   };
 
+  it('applies print setup and excelStyle when provided', async () => {
+    const style = {
+      columnWidths: { name: 18, amount: 10 },
+      fontSize: 8,
+    };
+    const template = await createTestTemplate();
+    const buffer = await generateTemplateExcel(template, testRows, exportConfig, style);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as Buffer);
+    const ws = wb.getWorksheet(1)!;
+
+    // Print setup
+    expect(ws.pageSetup.paperSize).toBe(1);
+    expect(ws.pageSetup.orientation).toBe('landscape');
+    expect(ws.pageSetup.fitToPage).toBe(true);
+    // WHY: Template repeats rows 1 through (dataStartRow - 1) = rows 1-3
+    expect(ws.pageSetup.printTitlesRow).toBe('1:3');
+
+    // Column widths applied (A=name=18, B=amount=10)
+    expect(ws.getColumn(1).width).toBe(18);
+    expect(ws.getColumn(2).width).toBe(10);
+  });
+
   it('fills template with data rows', async () => {
     const template = await createTestTemplate();
     const buffer = await generateTemplateExcel(template, testRows, exportConfig);
