@@ -1,20 +1,20 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: client/src/components/widgets/ReportTableWidget.tsx
-// PURPOSE: Report widget orchestrator. Two-phase loading: shows
-//          quick results via useReportQuery, then switches to
-//          base dataset for instant client-side filtering.
+// PURPOSE: Report widget — single-phase server-side filtering.
+//          Shows CheeseLoader during fetch, data table when ready.
+//          Refresh button clears server cache for fresh data.
 // USED BY: widgetRegistry.ts (registered as 'table' type)
 // EXPORTS: ReportTableWidget
 // ═══════════════════════════════════════════════════════════════
 
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
 import { useReportQuery } from '../../hooks/useReportQuery';
 import { useFiltersQuery } from '../../hooks/useFiltersQuery';
 import { useFilterState } from '../../hooks/useFilterState';
-import { useBaseDataset } from '../../hooks/useBaseDataset';
 import { useColumnManager } from '../../hooks/useColumnManager';
 import { useExport } from '../../hooks/useExport';
-import { useFilteredData } from '../../hooks/useFilteredData';
 import { AnimatePresence, motion } from 'framer-motion';
 import { EASE_FAST } from '../../config/animationConstants';
 import TableToolbar from '../TableToolbar';
@@ -23,11 +23,9 @@ import ColumnManagerPanel from '../columns/ColumnManagerPanel';
 import ReportTable from '../ReportTable';
 import Pagination from '../Pagination';
 import Toast from '../Toast';
-import TableSkeleton from '../TableSkeleton';
-import LoadingBar from '../LoadingBar';
+import CheeseLoader from '../CheeseLoader';
 import EmptyState from '../EmptyState';
 import ErrorState from '../ErrorState';
-import { hasAnyClientConditions, hasSkippedOrGroups } from '../../utils/clientFilter';
 import { countActiveFilters } from '../../config/filterConstants';
 
 export default function ReportTableWidget({ reportId }: { reportId: string }) {
@@ -39,50 +37,39 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const filtersQuery = useFiltersQuery(reportId);
   const filterColumns = filtersQuery.data?.columns ?? [];
 
-  // --- Phase 1: Quick display (50 rows, fast) ---
-  const hasClientFilters = hasAnyClientConditions(debouncedGroup, filterColumns);
-  const hasSkippedOr = hasSkippedOrGroups(debouncedGroup, filterColumns);
-  const fetchPageSize = hasClientFilters ? 500 : 50;
-
-  const quickQuery = useReportQuery(reportId, {
+  const query = useReportQuery(reportId, {
     filterGroup: debouncedGroup,
-    page: hasClientFilters ? 1 : page,
-    pageSize: fetchPageSize,
+    page,
+    pageSize: 50,
   });
-
-  // --- Phase 2: Base dataset (all rows for date range, background) ---
-  const baseQuery = useBaseDataset(reportId, debouncedGroup, filterColumns, !!quickQuery.data);
-  const isBaseReady = !!baseQuery.data && !baseQuery.isError && !baseQuery.isPlaceholderData;
-
-  const activeData = isBaseReady ? baseQuery.data : quickQuery.data;
-  const isLoading = !isBaseReady && quickQuery.isLoading;
-  const isFetching = isBaseReady ? baseQuery.isFetching : quickQuery.isFetching;
-  const error = isBaseReady ? baseQuery.error : quickQuery.error;
-  const refetch = isBaseReady ? baseQuery.refetch : quickQuery.refetch;
-
-  const loadingPhase = isLoading ? 'quick' as const
-    : isFetching ? 'base' as const
-    : 'idle' as const;
 
   const {
     managedColumns, visibleColumns, hiddenCount,
     isColumnPanelOpen, setIsColumnPanelOpen,
     toggleColumn, reorderColumns, showAll, hideAll,
-  } = useColumnManager(activeData?.columns);
+  } = useColumnManager(query.data?.columns);
 
   const { isExporting, toast, clearToast, triggerExport } = useExport(reportId, debouncedGroup);
   const filterLoadError = filtersQuery.error;
 
-  const allRows = activeData?.data ?? [];
-  const { displayData, totalCount, totalPages } = useFilteredData({
-    allRows, debouncedGroup, filterColumns, page,
-    isBaseReady, hasClientFilters,
-    serverPagination: quickQuery.data?.pagination,
-  });
+  // --- Refresh logic ---
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await fetch(`/api/v1/reports/${reportId}/refresh`, { method: 'POST' });
+      await queryClient.invalidateQueries({ queryKey: ['report', reportId] });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const data = query.data;
+  const displayData = data?.data ?? [];
 
   return (
     <>
-      <LoadingBar phase={loadingPhase} />
       <TableToolbar
         activeFilterCount={countActiveFilters(filterGroup)}
         isFilterOpen={isFilterOpen}
@@ -92,6 +79,8 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         onColumnToggle={() => setIsColumnPanelOpen(!isColumnPanelOpen)}
         isExporting={isExporting}
         onExport={triggerExport}
+        isRefreshing={isRefreshing}
+        onRefresh={handleRefresh}
       />
 
       <AnimatePresence>
@@ -141,37 +130,30 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         </div>
       )}
 
-      {/* WHY: OR-group warning only needed in Phase 1 — the backend skips mixed OR
-          groups, causing over-fetching. In Phase 2 (isBaseReady), applyAllFilters
-          handles all conditions client-side with full OR support, so no data is lost. */}
-      {!isBaseReady && hasSkippedOr && (
-        <div className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-amber-700 bg-amber-50/80 border border-amber-200/60 rounded-lg">
-          <AlertTriangle size={14} className="shrink-0 text-amber-500" />
-          <span>Some OR-group filters can't be fully applied. Results may include extra rows.</span>
-        </div>
-      )}
-
-      {activeData?.warnings && activeData.warnings.length > 0 && activeData.warnings.map((msg, i) => (
+      {data?.warnings && data.warnings.length > 0 && data.warnings.map((msg, i) => (
         <div key={`warn-${i}`} className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-amber-700 bg-amber-50/80 border border-amber-200/60 rounded-lg">
           <AlertTriangle size={14} className="shrink-0 text-amber-500" />
           <span>{msg}</span>
         </div>
       ))}
 
-      {isLoading && <TableSkeleton />}
+      {query.isLoading && <CheeseLoader />}
 
-      {error && <ErrorState onRetry={() => refetch()} />}
+      {query.error && <ErrorState onRetry={() => query.refetch()} />}
 
-      {!isLoading && !error && displayData.length === 0 && <EmptyState />}
+      {!query.isLoading && !query.error && displayData.length === 0 && <EmptyState />}
 
-      {activeData && displayData.length > 0 && (
+      {!query.isLoading && displayData.length > 0 && (
         <>
-          <ReportTable columns={visibleColumns.length > 0 ? visibleColumns : activeData.columns} data={displayData} />
+          <ReportTable
+            columns={visibleColumns.length > 0 ? visibleColumns : data!.columns}
+            data={displayData}
+          />
           <Pagination
             page={page}
             pageSize={50}
-            totalCount={totalCount}
-            totalPages={totalPages}
+            totalCount={data!.pagination.totalCount}
+            totalPages={data!.pagination.totalPages}
             onPageChange={setPage}
           />
         </>
