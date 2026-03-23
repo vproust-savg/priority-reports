@@ -82,8 +82,4 @@ export interface QueryRequest {
   filterGroup: FilterGroup;
   page: number;
   pageSize: number;
-  // WHY: When true, backend fetches ALL rows for the date range with a
-  // longer cache TTL. Frontend applies non-date filters client-side for
-  // instant filter responses (no network round-trip on filter changes).
-  baseMode?: boolean;
 }
