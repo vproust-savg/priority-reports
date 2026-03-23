@@ -3,7 +3,7 @@
 // PURPOSE: Defines which widgets appear on which pages and in what layout.
 //          This is the ONLY file you edit to rearrange the dashboard.
 //          Zod-validated — app crashes on startup if config is invalid.
-// USED BY: Layout.tsx (for nav tabs), PageRenderer (for widget grid)
+// USED BY: DepartmentLayout.tsx (for nav tabs), PageRenderer (for widget grid)
 // EXPORTS: pages
 // ═══════════════════════════════════════════════════════════════
 
@@ -19,6 +19,7 @@ const WidgetConfigSchema = z.object({
 
 const PageConfigSchema = z.object({
   id: z.string(),
+  department: z.string(),
   name: z.string(),
   path: z.string(),
   widgets: z.array(WidgetConfigSchema),
@@ -30,6 +31,7 @@ const PageConfigSchema = z.object({
 export const pages = z.array(PageConfigSchema).parse([
   {
     id: 'receiving-log',
+    department: 'food-safety',
     name: 'Receiving Log',
     path: '/receiving-log',
     widgets: [
@@ -43,9 +45,10 @@ export const pages = z.array(PageConfigSchema).parse([
     ],
   },
   {
-    id: 'purchasing-reports',
-    name: 'Purchasing Reports',
-    path: '/purchasing-reports',
+    id: 'bbd',
+    department: 'purchasing',
+    name: 'BBD — Best By Dates',
+    path: '/bbd',
     widgets: [
       {
         id: 'bbd',
