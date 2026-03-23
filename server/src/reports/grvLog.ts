@@ -186,4 +186,23 @@ reportRegistry.set('grv-log', {
     },
     dataStartRow: 5,
   },
+  // WHY: Only columns present in exportConfig.mapping get widths applied
+  // in template mode. warehouse, status, total are NOT mapped (they don't
+  // exist in the GRV Log template) so they are omitted here.
+  excelStyle: {
+    columnWidths: {
+      date: 11,
+      docNo: 10,
+      vendor: 20,
+      driverId: 10,
+      licensePlate: 12,
+      truckTemp: 8,
+      productTemp: 8,
+      productCondition: 10,
+      truckCondition: 10,
+      comments: 22,
+      receivedBy: 12,
+    },
+    fontSize: 8,
+  },
 });
