@@ -48,10 +48,12 @@ export function createExportRouter(): Router {
       return;
     }
 
-    // WHY: buildQuery is ONLY used for $select and $orderby.
-    // $filter comes from buildODataFilter. Pagination is manual ($top/$skip loop).
     const baseParams = report.buildQuery({ page: 1, pageSize: PAGE_SIZE });
     const odataFilter = buildODataFilter(body.filterGroup, report.filterColumns);
+
+    // WHY: Merge the report's base $filter (e.g., BBD's EXPIRYDATE cutoff) with
+    // UI-generated OData filter. Both are ANDed when present. Same pattern as query.ts.
+    const combinedFilter = [baseParams.$filter, odataFilter].filter(Boolean).join(' and ') || undefined;
 
     // --- Paginated fetch: get ALL matching rows ---
     const allRawRows: Record<string, unknown>[] = [];
@@ -63,7 +65,7 @@ export function createExportRouter(): Router {
         const response = await queryPriority(report.entity, {
           $select: baseParams.$select,
           $orderby: baseParams.$orderby,
-          $filter: odataFilter,
+          $filter: combinedFilter,
           $top: PAGE_SIZE,
           $skip: page * PAGE_SIZE,
         });
@@ -108,8 +110,15 @@ export function createExportRouter(): Router {
       }
     }
 
-    // --- Transform + client-side filter ---
-    const transformedRows = enrichedRows.map(report.transformRow);
+    // --- Transform + post-transform exclusion + client-side filter ---
+    let transformedRows = enrichedRows.map(report.transformRow);
+
+    // WHY: Post-transform row exclusion. BBD uses this to remove items
+    // with balance <= 0 or without a flagged expiration status. Same as query.ts.
+    if (report.filterRows) {
+      transformedRows = report.filterRows(transformedRows);
+    }
+
     const filteredRows = applyServerClientFilters(
       transformedRows, body.filterGroup, report.filterColumns,
     );
@@ -139,8 +148,11 @@ export function createExportRouter(): Router {
     }
 
     // WHY: Filename format matches spec: report name (spaces→hyphens) + today's date.
+    // Strip non-ASCII chars (e.g., em dash "—" in "BBD — Best By Dates") because
+    // HTTP Content-Disposition headers only allow ASCII (RFC 7230). Node throws
+    // ERR_INVALID_CHAR on non-ASCII header values.
     const today = new Date().toISOString().slice(0, 10);
-    const safeName = report.name.replace(/\s+/g, '-');
+    const safeName = report.name.replace(/[^\x20-\x7E]/g, '').replace(/\s+/g, '-').replace(/-{2,}/g, '-');
     const filename = `${safeName}-${today}.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
