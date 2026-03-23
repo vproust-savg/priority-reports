@@ -26,6 +26,9 @@ export interface ResponseMeta {
   cache: 'hit' | 'miss';
   executionTimeMs: number;
   source: 'priority-odata' | 'mock';
+  // WHY: When present, ReportTable reads this field from each row to apply
+  // per-row CSS classes (e.g., red for expired, orange for expiring-perishable).
+  rowStyleField?: string;
 }
 
 // WHY: Every endpoint returns this exact shape so the frontend needs

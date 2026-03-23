@@ -7,7 +7,7 @@
 // EXPORTS: ReportConfig, ReportFilters, ExportConfig, reportRegistry, getReport
 // ═══════════════════════════════════════════════════════════════
 
-import type { ColumnDefinition, ColumnFilterMeta } from '@shared/types';
+import type { ColumnDefinition, ColumnFilterMeta, FilterOption } from '@shared/types';
 import type { ODataParams } from '../services/priorityClient';
 
 export interface ReportFilters {
@@ -48,6 +48,21 @@ export interface ReportConfig {
   // endpoint uses the Airtable template with this column mapping.
   // When absent, export falls back to a basic Excel with headers + data.
   exportConfig?: ExportConfig;
+  // WHY: Post-transform row exclusion. Runs after enrichRows + transformRow.
+  // Used by BBD to exclude items with balance <= 0 or non-flagged status.
+  // Keeps enrichRows focused on data fetching (consistent with GRV Log pattern).
+  filterRows?: (rows: Record<string, unknown>[]) => Record<string, unknown>[];
+  // WHY: Per-report filter fetching. When absent, filters.ts falls back to
+  // hardcoded GRV Log logic. Avoids modifying grvLog.ts for multi-report support.
+  fetchFilters?: () => Promise<Record<string, FilterOption[]>>;
+  // WHY: When present, query.ts includes this in ResponseMeta so the frontend
+  // can apply per-row styling based on the named field's value.
+  rowStyleField?: string;
+  // WHY: When true, query.ts uses the report's own $filter/$top/$skip from
+  // buildQuery() instead of overriding them. All post-fetch rows are returned
+  // to the frontend, which handles pagination client-side. Required for reports
+  // like BBD where post-fetch filtering (filterRows) makes OData pagination unreliable.
+  clientSidePagination?: boolean;
 }
 
 export const reportRegistry = new Map<string, ReportConfig>();

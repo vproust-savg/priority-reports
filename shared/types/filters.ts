@@ -69,12 +69,10 @@ export interface FiltersResponse {
     reportId: string;
     generatedAt: string;
   };
-  filters: {
-    vendors: FilterOption[];
-    statuses: FilterOption[];
-    warehouses: FilterOption[];
-    users: FilterOption[];
-  };
+  // WHY: Generic record so each report defines its own filter keys.
+  // GRV Log uses 'vendors', 'statuses', etc. BBD uses 'vendors', 'brands', 'families'.
+  // FilterValueInput.tsx already looks up by column.enumKey dynamically (line 30-31).
+  filters: Record<string, FilterOption[]>;
   columns: ColumnFilterMeta[];
 }
 
