@@ -6,7 +6,7 @@
 // EXPORTS: useReportQuery
 // ═══════════════════════════════════════════════════════════════
 
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import type { ApiResponse, FilterGroup, QueryRequest } from '@shared/types';
 
 interface ReportQueryParams {
@@ -17,8 +17,6 @@ interface ReportQueryParams {
 
 export function useReportQuery(reportId: string, params: ReportQueryParams) {
   return useQuery<ApiResponse>({
-    // WHY: queryKey includes stringified filterGroup so TanStack Query
-    // caches each filter combination separately
     queryKey: ['report', reportId, params],
     queryFn: async () => {
       const body: QueryRequest = {
@@ -34,11 +32,12 @@ export function useReportQuery(reportId: string, params: ReportQueryParams) {
       if (!response.ok) throw new Error(`Report query failed: ${response.status}`);
       return response.json();
     },
-    staleTime: 5 * 60 * 1000,
-    // WHY: Shows previous results while new data loads instead of flashing
-    // a skeleton on every filter change. Makes filter changes feel instant.
-    placeholderData: keepPreviousData,
-    // WHY: Prevents unnecessary refetches when user switches browser tabs
+    // WHY: Match server cache TTL (15 min). Within this window,
+    // TanStack serves from its local cache — no network request at all.
+    staleTime: 15 * 60 * 1000,
+    // WHY: No keepPreviousData — show skeleton on every data change.
+    // Old data showing silently made the app feel broken. With 15-min
+    // cache, most loads are instant (0ms) so skeleton barely flashes.
     refetchOnWindowFocus: false,
   });
 }
