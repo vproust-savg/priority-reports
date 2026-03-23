@@ -28,14 +28,26 @@ Airtable Omni blocks point to department paths:
 
 ### 1. Config-Driven Departments
 
-New config file `client/src/config/departments.ts` defines departments:
+New config file `client/src/config/departments.ts` defines departments.
+
+**`DepartmentConfig` is client-only** — the backend never uses it. Define the interface and Zod schema in `departments.ts`, not in `shared/types/`.
 
 ```typescript
-export interface DepartmentConfig {
-  id: string;        // URL-safe identifier (e.g., 'food-safety')
-  name: string;      // Display name in header (e.g., 'Food Safety')
-  basePath: string;  // URL prefix (e.g., '/food-safety')
-}
+// client/src/config/departments.ts
+import { z } from 'zod';
+
+const DepartmentConfigSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  basePath: z.string(),
+});
+
+export type DepartmentConfig = z.infer<typeof DepartmentConfigSchema>;
+
+export const departments = z.array(DepartmentConfigSchema).parse([
+  { id: 'food-safety', name: 'Food Safety',         basePath: '/food-safety' },
+  { id: 'purchasing',  name: 'Purchasing Reports',  basePath: '/purchasing' },
+]);
 ```
 
 Each page in `pages.ts` gains a `department` field that links it to a department:
@@ -57,24 +69,32 @@ The full URL is built automatically: `department.basePath + page.path` → `/foo
 
 `App.tsx` generates a route group per department. Each department wraps its sub-pages in a `DepartmentLayout` that provides the header, nav tabs, and outlet.
 
-```
+```tsx
 <Routes>
   <Route path="/" element={<RootPage />} />
 
-  {departments.map(dept => (
-    <Route path={dept.basePath} element={<DepartmentLayout department={dept} />}>
-      <Route index element={<Navigate to={firstPage.path.slice(1)} />} />
-      {deptPages.map(page => (
-        <Route path={page.path.slice(1)} element={<PageRenderer page={page} />} />
-      ))}
-    </Route>
-  ))}
+  {departments.map(dept => {
+    const deptPages = pages.filter(p => p.department === dept.id);
+    return (
+      <Route key={dept.id} path={dept.basePath} element={<DepartmentLayout department={dept} />}>
+        {/* WHY: Navigate uses relative path (no leading /) because this is
+            inside a nested route. '/receiving-log' would navigate to the root,
+            'receiving-log' navigates relative to the department basePath. */}
+        <Route index element={<Navigate to={deptPages[0].path.slice(1)} replace />} />
+        {deptPages.map(page => (
+          <Route key={page.id} path={page.path.slice(1)} element={<PageRenderer page={page} />} />
+        ))}
+      </Route>
+    );
+  })}
 </Routes>
 ```
 
 ### 3. DepartmentLayout Replaces Layout
 
-The current `Layout.tsx` component becomes `DepartmentLayout.tsx`. Changes:
+The current `Layout.tsx` is renamed to `DepartmentLayout.tsx` via `git mv` (preserves file history). `App.tsx` import changes from `import Layout from './components/Layout'` to `import DepartmentLayout from './components/DepartmentLayout'`.
+
+Changes:
 
 | Aspect | Current (Layout.tsx) | New (DepartmentLayout.tsx) |
 |--------|---------------------|---------------------------|
@@ -86,9 +106,7 @@ Everything else (animation, DEV badge, max-width container) stays identical.
 
 ### 4. NavTabs Path Matching
 
-`NavTabs.tsx` currently checks `currentPath === page.path` for active state. With department-prefixed URLs, the comparison needs to use the full path: `currentPath === department.basePath + page.path`.
-
-The simplest approach: `DepartmentLayout` passes fully-qualified paths to `NavTabs`. NavTabs itself needs no logic change — it already compares `currentPath` against `page.path`. We just ensure `page.path` in the NavTabs props contains the full path.
+`NavTabs.tsx` currently checks `currentPath === page.path` for active state. With department-prefixed URLs, the comparison needs to use the full path.
 
 **Approach:** `DepartmentLayout` maps pages to include full paths before passing to `NavTabs`:
 
@@ -98,6 +116,10 @@ const navPages = deptPages.map(p => ({
   path: dept.basePath + p.path,  // '/food-safety' + '/receiving-log'
 }));
 ```
+
+NavTabs itself needs no logic change — it already compares `currentPath` against `page.path`.
+
+**Trailing-slash safety:** `NavTabs` uses exact equality (`currentPath === page.path`). React Router v7 may produce paths with or without trailing slashes. The implementer should verify this works, or switch the active check to use `location.pathname.startsWith(page.path)` or React Router's `NavLink` component (which handles active state natively) for robustness.
 
 ### 5. Root URL Behavior
 
@@ -109,7 +131,11 @@ Content: a centered message like "Select a department" or a simple list of depar
 
 Any URL not matching a department or sub-page shows a minimal "Page not found" message. No redirect — keeps the iframe from jumping unexpectedly.
 
-### 7. Backend: Zero Changes
+### 7. PageRenderer Page Title
+
+`PageRenderer.tsx` renders an `<h2>` with `page.name` (e.g., "Receiving Log"). This stays as-is. With the department name in the header and the page name below it, the hierarchy is clear: "Food Safety" (header) → "Receiving Log" (page title). When a department has only one page, the page title still shows — it provides context for what the report is.
+
+### 8. Backend: Zero Changes
 
 The Express SPA catch-all (`/{*path}`) already serves `index.html` for any path. React Router handles all routing client-side. API routes are all under `/api/v1/` — completely unaffected.
 
@@ -117,23 +143,31 @@ The Express SPA catch-all (`/{*path}`) already serves `index.html` for any path.
 
 | File | Action | Description |
 |------|--------|-------------|
-| `shared/types/widget.ts` | **Modify** | Add `DepartmentConfig` type, add `department: string` to `PageConfig` |
-| `client/src/config/departments.ts` | **Create** | Department definitions array with Zod validation |
+| `shared/types/widget.ts` | **Modify** | Add `department: string` to `PageConfig` (no `DepartmentConfig` here — it's client-only) |
+| `client/src/config/departments.ts` | **Create** | `DepartmentConfig` type + department definitions array with Zod validation |
 | `client/src/config/pages.ts` | **Modify** | Add `department` field to each page entry, update Zod schema |
-| `client/src/App.tsx` | **Modify** | Generate nested routes per department instead of flat routes |
-| `client/src/components/Layout.tsx` → `DepartmentLayout.tsx` | **Rename + Modify** | Accept department prop, show department name, filter pages |
-| `client/src/components/NavTabs.tsx` | **No logic change** | Already receives pages + currentPath as props |
+| `client/src/App.tsx` | **Modify** | Import `DepartmentLayout` + `departments`, generate nested routes per department |
+| `client/src/components/Layout.tsx` → `DepartmentLayout.tsx` | **Rename (`git mv`) + Modify** | Accept `department` prop, show `department.name` in header, filter pages by department |
+| `client/src/components/RootPage.tsx` | **Create** | Minimal fallback for `/` — centered message with department links for dev convenience |
+| `client/src/components/NavTabs.tsx` | **No logic change** | Already receives pages + currentPath as props. Verify trailing-slash behavior. |
 | `client/src/components/PageRenderer.tsx` | **No change** | Already receives a page and renders its widgets |
 
 ## Migration
 
-### Current → New URL mapping
+### Current → New mapping
+
+| Current | New | Notes |
+|---|---|---|
+| Page id: `purchasing-reports`, path: `/purchasing-reports` | Page id: `bbd`, path: `/bbd` | Simplified — department provides "purchasing" context |
+| Page id: `receiving-log`, path: `/receiving-log` | Page id: `receiving-log`, path: `/receiving-log` | Unchanged — just gains `department: 'food-safety'` |
+| `/` → redirect to `/receiving-log` | `/` → blank root page | Root no longer redirects |
+
+Full URL mapping:
 
 | Current URL | New URL |
 |---|---|
 | `/receiving-log` | `/food-safety/receiving-log` |
 | `/purchasing-reports` | `/purchasing/bbd` |
-| `/` (→ redirect to receiving-log) | `/` (→ blank root page) |
 
 ### No backwards-compatible redirects
 
