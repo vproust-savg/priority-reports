@@ -9,6 +9,10 @@
 
 import TableSkeleton from './TableSkeleton';
 
+interface CheeseLoaderProps {
+  variant?: 'slice-reveal' | 'slice-cut';
+}
+
 // WHY: 6 wedges at 60deg each. Pre-computed arc endpoints for a circle
 // centered at (40,40) with radius 36. Formula: (40 + 36*sin(angle), 40 - 36*cos(angle))
 const WEDGE_PATHS = [
@@ -33,7 +37,7 @@ const HOLES = [
   { cx: 50, cy: 24, r: 1.5, opacity: 0.2 },
 ];
 
-export default function CheeseLoader() {
+export default function CheeseLoader({ variant = 'slice-reveal' }: CheeseLoaderProps) {
   return (
     <div role="status" aria-label="Loading data">
       <div className="flex flex-col items-center justify-center py-16">
@@ -48,6 +52,26 @@ export default function CheeseLoader() {
               <stop offset="0%" stopColor="#DCBA5C" />
               <stop offset="100%" stopColor="#C89A30" />
             </radialGradient>
+            <style>{`
+              @keyframes cheese-sweep {
+                0%   { opacity: 0; }
+                8%   { opacity: 1; }
+                58%  { opacity: 1; }
+                67%  { opacity: 0; }
+                100% { opacity: 0; }
+              }
+              .sweep-wedge {
+                opacity: 0;
+                animation: cheese-sweep 3.6s cubic-bezier(0.25, 0.1, 0.25, 1) infinite both;
+              }
+              @media (prefers-reduced-motion: reduce) {
+                .sweep-wedge, .pop-wedge {
+                  animation: none !important;
+                  opacity: 1 !important;
+                  transform: none !important;
+                }
+              }
+            `}</style>
           </defs>
 
           {WEDGE_PATHS.map((d, i) => (
@@ -57,6 +81,8 @@ export default function CheeseLoader() {
               fill="url(#cheese-gradient)"
               stroke="#B8912E"
               strokeWidth="0.5"
+              className={variant === 'slice-reveal' ? 'sweep-wedge' : undefined}
+              style={variant === 'slice-reveal' ? { animationDelay: `${i * 0.6}s` } : undefined}
             />
           ))}
 
