@@ -7,11 +7,15 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { useLocation, Outlet } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { FADE_SLIDE_UP, EASE_FADE, REDUCED_FADE, REDUCED_TRANSITION } from '../config/animationConstants';
 import { pages } from '../config/pages';
 import NavTabs from './NavTabs';
 
 export default function Layout() {
   const location = useLocation();
+  const reduced = useReducedMotion();
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -36,7 +40,15 @@ export default function Layout() {
 
       {/* Page content */}
       <main className="max-w-7xl mx-auto px-6 py-6">
-        <Outlet />
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            {...(reduced ? REDUCED_FADE : FADE_SLIDE_UP)}
+            transition={reduced ? REDUCED_TRANSITION : EASE_FADE}
+          >
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
       </main>
     </div>
   );
