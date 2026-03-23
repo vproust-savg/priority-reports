@@ -20,6 +20,7 @@ const columns: ColumnDefinition[] = [
   { key: 'partNumber', label: 'Part Number', type: 'string' },
   { key: 'partDescription', label: 'Part Description', type: 'string' },
   { key: 'balance', label: 'Balance', type: 'number' },
+  { key: 'unit', label: 'Unit', type: 'string' },
   { key: 'expiryDate', label: 'Expir. Date', type: 'date' },
   { key: 'daysUntilExpiry', label: 'Days Left', type: 'number' },
   { key: 'status', label: 'Status', type: 'string' },
@@ -55,7 +56,7 @@ function buildQuery(_filters: ReportFilters): ODataParams {
   return {
     // WHY: QUANT is the lot quantity on RAWSERIAL (TBALANCE lives on the sub-form only).
     // Filtered in $filter to avoid fetching zero-quantity rows (reduces result set dramatically).
-    $select: 'PARTNAME,PARTDES,EXPIRYDATE,SUPDES,Y_9966_5_ESH,Y_9952_5_ESH,Y_2074_5_ESH,QUANT',
+    $select: 'PARTNAME,PARTDES,EXPIRYDATE,SUPDES,Y_9966_5_ESH,Y_9952_5_ESH,Y_2074_5_ESH,QUANT,UNITNAME',
     $filter: `EXPIRYDATE le ${cutoffIso} and QUANT gt 0`,
     $orderby: 'EXPIRYDATE asc',
     // WHY: Fetch all matching rows (no server pagination). Post-fetch filtering
@@ -112,6 +113,7 @@ function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
     partNumber: raw.PARTNAME,
     partDescription: raw.PARTDES,
     balance,
+    unit: raw.UNITNAME ?? '',
     expiryDate: raw.EXPIRYDATE,
     daysUntilExpiry,
     status: status ?? '',
