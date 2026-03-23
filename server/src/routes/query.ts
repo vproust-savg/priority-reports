@@ -61,6 +61,11 @@ export function createQueryRouter(cache: CacheProvider): Router {
       console.warn(`[query] Cache read failed for ${cacheKey}, continuing as miss:`, err);
     }
     if (cached) {
+      // WHY: Override stale meta fields — the cached response has the
+      // original fetch's timing and 'miss' marker. Update them so the
+      // frontend (and debugging) can see this was served from cache.
+      cached.meta.cache = 'hit';
+      cached.meta.executionTimeMs = Date.now() - startTime;
       logApiCall({
         level: 'info', event: 'query_fetch', reportId,
         durationMs: Date.now() - startTime, cacheHit: true,

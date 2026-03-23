@@ -71,6 +71,8 @@ export function createReportsRouter(cache: CacheProvider): Router {
       console.warn(`[reports] Cache read failed for ${cacheKey}, continuing as miss:`, err);
     }
     if (cached) {
+      cached.meta.cache = 'hit';
+      cached.meta.executionTimeMs = Date.now() - startTime;
       logApiCall({
         level: 'info', event: 'report_fetch', reportId,
         durationMs: Date.now() - startTime, cacheHit: true,
