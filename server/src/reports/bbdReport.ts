@@ -252,4 +252,20 @@ reportRegistry.set('bbd', {
   // OData pagination is unreliable when post-fetch exclusion removes rows.
   // Frontend handles pagination client-side.
   clientSidePagination: true,
+  excelStyle: {
+    columnWidths: {
+      partNumber: 14,
+      partDescription: 28,
+      balance: 8,
+      unit: 6,
+      expiryDate: 11,
+      daysUntilExpiry: 8,
+      status: 12,
+      vendor: 18,
+      perishable: 10,
+      brand: 14,
+      family: 14,
+    },
+    fontSize: 9,
+  },
 });
