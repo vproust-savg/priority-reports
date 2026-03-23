@@ -60,7 +60,7 @@ export default function ReportTableWidget({ reportId }) {
     <>
       <TableToolbar onRefresh={...} isRefreshing={...} ... />
       {/* Filter/Column panels (unchanged) */}
-      {query.isLoading && <TableSkeleton />}
+      {query.isLoading && <CheeseLoader />}
       {query.error && <ErrorState onRetry={() => query.refetch()} />}
       {!query.isLoading && !query.error && query.data?.data.length === 0 && <EmptyState />}
       {query.data && query.data.data.length > 0 && (
@@ -79,11 +79,22 @@ export default function ReportTableWidget({ reportId }) {
 - Delete file entirely if nothing else imports it
 - Update `client/src/utils/clientFilter.test.ts` accordingly
 
-### 2. Loading UX — Skeleton on Filter Change
+### 2. Loading UX — Cheese Wheel Loader
+
+**Replace `<TableSkeleton />` with a custom `<CheeseLoader />` component** inspired by the McDonald's Fry Box Loader animation. Instead of fries rising from a box, a cheese wheel animates (e.g., spinning, slicing, or rolling). The animation is built from scratch using pure CSS/SVG — no external libraries or GIFs.
+
+**Component:** `client/src/components/CheeseLoader.tsx`
+- Self-contained component, no props needed
+- Pure CSS `@keyframes` animation (no Framer Motion — this runs during loading, keep it lightweight)
+- Centered in the widget area where the table would normally appear
+- Subtle, premium, on-brand — not cartoonish. Think Apple + artisan cheese.
+- The animation will be designed separately using Claude Code artifacts, then dropped into this component file
+
+**The component is a simple swap** — `ReportTableWidget` renders `<CheeseLoader />` when `query.isLoading` is true, replacing the old `<TableSkeleton />`. The `TableSkeleton` component can be kept as a fallback or deleted.
 
 **Remove `keepPreviousData` from `useReportQuery` for filter changes.**
 
-When filters change, `query.isLoading` becomes `true` and `ReportTableWidget` shows `<TableSkeleton />` with shimmer animation. This is the loading indicator — no separate progress bar needed.
+When filters change, `query.isLoading` becomes `true` and `ReportTableWidget` shows `<CheeseLoader />`. This is the loading indicator.
 
 **Keep `keepPreviousData` for pagination only.** When the user clicks Page 2, old data stays visible while Page 2 loads (better UX than flashing skeleton for a 1-2s page load). Implement by splitting the query key: filter changes produce a new query key (skeleton), page changes use the same base key with `keepPreviousData`.
 
@@ -257,6 +268,7 @@ const totalCount = isLastPage
 | Delete | `client/src/hooks/useBaseDataset.ts` | Two-phase hook |
 | Delete | `client/src/hooks/useFilteredData.ts` | Client-side filter hook |
 | Delete | `client/src/components/LoadingBar.tsx` | Phase loading bar |
+| New | `client/src/components/CheeseLoader.tsx` | Cheese wheel loading animation (designed via artifact, dropped in) |
 | Delete/Simplify | `client/src/utils/clientFilter.ts` | Remove if unused, or keep for any remaining need |
 | Update | `client/src/utils/clientFilter.test.ts` | Remove tests for deleted exports |
 | Simplify | `client/src/components/widgets/ReportTableWidget.tsx` | Remove all Phase 2 logic |
