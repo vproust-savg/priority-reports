@@ -16,6 +16,8 @@ import { useBaseDataset } from '../../hooks/useBaseDataset';
 import { useColumnManager } from '../../hooks/useColumnManager';
 import { useExport } from '../../hooks/useExport';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { AnimatePresence, motion } from 'framer-motion';
+import { SPRING_SNAPPY, REDUCED_FADE, REDUCED_TRANSITION } from '../../config/animationConstants';
 import TableToolbar from '../TableToolbar';
 import FilterBuilder from '../filter/FilterBuilder';
 import ColumnManagerPanel from '../columns/ColumnManagerPanel';
@@ -124,25 +126,47 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         onExport={triggerExport}
       />
 
-      {isFilterOpen && (
-        <FilterBuilder
-          filterGroup={filterGroup}
-          onChange={handleFilterChange}
-          columns={filterColumns}
-          filterOptions={filtersQuery.data?.filters}
-          filterOptionsLoading={filtersQuery.isLoading}
-        />
-      )}
+      <AnimatePresence>
+        {isFilterOpen && (
+          <motion.div
+            key="filter-panel"
+            initial={reduced ? REDUCED_FADE.initial : { height: 0, opacity: 0 }}
+            animate={reduced ? REDUCED_FADE.animate : { height: 'auto', opacity: 1 }}
+            exit={reduced ? REDUCED_FADE.exit : { height: 0, opacity: 0 }}
+            transition={reduced ? REDUCED_TRANSITION : { height: SPRING_SNAPPY, opacity: { duration: 0.15 } }}
+            style={{ overflow: 'hidden' }}
+          >
+            <FilterBuilder
+              filterGroup={filterGroup}
+              onChange={handleFilterChange}
+              columns={filterColumns}
+              filterOptions={filtersQuery.data?.filters}
+              filterOptionsLoading={filtersQuery.isLoading}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {isColumnPanelOpen && (
-        <ColumnManagerPanel
-          managedColumns={managedColumns}
-          onToggle={toggleColumn}
-          onReorder={reorderColumns}
-          onShowAll={showAll}
-          onHideAll={hideAll}
-        />
-      )}
+      <AnimatePresence>
+        {isColumnPanelOpen && (
+          <motion.div
+            key="column-panel"
+            initial={reduced ? REDUCED_FADE.initial : { height: 0, opacity: 0 }}
+            animate={reduced ? REDUCED_FADE.animate : { height: 'auto', opacity: 1 }}
+            exit={reduced ? REDUCED_FADE.exit : { height: 0, opacity: 0 }}
+            transition={reduced ? REDUCED_TRANSITION : { height: SPRING_SNAPPY, opacity: { duration: 0.15 } }}
+            style={{ overflow: 'hidden' }}
+          >
+            <ColumnManagerPanel
+              managedColumns={managedColumns}
+              onToggle={toggleColumn}
+              onReorder={reorderColumns}
+              onShowAll={showAll}
+              onHideAll={hideAll}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {filterLoadError && (
         <div className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-red-700 bg-red-50/80 border border-red-200/60 rounded-lg">

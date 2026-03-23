@@ -7,6 +7,7 @@
 // EXPORTS: FilterBuilder
 // ═══════════════════════════════════════════════════════════════
 
+import { AnimatePresence, motion } from 'framer-motion';
 import { DndContext, DragOverlay, useDroppable, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useFilterDrag } from '../../hooks/useFilterDrag';
@@ -97,8 +98,16 @@ export default function FilterBuilder({
         {/* Root conditions — sortable + droppable container */}
         <div ref={setRootDroppable}>
           <SortableContext items={filterGroup.conditions.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+            <AnimatePresence initial={false}>
             {filterGroup.conditions.map((condition, idx) => (
-              <div key={condition.id}>
+              <motion.div
+                key={condition.id}
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ opacity: { duration: 0.15 }, height: { duration: 0.2 } }}
+                style={{ overflow: 'hidden' }}
+              >
                 {idx === 0 ? (
                   <span className={`${FILTER_LABEL_CLASS} block mb-1`}>Where</span>
                 ) : (
@@ -116,8 +125,9 @@ export default function FilterBuilder({
                   onDelete={() => deleteCondition(condition.id)}
                   {...sharedRowProps}
                 />
-              </div>
+              </motion.div>
             ))}
+            </AnimatePresence>
           </SortableContext>
         </div>
 
