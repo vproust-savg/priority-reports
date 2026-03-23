@@ -133,14 +133,16 @@ After transform + filter, before Excel generation:
 
 ## Print Setup (Applied Universally)
 
-| Setting | Value |
-|---------|-------|
-| Paper size | Letter (8.5" × 11") |
-| Orientation | Landscape |
-| Margins | 0.25" all sides |
-| Scaling | Fit to 1 page wide, unlimited pages tall |
-| Header row | Repeats on every printed page |
-| Frozen panes | Row 1 frozen (already in fallback) |
+| Setting | Value | ExcelJS API |
+|---------|-------|-------------|
+| Paper size | Letter (8.5" × 11") | `pageSetup.paperSize = 1` |
+| Orientation | Landscape | `pageSetup.orientation = 'landscape'` |
+| Margins | 0.25" all sides | `pageSetup.margins = { left: 0.25, right: 0.25, top: 0.25, bottom: 0.25, header: 0.25, footer: 0.25 }` |
+| Scaling | Fit to 1 page wide, unlimited tall | `pageSetup.fitToPage = true; fitToWidth = 1; fitToHeight = 0` |
+| Header row (fallback) | Row 1 repeats | `pageSetup.printTitlesRow = '1:1'` |
+| Header row (template) | Rows 1–(dataStartRow-1) repeat | `pageSetup.printTitlesRow = '1:' + (dataStartRow - 1)` |
+| Frozen panes | Row 1 frozen (already in fallback) | existing |
+| Font family | Arial (explicit, consistent for print) | `font = { name: 'Arial', size: fontSize }` |
 
 ## What Does NOT Change
 
@@ -153,6 +155,8 @@ After transform + filter, before Excel generation:
 
 - When template generation fails and falls back to `generateFallbackExcel`, pass `excelStyle` to the fallback call too — otherwise a template failure produces an un-styled export.
 - `visibleColumnKeys` in `useExport` must be added to the `useCallback` dependency array for `triggerExport`.
+- Set font family explicitly to Arial on all cells (header + data). ExcelJS defaults to Calibri — Arial is more consistent across print environments.
+- Column width units in ExcelJS are "character widths" based on the default font. Since we're changing font to Arial at 8-9pt (smaller than default Calibri 11pt), effective column widths will be slightly wider than expected. May need minor adjustment during testing.
 
 ## Files Touched
 
