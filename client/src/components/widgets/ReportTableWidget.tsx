@@ -21,6 +21,7 @@ import ColumnManagerPanel from '../columns/ColumnManagerPanel';
 import ReportTable from '../ReportTable';
 import Pagination from '../Pagination';
 import Toast from '../Toast';
+import TableSkeleton from '../TableSkeleton';
 import { applyAllFilters, applyClientFilters, hasAnyClientConditions, hasSkippedOrGroups } from '../../utils/clientFilter';
 import { countActiveFilters } from '../../config/filterConstants';
 
@@ -173,18 +174,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         </div>
       )}
 
-      {isLoading && (
-        <div className="p-6 space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse flex gap-4">
-              <div className="h-4 bg-slate-100 rounded w-1/6" />
-              <div className="h-4 bg-slate-100 rounded w-1/4" />
-              <div className="h-4 bg-slate-100 rounded w-1/3" />
-              <div className="h-4 bg-slate-100 rounded w-1/6" />
-            </div>
-          ))}
-        </div>
-      )}
+      {isLoading && <TableSkeleton />}
 
       {error && (
         <div className="p-6 text-center">
