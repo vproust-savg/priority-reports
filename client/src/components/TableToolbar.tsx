@@ -1,12 +1,12 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: client/src/components/TableToolbar.tsx
-// PURPOSE: Toolbar row with "Filter" and "Columns" toggle buttons.
+// PURPOSE: Toolbar row with Filter, Columns, Refresh, and Export buttons.
 //          Shows active filter count and hidden column count badges.
 // USED BY: ReportTableWidget
 // EXPORTS: TableToolbar
 // ═══════════════════════════════════════════════════════════════
 
-import { SlidersHorizontal, Columns3, ChevronDown, Download, Loader2 } from 'lucide-react';
+import { SlidersHorizontal, Columns3, ChevronDown, Download, Loader2, RefreshCw } from 'lucide-react';
 
 interface TableToolbarProps {
   activeFilterCount: number;
@@ -17,12 +17,15 @@ interface TableToolbarProps {
   onColumnToggle: () => void;
   isExporting: boolean;
   onExport: () => void;
+  isRefreshing?: boolean;
+  onRefresh?: () => void;
 }
 
 export default function TableToolbar({
   activeFilterCount, isFilterOpen, onFilterToggle,
   hiddenColumnCount, isColumnPanelOpen, onColumnToggle,
   isExporting, onExport,
+  isRefreshing, onRefresh,
 }: TableToolbarProps) {
   const hasFilters = activeFilterCount > 0;
   const hasHiddenColumns = hiddenColumnCount > 0;
@@ -33,7 +36,6 @@ export default function TableToolbar({
 
   return (
     <div className="px-5 py-2 border-b border-slate-100 flex items-center gap-1">
-      {/* Filter button */}
       <button
         onClick={onFilterToggle}
         className={`${baseClass} ${hasFilters ? activeClass : inactiveClass}`}
@@ -47,7 +49,6 @@ export default function TableToolbar({
         />
       </button>
 
-      {/* Columns button */}
       <button
         onClick={onColumnToggle}
         className={`${baseClass} ${hasHiddenColumns ? activeClass : inactiveClass}`}
@@ -61,18 +62,28 @@ export default function TableToolbar({
         />
       </button>
 
-      {/* Export button — action (not a toggle), pushed right */}
-      <button
-        onClick={onExport}
-        disabled={isExporting}
-        className={`ml-auto ${baseClass} ${inactiveClass}
-          disabled:opacity-50 disabled:cursor-not-allowed`}
-      >
-        {isExporting
-          ? <Loader2 size={16} className="animate-spin" />
-          : <Download size={16} />}
-        <span>{isExporting ? 'Exporting...' : 'Export'}</span>
-      </button>
+      {/* WHY: Refresh and Export pushed right together */}
+      <div className="ml-auto flex items-center gap-1">
+        <button
+          onClick={onRefresh}
+          disabled={isRefreshing}
+          className={`${baseClass} ${inactiveClass} disabled:opacity-50 disabled:cursor-not-allowed`}
+          title="Refresh data (clears cache)"
+        >
+          <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+        </button>
+
+        <button
+          onClick={onExport}
+          disabled={isExporting}
+          className={`${baseClass} ${inactiveClass} disabled:opacity-50 disabled:cursor-not-allowed`}
+        >
+          {isExporting
+            ? <Loader2 size={16} className="animate-spin" />
+            : <Download size={16} />}
+          <span>{isExporting ? 'Exporting...' : 'Export'}</span>
+        </button>
+      </div>
     </div>
   );
 }
