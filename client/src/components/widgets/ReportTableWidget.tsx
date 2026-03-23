@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: client/src/components/widgets/ReportTableWidget.tsx
 // PURPOSE: Report widget — single-phase server-side filtering.
-//          Shows CheeseLoader during fetch, data table when ready.
+//          Shows LoadingToast during fetch, data table when ready.
 //          Refresh button clears server cache for fresh data.
 // USED BY: widgetRegistry.ts (registered as 'table' type)
 // EXPORTS: ReportTableWidget
@@ -23,7 +23,7 @@ import ColumnManagerPanel from '../columns/ColumnManagerPanel';
 import ReportTable from '../ReportTable';
 import Pagination from '../Pagination';
 import Toast from '../Toast';
-import CheeseLoader from '../CheeseLoader';
+import LoadingToast from '../LoadingToast';
 import EmptyState from '../EmptyState';
 import ErrorState from '../ErrorState';
 import { countActiveFilters } from '../../config/filterConstants';
@@ -138,7 +138,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         </div>
       ))}
 
-      {query.isLoading && <CheeseLoader />}
+      {query.isLoading && <LoadingToast />}
 
       {query.error && <ErrorState onRetry={() => query.refetch()} />}
 
