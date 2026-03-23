@@ -22,9 +22,16 @@
    Without this, $1,234 and $999 would have different widths. */
 .tabular-nums { font-variant-numeric: tabular-nums; }
 
-/* WHY: Slide-up animation for the Toast component.
-   Subtle 200ms ease-out — matches the Apple/Stripe micro-interaction aesthetic. */
-@keyframes toast-slide-up {
-  from { transform: translateY(8px); opacity: 0; }
-  to   { transform: translateY(0);   opacity: 1; }
+/* WHY: Stripe-style shimmer sweep for skeleton loading placeholders.
+   Pure CSS — no JS animation loop needed. */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* WHY: Indeterminate pulse for the loading bar during Phase 1 (quick query).
+   Width oscillates to show "loading in progress" without a specific percentage. */
+@keyframes loading-pulse {
+  0%, 100% { width: 20%; }
+  50%      { width: 60%; }
 }
