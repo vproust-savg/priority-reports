@@ -7,7 +7,6 @@
 // EXPORTS: ReportTableWidget
 // ═══════════════════════════════════════════════════════════════
 
-import { useMemo } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useReportQuery } from '../../hooks/useReportQuery';
 import { useFiltersQuery } from '../../hooks/useFiltersQuery';
@@ -16,6 +15,7 @@ import { useBaseDataset } from '../../hooks/useBaseDataset';
 import { useColumnManager } from '../../hooks/useColumnManager';
 import { useExport } from '../../hooks/useExport';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useFilteredData } from '../../hooks/useFilteredData';
 import { AnimatePresence, motion } from 'framer-motion';
 import { SPRING_SNAPPY, REDUCED_FADE, REDUCED_TRANSITION } from '../../config/animationConstants';
 import TableToolbar from '../TableToolbar';
@@ -26,10 +26,10 @@ import Pagination from '../Pagination';
 import Toast from '../Toast';
 import TableSkeleton from '../TableSkeleton';
 import LoadingBar from '../LoadingBar';
-import { applyAllFilters, applyClientFilters, hasAnyClientConditions, hasSkippedOrGroups } from '../../utils/clientFilter';
+import EmptyState from '../EmptyState';
+import ErrorState from '../ErrorState';
+import { hasAnyClientConditions, hasSkippedOrGroups } from '../../utils/clientFilter';
 import { countActiveFilters } from '../../config/filterConstants';
-
-const CLIENT_PAGE_SIZE = 50;
 
 export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const {
@@ -52,27 +52,15 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   });
 
   // --- Phase 2: Base dataset (all rows for date range, background) ---
-  // WHY: Once the base dataset loads, ALL non-date filter changes become
-  // instant (client-side). Until then, Phase 1 handles display.
-  // WHY: enabled only after quick query loads — both share the Priority
-  // rate limiter, so running them simultaneously makes both slow.
   const baseQuery = useBaseDataset(reportId, debouncedGroup, filterColumns, !!quickQuery.data);
-  // WHY: isPlaceholderData is true when keepPreviousData is showing stale rows
-  // from a different date range. Fall back to quick query during transitions
-  // so users see correct data faster (50-row fetch) instead of waiting 15-20s
-  // for the full 1000-row base query to resolve.
   const isBaseReady = !!baseQuery.data && !baseQuery.isError && !baseQuery.isPlaceholderData;
 
-  // WHY: Use base dataset when available for instant filtering,
-  // fall back to quick query for immediate display
   const activeData = isBaseReady ? baseQuery.data : quickQuery.data;
   const isLoading = !isBaseReady && quickQuery.isLoading;
   const isFetching = isBaseReady ? baseQuery.isFetching : quickQuery.isFetching;
   const error = isBaseReady ? baseQuery.error : quickQuery.error;
   const refetch = isBaseReady ? baseQuery.refetch : quickQuery.refetch;
 
-  // WHY: Compute loading phase for the gradient progress bar.
-  // 'quick' = initial load, 'base' = background fetching base dataset, 'idle' = done.
   const loadingPhase = isLoading ? 'quick' as const
     : isFetching ? 'base' as const
     : 'idle' as const;
@@ -85,40 +73,14 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
 
   const { isExporting, toast, clearToast, triggerExport } = useExport(reportId, debouncedGroup);
   const reduced = useReducedMotion();
-
-  // WHY: Filter endpoint failure cascades — empty filterColumns breaks
-  // extractDateConditions in useBaseDataset and shows a blank filter panel.
-  // Surface the error so the user knows why filters aren't working.
   const filterLoadError = filtersQuery.error;
 
-  // --- Row filtering and pagination ---
   const allRows = activeData?.data ?? [];
-
-  const { displayData, totalCount, totalPages } = useMemo(() => {
-    let filtered: Record<string, unknown>[];
-    let display: Record<string, unknown>[];
-    let count: number;
-    let pages: number;
-
-    if (isBaseReady || hasClientFilters) {
-      // WHY: Base dataset has ALL rows — apply ALL non-date filters client-side.
-      // Phase 1 with client filters uses the same client-side path.
-      filtered = isBaseReady
-        ? applyAllFilters(allRows, debouncedGroup, filterColumns)
-        : applyClientFilters(allRows, debouncedGroup, filterColumns);
-      display = filtered.slice((page - 1) * CLIENT_PAGE_SIZE, page * CLIENT_PAGE_SIZE);
-      count = filtered.length;
-      pages = Math.ceil(filtered.length / CLIENT_PAGE_SIZE);
-    } else {
-      // Phase 1 without client-side filters — server handles pagination
-      filtered = allRows;
-      display = allRows;
-      count = quickQuery.data?.pagination.totalCount ?? 0;
-      pages = quickQuery.data?.pagination.totalPages ?? 0;
-    }
-
-    return { displayData: display, totalCount: count, totalPages: pages };
-  }, [allRows, debouncedGroup, filterColumns, page, isBaseReady, hasClientFilters, quickQuery.data?.pagination]);
+  const { displayData, totalCount, totalPages } = useFilteredData({
+    allRows, debouncedGroup, filterColumns, page,
+    isBaseReady, hasClientFilters,
+    serverPagination: quickQuery.data?.pagination,
+  });
 
   return (
     <>
@@ -202,28 +164,16 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
 
       {isLoading && <TableSkeleton />}
 
-      {error && (
-        <div className="p-6 text-center">
-          <p className="text-red-500 text-sm mb-3">Failed to load data</p>
-          <button onClick={() => refetch()} className="text-sm text-primary font-medium hover:underline">
-            Retry
-          </button>
-        </div>
-      )}
+      {error && <ErrorState onRetry={() => refetch()} />}
 
-      {!isLoading && !error && displayData.length === 0 && (
-        <div className="p-8 text-center">
-          <p className="text-slate-500 text-sm font-medium">No results found</p>
-          <p className="text-slate-400 text-xs mt-1">Try adjusting your filters</p>
-        </div>
-      )}
+      {!isLoading && !error && displayData.length === 0 && <EmptyState />}
 
       {activeData && displayData.length > 0 && (
         <>
           <ReportTable columns={visibleColumns.length > 0 ? visibleColumns : activeData.columns} data={displayData} disableAnimation={reduced} />
           <Pagination
             page={page}
-            pageSize={CLIENT_PAGE_SIZE}
+            pageSize={50}
             totalCount={totalCount}
             totalPages={totalPages}
             onPageChange={setPage}
