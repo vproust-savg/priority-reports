@@ -12,7 +12,7 @@ import type { ColumnDefinition, ColumnFilterMeta, FilterOption } from '@shared/t
 import type { ODataParams } from '../services/priorityClient';
 import type { ReportFilters } from '../config/reportRegistry';
 import { reportRegistry } from '../config/reportRegistry';
-import { queryPriority, querySubform } from '../services/priorityClient';
+import { queryPriority } from '../services/priorityClient';
 
 // --- Column Definitions ---
 
@@ -53,8 +53,10 @@ function buildQuery(_filters: ReportFilters): ODataParams {
   const cutoffIso = cutoffDate.toISOString().split('T')[0] + 'T23:59:59Z';
 
   return {
-    $select: 'PARTNAME,PARTDES,EXPIRYDATE,SUPDES,Y_9966_5_ESH,Y_9952_5_ESH,Y_2074_5_ESH,SERIAL',
-    $filter: `EXPIRYDATE le ${cutoffIso}`,
+    // WHY: QUANT is the lot quantity on RAWSERIAL (TBALANCE lives on the sub-form only).
+    // Filtered in $filter to avoid fetching zero-quantity rows (reduces result set dramatically).
+    $select: 'PARTNAME,PARTDES,EXPIRYDATE,SUPDES,Y_9966_5_ESH,Y_9952_5_ESH,Y_2074_5_ESH,QUANT',
+    $filter: `EXPIRYDATE le ${cutoffIso} and QUANT gt 0`,
     $orderby: 'EXPIRYDATE asc',
     // WHY: Fetch all matching rows (no server pagination). Post-fetch filtering
     // removes unflagged items, making OData pagination unreliable.
@@ -70,75 +72,12 @@ function buildQuery(_filters: ReportFilters): ODataParams {
 // Maps family code (Y_2074_5_ESH value) -> family description for display.
 let familyLookupMap: Map<string, string> = new Map();
 
-// --- Sub-form Cache ---
-
-// WHY: Same caching pattern as GRV Log's subformCache. Balance data doesn't
-// change between filter changes — cache prevents re-fetching.
-const subformCache = new Map<string, Record<string, unknown> | null>();
-const SUBFORM_CACHE_MAX = 5000;
-
-// --- Enrichment (Two-Step Sub-Form Fetch) ---
-
-// WHY: Fetches RAWSERIALBAL_SUBFORM per row in batches. Only adds balance
-// data — does NOT filter rows (that's filterRows' job).
-async function enrichRows(rows: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
-  const BATCH_SIZE = 10;
-  const BATCH_DELAY_MS = 200;
-
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch = rows.slice(i, i + BATCH_SIZE);
-
-    const uncached: Record<string, unknown>[] = [];
-    for (const row of batch) {
-      const cacheKey = String(row.SERIAL);
-      if (subformCache.has(cacheKey)) {
-        row.RAWSERIALBAL_SUBFORM = subformCache.get(cacheKey);
-      } else {
-        uncached.push(row);
-      }
-    }
-
-    if (uncached.length > 0) {
-      if (i > 0) await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
-      const results = await Promise.all(
-        uncached.map((row) =>
-          querySubform(
-            'RAWSERIAL',
-            { SERIAL: String(row.SERIAL) },
-            'RAWSERIALBAL_SUBFORM',
-          ).catch(() => null),
-        ),
-      );
-      for (let j = 0; j < uncached.length; j++) {
-        const cacheKey = String(uncached[j].SERIAL);
-        subformCache.set(cacheKey, results[j]);
-        uncached[j].RAWSERIALBAL_SUBFORM = results[j];
-      }
-
-      // WHY: FIFO eviction — same pattern as grvLog.ts
-      if (subformCache.size > SUBFORM_CACHE_MAX) {
-        const deleteCount = Math.floor(SUBFORM_CACHE_MAX * 0.2);
-        let count = 0;
-        for (const key of subformCache.keys()) {
-          if (count >= deleteCount) break;
-          subformCache.delete(key);
-          count++;
-        }
-      }
-    }
-  }
-
-  return rows;
-}
-
 // --- Row Transformer ---
 
 function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
-  // WHY: querySubform() already resolves Pattern A/B — it returns a single
-  // record (or null), never a raw { value: [...] } array. Just read the field.
-  // Balance field name needs API verification — check TBALANCE, BALANCE, WBALANCE.
-  const subform = raw.RAWSERIALBAL_SUBFORM as Record<string, unknown> | null;
-  const balance = Number(subform?.TBALANCE ?? subform?.BALANCE ?? 0);
+  // WHY: QUANT (lot quantity) is fetched directly from RAWSERIAL via $select
+  // (and filtered via $filter to only include > 0). No sub-form needed.
+  const balance = Number(raw.QUANT ?? 0);
 
   const expiryRaw = raw.EXPIRYDATE as string | null;
   const now = new Date();
@@ -303,7 +242,6 @@ reportRegistry.set('bbd', {
   filterColumns,
   buildQuery,
   transformRow,
-  enrichRows,
   filterRows,
   fetchFilters,
   rowStyleField: 'status',
