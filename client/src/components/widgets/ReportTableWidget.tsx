@@ -231,9 +231,11 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         </>
       )}
 
-      {toast && (
-        <Toast message={toast.message} variant={toast.variant} onDismiss={clearToast} />
-      )}
+      <AnimatePresence>
+        {toast && (
+          <Toast message={toast.message} variant={toast.variant} onDismiss={clearToast} />
+        )}
+      </AnimatePresence>
     </>
   );
 }
