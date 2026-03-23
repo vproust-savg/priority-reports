@@ -10,7 +10,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import DepartmentLayout from './components/DepartmentLayout';
 import PageRenderer from './components/PageRenderer';
-import RootPage from './components/RootPage';
 import NotFoundPage from './components/NotFoundPage';
 import { departments } from './config/departments';
 import { pages } from './config/pages';
@@ -22,7 +21,9 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<RootPage />} />
+          {/* WHY: No standalone root page — dashboard is always accessed via
+              department URLs in Airtable iframe embeds. Redirect to first department. */}
+          <Route path="/" element={<Navigate to={departments[0].basePath} replace />} />
 
           {/* WHY: Routes are generated from departments + pages config so adding
               a new department or page NEVER requires touching App.tsx. */}

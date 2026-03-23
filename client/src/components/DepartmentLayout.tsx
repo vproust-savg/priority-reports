@@ -8,9 +8,6 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { useLocation, Outlet } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-import { FADE_SLIDE_UP, EASE_FAST, REDUCED_FADE, REDUCED_TRANSITION } from '../config/animationConstants';
 import { pages } from '../config/pages';
 import NavTabs from './NavTabs';
 import type { DepartmentConfig } from '../config/departments';
@@ -21,7 +18,6 @@ interface DepartmentLayoutProps {
 
 export default function DepartmentLayout({ department }: DepartmentLayoutProps) {
   const location = useLocation();
-  const reduced = useReducedMotion();
 
   // WHY: Filter pages to this department, then map paths to full URLs
   // so NavTabs can compare against location.pathname for active state.
@@ -51,16 +47,13 @@ export default function DepartmentLayout({ department }: DepartmentLayoutProps) 
       </header>
 
       {/* Page content */}
+      {/* WHY: No AnimatePresence here. The Navigate redirect in App.tsx
+          (index route → first page) causes AnimatePresence mode="wait"
+          to deadlock: exit animation never completes, blocking enter,
+          leaving content permanently at opacity:0. NavTabs pill animation
+          already provides visual continuity between pages. */}
       <main className="max-w-7xl mx-auto px-6 py-6">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={location.pathname}
-            {...(reduced ? REDUCED_FADE : FADE_SLIDE_UP)}
-            transition={reduced ? REDUCED_TRANSITION : EASE_FAST}
-          >
-            <Outlet />
-          </motion.div>
-        </AnimatePresence>
+        <Outlet />
       </main>
     </div>
   );
