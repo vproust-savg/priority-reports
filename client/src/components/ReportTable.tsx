@@ -7,15 +7,17 @@
 // EXPORTS: ReportTable
 // ═══════════════════════════════════════════════════════════════
 
+import { motion } from 'framer-motion';
 import type { ColumnDefinition } from '@shared/types';
 import { formatCellValue } from '../utils/formatters';
 
 interface ReportTableProps {
   columns: ColumnDefinition[];
   data: Record<string, unknown>[];
+  disableAnimation?: boolean;
 }
 
-export default function ReportTable({ columns, data }: ReportTableProps) {
+export default function ReportTable({ columns, data, disableAnimation }: ReportTableProps) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-[13px]">
@@ -35,9 +37,12 @@ export default function ReportTable({ columns, data }: ReportTableProps) {
         </thead>
         <tbody>
           {data.map((row, rowIdx) => (
-            <tr
+            <motion.tr
               key={rowIdx}
-              className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors duration-150 ${
+              initial={disableAnimation ? { opacity: 0 } : { opacity: 0, y: 6 }}
+              animate={disableAnimation ? { opacity: 1 } : { opacity: 1, y: 0 }}
+              transition={{ delay: Math.min(rowIdx, 10) * 0.03, duration: 0.15 }}
+              className={`border-b border-slate-100 hover:bg-blue-50/60 transition-colors duration-150 ${
                 rowIdx % 2 === 1 ? 'bg-slate-50/30' : ''
               }`}
             >
@@ -54,7 +59,7 @@ export default function ReportTable({ columns, data }: ReportTableProps) {
                   </td>
                 );
               })}
-            </tr>
+            </motion.tr>
           ))}
         </tbody>
       </table>

@@ -15,6 +15,7 @@ import { useFilterState } from '../../hooks/useFilterState';
 import { useBaseDataset } from '../../hooks/useBaseDataset';
 import { useColumnManager } from '../../hooks/useColumnManager';
 import { useExport } from '../../hooks/useExport';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import TableToolbar from '../TableToolbar';
 import FilterBuilder from '../filter/FilterBuilder';
 import ColumnManagerPanel from '../columns/ColumnManagerPanel';
@@ -74,6 +75,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   } = useColumnManager(activeData?.columns);
 
   const { isExporting, toast, clearToast, triggerExport } = useExport(reportId, debouncedGroup);
+  const reduced = useReducedMotion();
 
   // WHY: Filter endpoint failure cascades — empty filterColumns breaks
   // extractDateConditions in useBaseDataset and shows a blank filter panel.
@@ -194,7 +196,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
 
       {activeData && displayData.length > 0 && (
         <>
-          <ReportTable columns={visibleColumns.length > 0 ? visibleColumns : activeData.columns} data={displayData} />
+          <ReportTable columns={visibleColumns.length > 0 ? visibleColumns : activeData.columns} data={displayData} disableAnimation={reduced} />
           <Pagination
             page={page}
             pageSize={CLIENT_PAGE_SIZE}
