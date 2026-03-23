@@ -17,6 +17,8 @@ import { createReportsRouter } from './routes/reports';
 import { createFiltersRouter } from './routes/filters';
 import { createExportRouter } from './routes/export';
 import { logStartup } from './services/logger';
+import { getMonday, getSunday, toISODate } from '../../shared/utils/weekUtils';
+import type { CacheProvider } from './services/cache';
 
 const app = express();
 
@@ -47,6 +49,46 @@ if (env.NODE_ENV === 'production') {
 
 export { app };
 
+// WHY: Pre-cache the default view (current week) so the first user
+// sees data instantly instead of waiting 3-5s on cold load.
+async function warmCache(_cache: CacheProvider) {
+  const monday = getMonday(new Date());
+  const sunday = getSunday(monday);
+
+  const body = {
+    filterGroup: {
+      id: 'warmup',
+      conjunction: 'and' as const,
+      conditions: [{
+        id: 'warmup-date',
+        field: 'date',
+        operator: 'isInWeek' as const,
+        value: toISODate(monday),
+        valueTo: toISODate(sunday),
+      }],
+      groups: [],
+    },
+    page: 1,
+    pageSize: 50,
+  };
+
+  // WHY: Hit our own endpoint via HTTP to reuse all query logic
+  // (OData translation, enrichment, caching). Simpler than
+  // extracting and calling the handler function directly.
+  const port = env.PORT;
+  try {
+    const response = await fetch(`http://localhost:${port}/api/v1/reports/grv-log/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json() as { meta: { cache: string; executionTimeMs: number }; data: unknown[] };
+    console.log(`[warmup] Pre-cached current week: ${data.data.length} rows in ${data.meta.executionTimeMs}ms`);
+  } catch (err) {
+    console.warn('[warmup] Cache warming failed:', err);
+  }
+}
+
 // WHY: Only start listening when run directly (not when imported by tests).
 const isDirectRun = require.main === module ||
   process.argv[1]?.includes('tsx');
@@ -60,5 +102,7 @@ if (isDirectRun) {
       cacheStatus: cacheConnected ? 'connected' : 'disconnected',
     });
     console.log(`Server running on http://localhost:${env.PORT}`);
+    // WHY: Fire-and-forget — don't block server readiness on cache warming
+    warmCache(cache);
   });
 }
