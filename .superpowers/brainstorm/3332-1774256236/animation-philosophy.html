@@ -1,0 +1,111 @@
+<h2>Animation Philosophy</h2>
+<p class="subtitle">Apple and Stripe take different approaches to motion. Which direction feels right for a data dashboard?</p>
+
+<div class="cards">
+  <div class="card" data-choice="subtle" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: linear-gradient(135deg, #f8fafc, #e2e8f0); padding: 32px; display: flex; flex-direction: column; gap: 12px;">
+      <!-- Subtle Apple style mockup -->
+      <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+        <div style="width: 60px; height: 6px; border-radius: 3px; background: #007AFF;"></div>
+        <div style="width: 60px; height: 6px; border-radius: 3px; background: #e2e8f0;"></div>
+        <div style="width: 60px; height: 6px; border-radius: 3px; background: #e2e8f0;"></div>
+      </div>
+      <div style="background: white; border-radius: 16px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+          <div style="width: 80px; height: 10px; border-radius: 4px; background: #334155;"></div>
+          <div style="width: 40px; height: 10px; border-radius: 4px; background: #e2e8f0;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="height: 32px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0;"></div>
+          <div style="height: 32px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; opacity: 0.9;"></div>
+          <div style="height: 32px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; opacity: 0.8;"></div>
+        </div>
+      </div>
+      <p style="text-align: center; font-size: 11px; color: #94a3b8; margin-top: 4px;">Gentle fades &bull; Soft transitions &bull; Restrained</p>
+    </div>
+    <div class="card-body">
+      <h3>A. Subtle & Restrained</h3>
+      <p>Apple iCloud / macOS System Preferences style. Barely-there transitions that feel natural. Content fades in softly, hovers are gentle color shifts, panels slide with ease. <strong>Nothing calls attention to itself.</strong></p>
+      <ul style="font-size: 13px; color: #64748b; margin-top: 8px;">
+        <li>200-300ms ease-out transitions</li>
+        <li>Opacity fades for content changes</li>
+        <li>Gentle scale on hover (1.01-1.02x)</li>
+        <li>No spring physics or bouncing</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" data-choice="polished" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: linear-gradient(135deg, #f0f4ff, #e0e7ff); padding: 32px; display: flex; flex-direction: column; gap: 12px;">
+      <!-- Polished Stripe style mockup -->
+      <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+        <div style="width: 60px; height: 6px; border-radius: 3px; background: #007AFF; box-shadow: 0 0 8px rgba(0,122,255,0.3);"></div>
+        <div style="width: 60px; height: 6px; border-radius: 3px; background: #e2e8f0;"></div>
+        <div style="width: 60px; height: 6px; border-radius: 3px; background: #e2e8f0;"></div>
+      </div>
+      <div style="background: white; border-radius: 16px; padding: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+          <div style="width: 80px; height: 10px; border-radius: 4px; background: #334155;"></div>
+          <div style="width: 40px; height: 10px; border-radius: 4px; background: #007AFF; opacity: 0.6;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="height: 32px; border-radius: 8px; background: linear-gradient(90deg, #f8fafc 60%, transparent); border: 1px solid #e2e8f0; position: relative; overflow: hidden;">
+            <div style="position: absolute; top: 0; left: 0; height: 100%; width: 60%; background: linear-gradient(90deg, rgba(0,122,255,0.03), transparent);"></div>
+          </div>
+          <div style="height: 32px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; opacity: 0.95;"></div>
+          <div style="height: 32px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; opacity: 0.9;"></div>
+        </div>
+      </div>
+      <p style="text-align: center; font-size: 11px; color: #94a3b8; margin-top: 4px;">Smooth springs &bull; Staggered reveals &bull; Purposeful</p>
+    </div>
+    <div class="card-body">
+      <h3>B. Polished & Purposeful</h3>
+      <p>Stripe Dashboard / Linear style. Every interaction has satisfying feedback. Content enters with staggered timing, filters animate with spring physics, numbers count up. <strong>Motion guides attention.</strong></p>
+      <ul style="font-size: 13px; color: #64748b; margin-top: 8px;">
+        <li>Spring-based easing (natural feel)</li>
+        <li>Staggered row/card entrance animations</li>
+        <li>Animated number counters on stats</li>
+        <li>Micro-interactions on every control</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" data-choice="expressive" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: linear-gradient(135deg, #eff6ff, #dbeafe); padding: 32px; display: flex; flex-direction: column; gap: 12px;">
+      <!-- Expressive mockup -->
+      <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+        <div style="width: 60px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #007AFF, #5856D6); box-shadow: 0 0 12px rgba(0,122,255,0.4);"></div>
+        <div style="width: 60px; height: 6px; border-radius: 3px; background: #e2e8f0;"></div>
+        <div style="width: 60px; height: 6px; border-radius: 3px; background: #e2e8f0;"></div>
+      </div>
+      <div style="background: white; border-radius: 16px; padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04); transform: perspective(800px) rotateX(1deg);">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+          <div style="width: 80px; height: 10px; border-radius: 4px; background: #334155;"></div>
+          <div style="width: 60px; height: 10px; border-radius: 6px; background: linear-gradient(90deg, #007AFF, #5856D6); opacity: 0.7;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="height: 32px; border-radius: 8px; background: linear-gradient(90deg, rgba(0,122,255,0.05), rgba(88,86,214,0.03)); border: 1px solid #e2e8f0;"></div>
+          <div style="height: 32px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; transform: translateX(2px); opacity: 0.95;"></div>
+          <div style="height: 32px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; transform: translateX(4px); opacity: 0.85;"></div>
+        </div>
+      </div>
+      <p style="text-align: center; font-size: 11px; color: #94a3b8; margin-top: 4px;">Bold motion &bull; Gradient accents &bull; Dramatic</p>
+    </div>
+    <div class="card-body">
+      <h3>C. Expressive & Bold</h3>
+      <p>Vercel / Framer style. Dramatic entrances, parallax effects, gradient accents, 3D perspective transforms. <strong>The UI itself is a showpiece.</strong></p>
+      <ul style="font-size: 13px; color: #64748b; margin-top: 8px;">
+        <li>Parallax scroll effects</li>
+        <li>3D card transforms on hover</li>
+        <li>Gradient shimmer effects</li>
+        <li>Bold entrance animations (slide + scale)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 24px; padding: 16px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+  <p style="font-size: 13px; color: #64748b; margin: 0;">
+    <strong style="color: #334155;">Context:</strong> This dashboard is embedded in Airtable via an iframe. It's a business tool used daily for ERP data. The animation philosophy sets the tone for every interaction — loading states, filter changes, page transitions, hover effects, and data updates.
+  </p>
+</div>

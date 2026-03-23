@@ -28,10 +28,3 @@
   0%   { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
-
-/* WHY: Indeterminate pulse for the loading bar during Phase 1 (quick query).
-   Width oscillates to show "loading in progress" without a specific percentage. */
-@keyframes loading-pulse {
-  0%, 100% { width: 20%; }
-  50%      { width: 60%; }
-}

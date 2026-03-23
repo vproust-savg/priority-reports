@@ -1,0 +1,168 @@
+<h2>Effects Catalog</h2>
+<p class="subtitle">Which of these premium effects do you want? Select all that appeal to you.</p>
+
+<div class="options" data-multiselect>
+
+  <!-- 1. Page & Navigation -->
+  <div class="option" data-choice="nav-transitions" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>Animated Nav Tabs</h3>
+      <p>A sliding pill/underline that glides between tabs with spring physics (like iOS segment control). The active indicator smoothly animates to the selected tab instead of jumping.</p>
+      <div style="margin-top: 12px; background: #f8fafc; border-radius: 12px; padding: 16px; border: 1px solid #e2e8f0;">
+        <div style="display: flex; gap: 4px; background: #f1f5f9; border-radius: 10px; padding: 3px; width: fit-content;">
+          <div style="padding: 6px 16px; background: white; border-radius: 8px; font-size: 13px; font-weight: 600; color: #007AFF; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">GRV Log</div>
+          <div style="padding: 6px 16px; font-size: 13px; color: #64748b;">Inventory</div>
+          <div style="padding: 6px 16px; font-size: 13px; color: #64748b;">Orders</div>
+        </div>
+        <p style="font-size: 11px; color: #94a3b8; margin-top: 8px;">The white pill slides smoothly between tabs</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Page content transitions -->
+  <div class="option" data-choice="page-transitions" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>Page Content Transitions</h3>
+      <p>When switching pages, content fades out/in with a subtle vertical shift. AnimatePresence handles exit animations so the old page gracefully leaves before the new one enters.</p>
+      <div style="margin-top: 12px; display: flex; gap: 12px; align-items: center;">
+        <div style="background: #f8fafc; border-radius: 8px; padding: 12px; flex: 1; border: 1px solid #e2e8f0; opacity: 0.4; transform: translateY(-4px);">
+          <div style="height: 8px; width: 60%; background: #cbd5e1; border-radius: 4px; margin-bottom: 6px;"></div>
+          <div style="height: 40px; background: #e2e8f0; border-radius: 6px;"></div>
+        </div>
+        <span style="color: #94a3b8; font-size: 18px;">→</span>
+        <div style="background: #f8fafc; border-radius: 8px; padding: 12px; flex: 1; border: 1px solid #007AFF20;">
+          <div style="height: 8px; width: 60%; background: #007AFF40; border-radius: 4px; margin-bottom: 6px;"></div>
+          <div style="height: 40px; background: #007AFF10; border-radius: 6px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Table row animations -->
+  <div class="option" data-choice="table-rows" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content">
+      <h3>Staggered Table Row Entrance</h3>
+      <p>When data loads or filters change, rows appear one-by-one with a fast stagger (30-50ms delay between rows). Each row fades in and slides up slightly. Creates a "waterfall" effect that makes data feel alive.</p>
+      <div style="margin-top: 12px; background: #f8fafc; border-radius: 12px; padding: 12px; border: 1px solid #e2e8f0;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="height: 28px; background: white; border-radius: 6px; border: 1px solid #e2e8f0; opacity: 1;"></div>
+          <div style="height: 28px; background: white; border-radius: 6px; border: 1px solid #e2e8f0; opacity: 0.85;"></div>
+          <div style="height: 28px; background: white; border-radius: 6px; border: 1px solid #e2e8f0; opacity: 0.6;"></div>
+          <div style="height: 28px; background: white; border-radius: 6px; border: 1px solid #e2e8f0; opacity: 0.3;"></div>
+          <div style="height: 28px; background: white; border-radius: 6px; border: 1px solid #e2e8f0; opacity: 0.1;"></div>
+        </div>
+        <p style="font-size: 11px; color: #94a3b8; margin-top: 8px; text-align: center;">Rows cascade in from top to bottom</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Skeleton loading -->
+  <div class="option" data-choice="skeleton" onclick="toggleSelect(this)">
+    <div class="letter">4</div>
+    <div class="content">
+      <h3>Premium Skeleton Loading</h3>
+      <p>Replace the current basic pulse skeleton with a Stripe-style shimmer effect — a diagonal light sweep that moves across placeholder bars. Skeleton shapes match the actual table layout (header + rows).</p>
+      <div style="margin-top: 12px; background: #f8fafc; border-radius: 12px; padding: 12px; border: 1px solid #e2e8f0; overflow: hidden;">
+        <div style="display: flex; gap: 12px; margin-bottom: 10px;">
+          <div style="height: 10px; width: 25%; background: linear-gradient(90deg, #e2e8f0, #f1f5f9, #e2e8f0); border-radius: 4px;"></div>
+          <div style="height: 10px; width: 20%; background: linear-gradient(90deg, #e2e8f0, #f1f5f9, #e2e8f0); border-radius: 4px;"></div>
+          <div style="height: 10px; width: 15%; background: linear-gradient(90deg, #e2e8f0, #f1f5f9, #e2e8f0); border-radius: 4px;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="height: 24px; background: linear-gradient(90deg, #e2e8f0, #f1f5f9, #e2e8f0); border-radius: 4px;"></div>
+          <div style="height: 24px; background: linear-gradient(90deg, #e2e8f0, #f1f5f9, #e2e8f0); border-radius: 4px;"></div>
+          <div style="height: 24px; background: linear-gradient(90deg, #e2e8f0, #f1f5f9, #e2e8f0); border-radius: 4px;"></div>
+        </div>
+        <p style="font-size: 11px; color: #94a3b8; margin-top: 8px; text-align: center;">Shimmer sweeps diagonally across placeholders</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Filter panel -->
+  <div class="option" data-choice="filter-panel" onclick="toggleSelect(this)">
+    <div class="letter">5</div>
+    <div class="content">
+      <h3>Smooth Filter Panel Expand/Collapse</h3>
+      <p>The filter and column panels animate open/closed with spring physics and height animation (not abrupt show/hide). Filter conditions animate in when added and gracefully exit when removed.</p>
+      <div style="margin-top: 12px; display: flex; gap: 12px;">
+        <div style="background: #f8fafc; border-radius: 8px; padding: 10px; flex: 1; border: 1px solid #e2e8f0;">
+          <div style="height: 6px; width: 50%; background: #cbd5e1; border-radius: 3px; margin-bottom: 6px;"></div>
+          <div style="height: 2px; background: #e2e8f0; border-radius: 1px;"></div>
+          <p style="font-size: 10px; color: #94a3b8; text-align: center; margin-top: 4px;">Collapsed</p>
+        </div>
+        <span style="color: #94a3b8; align-self: center;">→</span>
+        <div style="background: #f8fafc; border-radius: 8px; padding: 10px; flex: 1; border: 1px solid #007AFF30;">
+          <div style="height: 6px; width: 50%; background: #007AFF60; border-radius: 3px; margin-bottom: 8px;"></div>
+          <div style="height: 24px; background: white; border-radius: 4px; border: 1px solid #e2e8f0; margin-bottom: 4px;"></div>
+          <div style="height: 24px; background: white; border-radius: 4px; border: 1px solid #e2e8f0;"></div>
+          <p style="font-size: 10px; color: #94a3b8; text-align: center; margin-top: 4px;">Expanded (spring)</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Button micro-interactions -->
+  <div class="option" data-choice="button-micro" onclick="toggleSelect(this)">
+    <div class="letter">6</div>
+    <div class="content">
+      <h3>Button & Control Micro-interactions</h3>
+      <p>Buttons scale down slightly on press (0.97x) then spring back. Toggle switches animate with spring physics. Hover states have smooth color transitions. Active filter badges pulse subtly when filters are applied.</p>
+      <div style="margin-top: 12px; display: flex; gap: 12px; align-items: center; justify-content: center;">
+        <div style="padding: 8px 16px; background: #007AFF; color: white; border-radius: 8px; font-size: 12px; font-weight: 600; transform: scale(0.97); box-shadow: 0 1px 2px rgba(0,0,0,0.1);">Press ↓</div>
+        <div style="padding: 8px 16px; background: #007AFF; color: white; border-radius: 8px; font-size: 12px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,122,255,0.3);">Release ↑</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. Toast & notifications -->
+  <div class="option" data-choice="toast-upgrade" onclick="toggleSelect(this)">
+    <div class="letter">7</div>
+    <div class="content">
+      <h3>Premium Toast Notifications</h3>
+      <p>Toasts slide in from the bottom-right with spring physics and a subtle blur backdrop. Success toasts get a satisfying checkmark animation. Exit with a smooth slide-out instead of abrupt disappear.</p>
+    </div>
+  </div>
+
+  <!-- 8. Hover effects -->
+  <div class="option" data-choice="hover-effects" onclick="toggleSelect(this)">
+    <div class="letter">8</div>
+    <div class="content">
+      <h3>Enhanced Card & Row Hover</h3>
+      <p>Widget cards lift slightly on hover with elevated shadow (translateY -2px). Table rows get a smooth highlight transition. Interactive elements show cursor feedback instantly.</p>
+    </div>
+  </div>
+
+  <!-- 9. Loading progress -->
+  <div class="option" data-choice="loading-bar" onclick="toggleSelect(this)">
+    <div class="letter">9</div>
+    <div class="content">
+      <h3>Phase Loading Progress Bar</h3>
+      <p>A thin progress bar at the top of each widget (like YouTube/GitHub) that shows Phase 1 → Phase 2 loading. Smoothly fills with the primary color, then fades out when complete.</p>
+      <div style="margin-top: 12px; background: #f8fafc; border-radius: 8px; padding: 12px; border: 1px solid #e2e8f0;">
+        <div style="height: 2px; background: #e2e8f0; border-radius: 1px; overflow: hidden;">
+          <div style="height: 100%; width: 65%; background: linear-gradient(90deg, #007AFF, #5AC8FA); border-radius: 1px;"></div>
+        </div>
+        <p style="font-size: 11px; color: #94a3b8; margin-top: 6px; text-align: center;">Thin gradient bar shows loading progress</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 10. Empty/Error states -->
+  <div class="option" data-choice="empty-states" onclick="toggleSelect(this)">
+    <div class="letter">10</div>
+    <div class="content">
+      <h3>Animated Empty & Error States</h3>
+      <p>Empty states and error messages fade in with an icon animation (gentle bounce or scale). The "No results" state gets a subtle illustration-style treatment instead of plain text.</p>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top: 24px; padding: 16px; background: #f0f9ff; border-radius: 12px; border: 1px solid #bae6fd;">
+  <p style="font-size: 13px; color: #0369a1; margin: 0;">
+    <strong>Multi-select enabled</strong> — click all the effects you want included. I recommend all of them for the full premium treatment, but you can exclude any that feel like overkill for a data dashboard.
+  </p>
+</div>

@@ -24,7 +24,7 @@ export const FILTER_LABEL_CLASS =
 // --- Operator sets by column type ---
 
 // WHY: Extracted here (not inline in FilterConditionRow) to keep
-// that component under 150 lines. Also reusable by clientFilter.ts.
+// that component under 150 lines.
 export const OPERATORS_BY_TYPE: Record<ColumnFilterType, { value: FilterOperator; label: string }[]> = {
   text: [
     { value: 'contains', label: 'contains' },
