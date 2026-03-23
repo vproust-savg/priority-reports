@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/src/routes/filters.ts
 // PURPOSE: Returns available filter values for report dropdowns.
-//          Vendors are fetched from Priority and deduplicated.
-//          Statuses are hardcoded (small known set).
+//          Dispatches to report.fetchFilters() when available.
+//          Falls back to hardcoded GRV Log logic when absent.
 // USED BY: index.ts (mounted at /api/v1/reports)
 // EXPORTS: createFiltersRouter
 // ═══════════════════════════════════════════════════════════════
@@ -16,6 +16,8 @@ import type { FiltersResponse, FilterOption } from '@shared/types';
 // WHY: Ensure report definitions are registered even if filters.ts
 // loads before reports.ts. Node module cache prevents double-registration.
 import '../reports/grvLog';
+// WHY: Temporarily commented until bbdReport.ts exists (Task 4).
+// import '../reports/bbdReport';
 
 export function createFiltersRouter(cache: CacheProvider): Router {
   const router = Router();
@@ -41,50 +43,59 @@ export function createFiltersRouter(cache: CacheProvider): Router {
       return;
     }
 
-    // Fetch distinct vendors from Priority
-    // WHY: $top=1000 fetches up to 1000 documents to extract unique vendors.
-    // For large datasets, not all vendors may be returned. Acceptable for v1.
-    let vendorData;
-    try {
-      vendorData = await queryPriority(report.entity, {
-        $select: 'SUPNAME,CDES',
-        $orderby: 'CDES',
-        $top: 1000,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      console.error(`[filters] Priority fetch failed: ${message}`);
-      res.status(502).json({ error: `Failed to fetch filters: ${message}` });
-      return;
+    let filters: Record<string, FilterOption[]>;
+
+    if (report.fetchFilters) {
+      // WHY: Report defines its own filter fetching logic (BBD, future reports).
+      try {
+        filters = await report.fetchFilters();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        console.error(`[filters] fetchFilters failed for ${reportId}: ${message}`);
+        res.status(502).json({ error: `Failed to fetch filters: ${message}` });
+        return;
+      }
+    } else {
+      // WHY: Fallback for GRV Log — hardcoded logic preserved until grvLog.ts
+      // is migrated to fetchFilters() in a future cleanup.
+      let vendorData;
+      try {
+        vendorData = await queryPriority(report.entity, {
+          $select: 'SUPNAME,CDES',
+          $orderby: 'CDES',
+          $top: 1000,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        console.error(`[filters] Priority fetch failed: ${message}`);
+        res.status(502).json({ error: `Failed to fetch filters: ${message}` });
+        return;
+      }
+
+      const vendorSet = new Set<string>();
+      for (const row of vendorData.value) {
+        const name = row.CDES as string;
+        if (name) vendorSet.add(name);
+      }
+
+      const vendors: FilterOption[] = Array.from(vendorSet)
+        .map((name) => ({ value: name, label: name }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+
+      const statuses: FilterOption[] = [
+        { value: 'Received', label: 'Received' },
+        { value: 'Cancelled', label: 'Cancelled' },
+      ];
+
+      filters = { vendors, statuses, warehouses: [], users: [] };
     }
-
-    // WHY: Deduplicate by CDES (vendor description) — this is the value used
-    // in both OData filtering (odataField: 'CDES') and row data (transformRow
-    // maps vendor: raw.CDES). Using CDES as the dropdown value ensures
-    // client-side filtering matches: row.vendor === condition.value.
-    const vendorSet = new Set<string>();
-    for (const row of vendorData.value) {
-      const name = row.CDES as string;
-      if (name) vendorSet.add(name);
-    }
-
-    const vendors: FilterOption[] = Array.from(vendorSet)
-      .map((name) => ({ value: name, label: name }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-
-    const statuses: FilterOption[] = [
-      { value: 'Received', label: 'Received' },
-      { value: 'Cancelled', label: 'Cancelled' },
-    ];
 
     const response: FiltersResponse = {
       meta: {
         reportId,
         generatedAt: new Date().toISOString(),
       },
-      // WHY: warehouses/users added in Spec 03a. Stubbed here until that spec
-      // adds the full Priority query for distinct warehouses/users.
-      filters: { vendors, statuses, warehouses: [], users: [] },
+      filters,
       columns: report.filterColumns,
     };
 
