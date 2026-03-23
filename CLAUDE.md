@@ -164,6 +164,9 @@ This code is maintained exclusively by LLMs. Every decision optimizes for AI rea
 - Interpolating user input directly into OData `$filter` queries — validate with `z.string().regex(/^[a-zA-Z0-9_-]+$/)`
 - Changing the `ApiResponse` envelope shape without reviewing all consumers
 - Using `app.get('*', ...)` for SPA catch-all — Express 5 requires `app.get('/{*path}', ...)` (path-to-regexp v8 needs named params)
+- Confusing Express and React Router catch-all syntax — Express 5 uses `/{*path}`, React Router uses `path="*"`. They live in the same project but use different path syntaxes.
+- Forgetting catch-all routes inside nested React Router groups — a parent route matching (e.g., `/food-safety`) doesn't 404 on unmatched children (e.g., `/food-safety/nonexistent`). Add `<Route path="*">` inside each nested group, not just at top level.
+- Putting client-only types (e.g., `DepartmentConfig`) in `shared/types/` — only types used by BOTH client and server belong there. Client-only types go in the client config file that defines them.
 - Using `$expand` on DOCUMENTS_P — Priority/CloudFront truncates the response. Use two-step fetch: query parent, then `querySubform()` per row
 - Modifying Dockerfile paths without checking `__dirname` math — server at `/app/server/dist/server/src/` serves client from `../../../../client/dist` (4 levels up to `/app/`)
 - Leaving unused variables/destructured bindings — `noUnusedLocals: true` in `tsconfig.app.json` means `tsc -b` fails, killing the Railway Docker build. Always clean up unused destructured props.
