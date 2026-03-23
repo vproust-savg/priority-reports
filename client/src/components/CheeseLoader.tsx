@@ -64,6 +64,55 @@ export default function CheeseLoader({ variant = 'slice-reveal' }: CheeseLoaderP
                 opacity: 0;
                 animation: cheese-sweep 3.6s cubic-bezier(0.25, 0.1, 0.25, 1) infinite both;
               }
+              .pop-wedge {
+                transform-origin: 40px 40px;
+                animation-duration: 3.9s;
+                animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+                animation-iteration-count: infinite;
+                animation-fill-mode: both;
+              }
+              @keyframes pop-0 {
+                0% { transform: translate(0,0) rotate(0); }
+                6.5% { transform: translate(4px,-6.9px) rotate(3deg); }
+                9% { transform: translate(4px,-6.9px) rotate(3deg); }
+                15.5% { transform: translate(0,0) rotate(0); }
+                100% { transform: translate(0,0) rotate(0); }
+              }
+              @keyframes pop-1 {
+                0% { transform: translate(0,0) rotate(0); }
+                6.5% { transform: translate(8px,0px) rotate(3deg); }
+                9% { transform: translate(8px,0px) rotate(3deg); }
+                15.5% { transform: translate(0,0) rotate(0); }
+                100% { transform: translate(0,0) rotate(0); }
+              }
+              @keyframes pop-2 {
+                0% { transform: translate(0,0) rotate(0); }
+                6.5% { transform: translate(4px,6.9px) rotate(3deg); }
+                9% { transform: translate(4px,6.9px) rotate(3deg); }
+                15.5% { transform: translate(0,0) rotate(0); }
+                100% { transform: translate(0,0) rotate(0); }
+              }
+              @keyframes pop-3 {
+                0% { transform: translate(0,0) rotate(0); }
+                6.5% { transform: translate(-4px,6.9px) rotate(3deg); }
+                9% { transform: translate(-4px,6.9px) rotate(3deg); }
+                15.5% { transform: translate(0,0) rotate(0); }
+                100% { transform: translate(0,0) rotate(0); }
+              }
+              @keyframes pop-4 {
+                0% { transform: translate(0,0) rotate(0); }
+                6.5% { transform: translate(-8px,0px) rotate(3deg); }
+                9% { transform: translate(-8px,0px) rotate(3deg); }
+                15.5% { transform: translate(0,0) rotate(0); }
+                100% { transform: translate(0,0) rotate(0); }
+              }
+              @keyframes pop-5 {
+                0% { transform: translate(0,0) rotate(0); }
+                6.5% { transform: translate(-4px,-6.9px) rotate(3deg); }
+                9% { transform: translate(-4px,-6.9px) rotate(3deg); }
+                15.5% { transform: translate(0,0) rotate(0); }
+                100% { transform: translate(0,0) rotate(0); }
+              }
               @media (prefers-reduced-motion: reduce) {
                 .sweep-wedge, .pop-wedge {
                   animation: none !important;
@@ -74,17 +123,23 @@ export default function CheeseLoader({ variant = 'slice-reveal' }: CheeseLoaderP
             `}</style>
           </defs>
 
-          {WEDGE_PATHS.map((d, i) => (
-            <path
-              key={i}
-              d={d}
-              fill="url(#cheese-gradient)"
-              stroke="#B8912E"
-              strokeWidth="0.5"
-              className={variant === 'slice-reveal' ? 'sweep-wedge' : undefined}
-              style={variant === 'slice-reveal' ? { animationDelay: `${i * 0.6}s` } : undefined}
-            />
-          ))}
+          {WEDGE_PATHS.map((d, i) => {
+            const isSweep = variant === 'slice-reveal';
+            return (
+              <path
+                key={i}
+                d={d}
+                fill="url(#cheese-gradient)"
+                stroke="#B8912E"
+                strokeWidth="0.5"
+                className={isSweep ? 'sweep-wedge' : 'pop-wedge'}
+                style={isSweep
+                  ? { animationDelay: `${i * 0.6}s` }
+                  : { animationName: `pop-${i}`, animationDelay: `${i * 0.65}s` }
+                }
+              />
+            );
+          })}
 
           {HOLES.map((h, i) => (
             <circle
