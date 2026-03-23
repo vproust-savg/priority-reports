@@ -14,6 +14,7 @@ const COLUMNS: ColumnFilterMeta[] = [
   { key: 'status', label: 'Status', filterType: 'enum', filterLocation: 'server', odataField: 'STATDES', enumKey: 'statuses' },
   { key: 'total', label: 'Total', filterType: 'currency', filterLocation: 'server', odataField: 'TOTPRICE' },
   { key: 'docNo', label: 'GRV #', filterType: 'text', filterLocation: 'server', odataField: 'DOCNO' },
+  { key: 'quantity', label: 'Quantity', filterType: 'number', filterLocation: 'server', odataField: 'QUANT' },
   { key: 'driverId', label: 'Driver ID', filterType: 'text', filterLocation: 'client' },
 ];
 
@@ -222,6 +223,158 @@ describe('nested groups', () => {
       ], 'or')],
     );
     group.groups[0].id = 'nested';
+    expect(buildODataFilter(group, COLUMNS)).toBe("SUPNAME eq 'ACME'");
+  });
+});
+
+describe('date equals/notEquals', () => {
+  it('builds equals with T00:00:00Z suffix', () => {
+    const group = makeGroup([makeCond('date', 'equals', '2026-01-15')]);
+    expect(buildODataFilter(group, COLUMNS)).toBe('CURDATE eq 2026-01-15T00:00:00Z');
+  });
+  it('builds notEquals with T00:00:00Z suffix', () => {
+    const group = makeGroup([makeCond('date', 'notEquals', '2026-01-15')]);
+    expect(buildODataFilter(group, COLUMNS)).toBe('CURDATE ne 2026-01-15T00:00:00Z');
+  });
+});
+
+describe('number type operators', () => {
+  it.each([
+    ['equals', '42', 'QUANT eq 42'],
+    ['notEquals', '42', 'QUANT ne 42'],
+    ['greaterThan', '100', 'QUANT gt 100'],
+    ['lessThan', '5', 'QUANT lt 5'],
+    ['greaterOrEqual', '10', 'QUANT ge 10'],
+    ['lessOrEqual', '50', 'QUANT le 50'],
+  ])('builds %s', (op, val, expected) => {
+    expect(buildODataFilter(makeGroup([makeCond('quantity', op, val)]), COLUMNS)).toBe(expected);
+  });
+  it('builds between as ge/le range', () => {
+    const group = makeGroup([makeCond('quantity', 'between', '10', '20')]);
+    expect(buildODataFilter(group, COLUMNS)).toBe('QUANT ge 10 and QUANT le 20');
+  });
+});
+
+describe('isEmpty/isNotEmpty for non-text/enum types', () => {
+  it.each([
+    ['date', 'isEmpty'], ['date', 'isNotEmpty'],
+    ['quantity', 'isEmpty'], ['quantity', 'isNotEmpty'],
+    ['total', 'isEmpty'], ['total', 'isNotEmpty'],
+  ] as const)('returns undefined for %s %s', (field, op) => {
+    expect(buildODataFilter(makeGroup([makeCond(field, op)]), COLUMNS)).toBeUndefined();
+  });
+});
+
+describe('missing valueTo edge cases', () => {
+  it.each([
+    ['date', 'isBetween', '2026-01-01'],
+    ['date', 'isInWeek', '2026-03-16'],
+    ['total', 'between', '10'],
+  ] as const)('returns undefined for %s %s missing valueTo', (field, op, val) => {
+    expect(buildODataFilter(makeGroup([makeCond(field, op, val)]), COLUMNS)).toBeUndefined();
+  });
+});
+
+describe('numeric edge cases', () => {
+  it('handles zero value', () => {
+    const group = makeGroup([makeCond('total', 'greaterThan', '0')]);
+    expect(buildODataFilter(group, COLUMNS)).toBe('TOTPRICE gt 0');
+  });
+  it('handles negative number', () => {
+    const group = makeGroup([makeCond('total', 'greaterThan', '-5')]);
+    expect(buildODataFilter(group, COLUMNS)).toBe('TOTPRICE gt -5');
+  });
+  it('handles float', () => {
+    const group = makeGroup([makeCond('total', 'greaterThan', '10.5')]);
+    expect(buildODataFilter(group, COLUMNS)).toBe('TOTPRICE gt 10.5');
+  });
+  it('builds currency equals', () => {
+    const group = makeGroup([makeCond('total', 'equals', '99.99')]);
+    expect(buildODataFilter(group, COLUMNS)).toBe('TOTPRICE eq 99.99');
+  });
+  it('builds currency notEquals', () => {
+    const group = makeGroup([makeCond('total', 'notEquals', '0')]);
+    expect(buildODataFilter(group, COLUMNS)).toBe('TOTPRICE ne 0');
+  });
+});
+
+describe('text edge cases', () => {
+  it('handles ampersand in value', () => {
+    expect(buildODataFilter(makeGroup([makeCond('docNo', 'equals', 'A&B')]), COLUMNS)).toBe("DOCNO eq 'A&B'");
+  });
+  it('handles backslash in value', () => {
+    expect(buildODataFilter(makeGroup([makeCond('docNo', 'equals', 'A\\B')]), COLUMNS)).toBe("DOCNO eq 'A\\B'");
+  });
+  it.each(['notContains', 'startsWith', 'endsWith'])('skips %s', (op) => {
+    expect(buildODataFilter(makeGroup([makeCond('docNo', op, 'GRV')]), COLUMNS)).toBeUndefined();
+  });
+  it('builds text notEquals', () => {
+    expect(buildODataFilter(makeGroup([makeCond('docNo', 'notEquals', 'GRV-001')]), COLUMNS)).toBe("DOCNO ne 'GRV-001'");
+  });
+  it('builds text isNotEmpty', () => {
+    expect(buildODataFilter(makeGroup([makeCond('docNo', 'isNotEmpty')]), COLUMNS)).toBe("DOCNO ne ''");
+  });
+});
+
+describe('complex nesting', () => {
+  it('handles AND → OR → AND nesting', () => {
+    const innerAnd = makeGroup([makeCond('status', 'equals', 'Cancelled')], 'and');
+    innerAnd.id = 'nested2';
+    const orChild = makeGroup(
+      [makeCond('status', 'equals', 'Received')],
+      'or',
+      [innerAnd],
+    );
+    orChild.id = 'nested1';
+    const group = makeGroup([makeCond('vendor', 'equals', 'ACME')], 'and', [orChild]);
+    expect(buildODataFilter(group, COLUMNS)).toBe("SUPNAME eq 'ACME' and (STATDES eq 'Received' or (STATDES eq 'Cancelled'))");
+  });
+  it('handles multiple nested OR groups in parent AND', () => {
+    const orGroup1 = makeGroup([
+      makeCond('status', 'equals', 'Received'),
+      makeCond('status', 'equals', 'Cancelled'),
+    ], 'or');
+    orGroup1.id = 'nested1';
+    const orGroup2 = makeGroup([
+      makeCond('vendor', 'equals', 'ACME'),
+      makeCond('vendor', 'equals', 'Beta'),
+    ], 'or');
+    orGroup2.id = 'nested2';
+    const group = makeGroup([], 'and', [orGroup1, orGroup2]);
+    expect(buildODataFilter(group, COLUMNS)).toBe("(STATDES eq 'Received' or STATDES eq 'Cancelled') and (SUPNAME eq 'ACME' or SUPNAME eq 'Beta')");
+  });
+  it('returns undefined for empty group', () => {
+    const group = makeGroup([], 'and', []);
+    expect(buildODataFilter(group, COLUMNS)).toBeUndefined();
+  });
+  it('returns undefined when all conditions are client-side in AND group', () => {
+    const group = makeGroup([
+      makeCond('driverId', 'equals', '123'),
+      makeCond('driverId', 'equals', '456'),
+    ], 'and');
+    expect(buildODataFilter(group, COLUMNS)).toBeUndefined();
+  });
+});
+
+describe('OR group safety — additional', () => {
+  it('skips OR with unknown field in conditions', () => {
+    const group = makeGroup([
+      makeCond('vendor', 'equals', 'ACME'),
+      makeCond('unknownField', 'equals', 'x'),
+    ], 'or');
+    expect(buildODataFilter(group, COLUMNS)).toBeUndefined();
+  });
+  it('parent AND keeps own conditions, skips mixed child OR', () => {
+    const mixedOr = makeGroup([
+      makeCond('status', 'equals', 'Received'),
+      makeCond('driverId', 'equals', '123'),
+    ], 'or');
+    mixedOr.id = 'nested1';
+    const group = makeGroup(
+      [makeCond('vendor', 'equals', 'ACME')],
+      'and',
+      [mixedOr],
+    );
     expect(buildODataFilter(group, COLUMNS)).toBe("SUPNAME eq 'ACME'");
   });
 });

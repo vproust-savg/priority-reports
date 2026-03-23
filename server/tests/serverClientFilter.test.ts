@@ -275,4 +275,114 @@ describe('applyServerClientFilters', () => {
     const result = applyServerClientFilters(rows, group, testColumns);
     expect(result).toHaveLength(2);
   });
+
+  it('filters by client-side notEquals operator', () => {
+    const group = makeGroup({
+      conditions: [{ id: '1', field: 'temp', operator: 'notEquals', value: '34' }],
+    });
+    const result = applyServerClientFilters(rows, group, testColumns);
+    expect(result).toHaveLength(2);
+    expect(result.map(r => r.name)).toEqual(['Bob', 'Carol']);
+  });
+
+  it('filters by isInWeek operator (date range)', () => {
+    const group = makeGroup({
+      conditions: [{ id: '1', field: 'received', operator: 'isInWeek', value: '2026-01-13', valueTo: '2026-01-19' }],
+    });
+    const result = applyServerClientFilters(rows, group, testColumns);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('Alice');
+  });
+
+  it('equals is case-insensitive', () => {
+    const group = makeGroup({ conditions: [{ id: '1', field: 'notes', operator: 'equals', value: 'GOOD DELIVERY' }] });
+    expect(applyServerClientFilters(rows, group, testColumns)).toHaveLength(1);
+  });
+
+  it('startsWith is case-insensitive', () => {
+    const group = makeGroup({ conditions: [{ id: '1', field: 'notes', operator: 'startsWith', value: 'GOOD' }] });
+    expect(applyServerClientFilters(rows, group, testColumns)[0].name).toBe('Alice');
+  });
+
+  it('endsWith is case-insensitive', () => {
+    const group = makeGroup({ conditions: [{ id: '1', field: 'notes', operator: 'endsWith', value: 'ITEMS' }] });
+    expect(applyServerClientFilters(rows, group, testColumns)[0].name).toBe('Bob');
+  });
+
+  it('handles null cell value in contains without crashing', () => {
+    const nullRow = [{ name: 'Dan', notes: null, amount: 50, date: '2026-04-01', temp: '30', received: '2026-04-01' }];
+    const group = makeGroup({ conditions: [{ id: '1', field: 'notes', operator: 'contains', value: 'test' }] });
+    expect(applyServerClientFilters(nullRow, group, testColumns)).toHaveLength(0);
+  });
+
+  it('handles undefined cell value in equals without crashing', () => {
+    const undefRow = [{ name: 'Eve', amount: 50, date: '2026-04-01', temp: '30', received: '2026-04-01' }];
+    const group = makeGroup({ conditions: [{ id: '1', field: 'notes', operator: 'equals', value: 'test' }] });
+    expect(applyServerClientFilters(undefRow, group, testColumns)).toHaveLength(0);
+  });
+
+  it('isEmpty returns true for null cell value', () => {
+    const nullRow = [{ name: 'Dan', notes: null, amount: 50, date: '2026-04-01', temp: '30', received: '2026-04-01' }];
+    const group = makeGroup({ conditions: [{ id: '1', field: 'notes', operator: 'isEmpty', value: '' }] });
+    expect(applyServerClientFilters(nullRow, group, testColumns)).toHaveLength(1);
+  });
+
+  it('isEmpty returns true for undefined cell value', () => {
+    const undefRow = [{ name: 'Eve', amount: 50, date: '2026-04-01', temp: '30', received: '2026-04-01' }];
+    const group = makeGroup({ conditions: [{ id: '1', field: 'notes', operator: 'isEmpty', value: '' }] });
+    expect(applyServerClientFilters(undefRow, group, testColumns)).toHaveLength(1);
+  });
+
+  it('isEmpty returns true for whitespace-only cell', () => {
+    const wsRow = [{ name: 'Frank', notes: '   ', amount: 50, date: '2026-04-01', temp: '30', received: '2026-04-01' }];
+    const group = makeGroup({ conditions: [{ id: '1', field: 'notes', operator: 'isEmpty', value: '' }] });
+    expect(applyServerClientFilters(wsRow, group, testColumns)).toHaveLength(1);
+  });
+
+  it('isNotEmpty returns false for whitespace-only cell', () => {
+    const wsRow = [{ name: 'Frank', notes: '   ', amount: 50, date: '2026-04-01', temp: '30', received: '2026-04-01' }];
+    const group = makeGroup({ conditions: [{ id: '1', field: 'notes', operator: 'isNotEmpty', value: '' }] });
+    expect(applyServerClientFilters(wsRow, group, testColumns)).toHaveLength(0);
+  });
+
+  it('handles nested AND inside OR group', () => {
+    const group = makeGroup({
+      conjunction: 'or',
+      conditions: [],
+      groups: [
+        makeGroup({
+          id: 'nested-and-1',
+          conjunction: 'and',
+          conditions: [
+            { id: '1', field: 'temp', operator: 'equals', value: '34' },
+            { id: '2', field: 'notes', operator: 'contains', value: 'good' },
+          ],
+        }),
+        makeGroup({
+          id: 'nested-and-2',
+          conjunction: 'and',
+          conditions: [
+            { id: '3', field: 'temp', operator: 'equals', value: '38' },
+            { id: '4', field: 'notes', operator: 'contains', value: 'damage' },
+          ],
+        }),
+      ],
+    });
+    const result = applyServerClientFilters(rows, group, testColumns);
+    expect(result).toHaveLength(2); // Alice and Bob
+  });
+
+  it('empty group with no conditions returns all rows', () => {
+    expect(applyServerClientFilters(rows, makeGroup({ conditions: [], groups: [] }), testColumns)).toHaveLength(3);
+  });
+
+  it('skips conditions with empty value (except isEmpty/isNotEmpty)', () => {
+    const group = makeGroup({ conditions: [{ id: '1', field: 'temp', operator: 'equals', value: '' }] });
+    expect(applyServerClientFilters(rows, group, testColumns)).toHaveLength(3);
+  });
+
+  it('unknown operator returns true (matches all)', () => {
+    const group = makeGroup({ conditions: [{ id: '1', field: 'temp', operator: 'unknownOp' as any, value: 'whatever' }] });
+    expect(applyServerClientFilters(rows, group, testColumns)).toHaveLength(3);
+  });
 });
