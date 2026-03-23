@@ -3,7 +3,7 @@
 // PURPOSE: Navigation tabs with a sliding pill indicator.
 //          The pill glides between tabs using Framer Motion layout
 //          animation (layoutId), providing visual continuity.
-// USED BY: Layout.tsx
+// USED BY: DepartmentLayout.tsx
 // EXPORTS: NavTabs (default)
 // ═══════════════════════════════════════════════════════════════
 
@@ -24,7 +24,9 @@ export default function NavTabs({ pages, currentPath }: NavTabsProps) {
   return (
     <nav className="flex gap-1 -mb-px">
       {pages.map((page) => {
-        const isActive = currentPath === page.path;
+        // WHY: Exact match plus trailing-slash variant. Using startsWith would
+        // cause false positives (e.g., '/purchasing/bbd-archive' would match '/purchasing/bbd').
+        const isActive = currentPath === page.path || currentPath === page.path + '/';
         return (
           <Link
             key={page.id}
