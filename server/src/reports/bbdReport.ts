@@ -91,8 +91,8 @@ function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
     expiryDate.setHours(0, 0, 0, 0);
     daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-    // WHY: Y/N field. Empty string or null treated as "N" (non-perishable).
-    const isPerishable = (raw.Y_9966_5_ESH as string)?.toUpperCase() === 'Y';
+    // WHY: Priority returns "Yes"/"No" (not "Y"/"N"). Empty/null treated as non-perishable.
+    const isPerishable = (raw.Y_9966_5_ESH as string)?.toUpperCase() === 'YES';
 
     // WHY: Day 0 (expiry date is today) counts as expired — the best-by date has arrived.
     if (daysUntilExpiry <= 0) {
@@ -116,7 +116,7 @@ function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
     daysUntilExpiry,
     status: status ?? '',
     vendor: raw.SUPDES,
-    perishable: (raw.Y_9966_5_ESH as string)?.toUpperCase() === 'Y' ? 'Yes' : 'No',
+    perishable: (raw.Y_9966_5_ESH as string)?.toUpperCase() === 'YES' ? 'Yes' : 'No',
     brand: raw.Y_9952_5_ESH ?? '',
     family: familyDesc,
   };
@@ -165,8 +165,10 @@ async function fetchFilters(): Promise<Record<string, FilterOption[]>> {
       $top: 1000,
     }),
     queryPriority('SPEC4VALUES', {
-      $select: 'SPEC4',
-      $orderby: 'SPEC4',
+      // WHY: Field is SPECVALUE (not SPEC4). Priority metadata confirms
+      // the property name on the SPEC4VALUES entity type.
+      $select: 'SPECVALUE',
+      $orderby: 'SPECVALUE',
       $top: 500,
     }).catch((err) => {
       // WHY: SPEC4VALUES may not have API access enabled. Log warning
@@ -192,10 +194,9 @@ async function fetchFilters(): Promise<Record<string, FilterOption[]>> {
     .sort((a, b) => a.label.localeCompare(b.label));
 
   // Brands from SPEC4VALUES
-  // WHY: SPEC4VALUES field name needs API verification. Might be SPEC4, SPECVAL, etc.
   const brandSet = new Set<string>();
   for (const row of spec4Data.value) {
-    const val = (row.SPEC4 ?? row.SPECVAL ?? row.SPEC4VAL) as string;
+    const val = row.SPECVALUE as string;
     if (val) brandSet.add(val);
   }
   const brands: FilterOption[] = Array.from(brandSet)
