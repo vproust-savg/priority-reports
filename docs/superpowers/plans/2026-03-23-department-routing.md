@@ -19,6 +19,9 @@
 | File | Responsibility |
 |------|---------------|
 | `client/src/config/departments.ts` | `DepartmentConfig` type + Zod-validated department definitions |
+| `client/src/config/departments.test.ts` | Config validation tests for departments |
+| `client/src/config/pages.test.ts` | Config validation tests for pages with department field |
+| `client/src/components/NavTabs.test.tsx` | Active-state matching tests (exact match, trailing slash, similar prefix) |
 | `client/src/components/RootPage.tsx` | Minimal fallback for `/` — centered message with department links |
 | `client/src/components/NotFoundPage.tsx` | Minimal 404 page for invalid URLs — prevents blank white page in iframe |
 
@@ -339,7 +342,208 @@ git commit -m "fix: handle trailing slashes in NavTabs active state, update inte
 
 ---
 
-## Task 6: Create RootPage and NotFoundPage Components
+## Task 6: Test Config Validation
+
+**Files:**
+- Create: `client/src/config/departments.test.ts`
+- Create: `client/src/config/pages.test.ts`
+
+- [ ] **Step 1: Write departments config tests**
+
+```typescript
+// ═══════════════════════════════════════════════════════════════
+// FILE: client/src/config/departments.test.ts
+// PURPOSE: Validates department config integrity — unique IDs,
+//          valid basePaths, and Zod schema correctness.
+// USED BY: Vitest
+// ═══════════════════════════════════════════════════════════════
+
+import { describe, it, expect } from 'vitest';
+import { departments } from './departments';
+
+describe('departments config', () => {
+  it('has at least one department', () => {
+    expect(departments.length).toBeGreaterThan(0);
+  });
+
+  it('every department has unique id', () => {
+    const ids = departments.map((d) => d.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('every basePath starts with /', () => {
+    for (const dept of departments) {
+      expect(dept.basePath).toMatch(/^\//);
+    }
+  });
+
+  it('every basePath is unique', () => {
+    const paths = departments.map((d) => d.basePath);
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+});
+```
+
+- [ ] **Step 2: Write pages config tests**
+
+```typescript
+// ═══════════════════════════════════════════════════════════════
+// FILE: client/src/config/pages.test.ts
+// PURPOSE: Validates page config integrity — every page references
+//          a valid department, unique IDs, valid paths.
+// USED BY: Vitest
+// ═══════════════════════════════════════════════════════════════
+
+import { describe, it, expect } from 'vitest';
+import { pages } from './pages';
+import { departments } from './departments';
+
+describe('pages config', () => {
+  it('has at least one page', () => {
+    expect(pages.length).toBeGreaterThan(0);
+  });
+
+  it('every page has unique id', () => {
+    const ids = pages.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('every page references a valid department', () => {
+    const deptIds = new Set(departments.map((d) => d.id));
+    for (const page of pages) {
+      expect(deptIds.has(page.department)).toBe(true);
+    }
+  });
+
+  it('every page path starts with /', () => {
+    for (const page of pages) {
+      expect(page.path).toMatch(/^\//);
+    }
+  });
+
+  it('every department has at least one page', () => {
+    for (const dept of departments) {
+      const deptPages = pages.filter((p) => p.department === dept.id);
+      expect(deptPages.length).toBeGreaterThan(0);
+    }
+  });
+});
+```
+
+- [ ] **Step 3: Run tests**
+
+```bash
+cd client && npm test
+```
+
+Expected: all new tests pass.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add client/src/config/departments.test.ts client/src/config/pages.test.ts
+git commit -m "test: add config validation tests for departments and pages"
+```
+
+---
+
+## Task 7: Test NavTabs Active-State Matching
+
+**Files:**
+- Create: `client/src/components/NavTabs.test.tsx`
+
+- [ ] **Step 1: Write NavTabs active-state tests**
+
+```tsx
+// ═══════════════════════════════════════════════════════════════
+// FILE: client/src/components/NavTabs.test.tsx
+// PURPOSE: Tests NavTabs active-state matching — exact match,
+//          trailing slash, and similar-prefix false positive.
+// USED BY: Vitest
+// ═══════════════════════════════════════════════════════════════
+
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import NavTabs from './NavTabs';
+import type { PageConfig } from '@shared/types';
+
+const mockPages: PageConfig[] = [
+  {
+    id: 'bbd',
+    department: 'purchasing',
+    name: 'BBD',
+    path: '/purchasing/bbd',
+    widgets: [],
+  },
+  {
+    id: 'bbd-archive',
+    department: 'purchasing',
+    name: 'BBD Archive',
+    path: '/purchasing/bbd-archive',
+    widgets: [],
+  },
+];
+
+function renderNavTabs(currentPath: string) {
+  return render(
+    <MemoryRouter initialEntries={[currentPath]}>
+      <NavTabs pages={mockPages} currentPath={currentPath} />
+    </MemoryRouter>,
+  );
+}
+
+describe('NavTabs active state', () => {
+  it('highlights exact path match', () => {
+    renderNavTabs('/purchasing/bbd');
+    const link = screen.getByText('BBD').closest('a');
+    expect(link?.className).toContain('text-primary');
+  });
+
+  it('highlights path with trailing slash', () => {
+    renderNavTabs('/purchasing/bbd/');
+    const link = screen.getByText('BBD').closest('a');
+    expect(link?.className).toContain('text-primary');
+  });
+
+  it('does NOT highlight similar prefix path', () => {
+    // '/purchasing/bbd-archive' should NOT highlight '/purchasing/bbd'
+    renderNavTabs('/purchasing/bbd-archive');
+    const bbdLink = screen.getByText('BBD').closest('a');
+    expect(bbdLink?.className).not.toContain('text-primary');
+    // But it SHOULD highlight 'BBD Archive'
+    const archiveLink = screen.getByText('BBD Archive').closest('a');
+    expect(archiveLink?.className).toContain('text-primary');
+  });
+
+  it('shows no active tab when path matches nothing', () => {
+    renderNavTabs('/purchasing/nonexistent');
+    const bbdLink = screen.getByText('BBD').closest('a');
+    const archiveLink = screen.getByText('BBD Archive').closest('a');
+    expect(bbdLink?.className).not.toContain('text-primary');
+    expect(archiveLink?.className).not.toContain('text-primary');
+  });
+});
+```
+
+- [ ] **Step 2: Run tests**
+
+```bash
+cd client && npm test
+```
+
+Expected: all new tests pass (the trailing-slash and similar-prefix tests validate the logic from Task 5).
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add client/src/components/NavTabs.test.tsx
+git commit -m "test: add NavTabs active-state matching tests (trailing slash, false positive)"
+```
+
+---
+
+## Task 8: Create RootPage and NotFoundPage Components
 
 **Files:**
 - Create: `client/src/components/RootPage.tsx`
@@ -421,7 +625,7 @@ git commit -m "feat: add RootPage and NotFoundPage fallback components"
 
 ---
 
-## Task 7: Update App.tsx with Nested Department Routes
+## Task 9: Update App.tsx with Nested Department Routes
 
 **Files:**
 - Modify: `client/src/App.tsx:1-38`
@@ -520,7 +724,7 @@ git commit -m "feat: nested department routes with auto-generated sub-pages and 
 
 ---
 
-## Task 8: Verification
+## Task 10: Verification
 
 - [ ] **Step 1: Run full TypeScript check (client + server)**
 
