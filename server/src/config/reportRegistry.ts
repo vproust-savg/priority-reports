@@ -4,7 +4,7 @@
 //          Priority entity, columns, OData query builder, and row
 //          transformer. Adding a report = one file + register here.
 // USED BY: routes/reports.ts, routes/filters.ts
-// EXPORTS: ReportConfig, ReportFilters, ExportConfig, reportRegistry, getReport
+// EXPORTS: ReportConfig, ReportFilters, ExportConfig, ExcelStyle, reportRegistry, getReport
 // ═══════════════════════════════════════════════════════════════
 
 import type { ColumnDefinition, ColumnFilterMeta, FilterOption } from '@shared/types';
@@ -29,6 +29,15 @@ export interface ExportConfig {
   dataStartRow: number;
   // WHY: Some templates have multiple sheets. Default: 0 (first sheet).
   sheetIndex?: number;
+}
+
+export interface ExcelStyle {
+  // WHY: Per-report column widths for print-ready Excel exports.
+  // Keys are column keys from transformRow output. Values are Excel character-width units.
+  columnWidths: Record<string, number>;
+  // WHY: Per-report font size. BBD uses 9pt (11 columns), GRV Log uses 8pt (14 columns).
+  // Default: 10 if omitted.
+  fontSize?: number;
 }
 
 export interface ReportConfig {
@@ -63,6 +72,9 @@ export interface ReportConfig {
   // to the frontend, which handles pagination client-side. Required for reports
   // like BBD where post-fetch filtering (filterRows) makes OData pagination unreliable.
   clientSidePagination?: boolean;
+  // WHY: Per-report Excel styling for print-ready exports. Column widths and font size
+  // are applied by excelExporter.ts. When absent, fallback uses auto-width and default font.
+  excelStyle?: ExcelStyle;
 }
 
 export const reportRegistry = new Map<string, ReportConfig>();
