@@ -14,16 +14,16 @@ Reports are **widgets** arranged on **configurable pages**. Adding a page or rea
 Building from specifications. Each spec has a matching implementation plan.
 Backend and frontend are built in **separate Claude Code sessions** that share `shared/types/`.
 
-**Parallel session rules:** Backend session only writes to `server/`. Frontend session only writes to `client/`. Shared types in `shared/types/` must be created before either session starts. Neither session should modify `CLAUDE.md`.
+**Parallel session rules:** Backend session only writes to `server/`. Frontend session only writes to `client/`. Shared code in `shared/` (types + utils) must be created before either session starts. Neither session should modify `CLAUDE.md`.
 
-**All specs archived:** `specs/done/` (Specs 01–08 complete)
+**All specs archived:** `specs/done/` (Specs 01–10 complete)
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Backend | Express + TypeScript |
-| Frontend | React 19 + Vite + Tailwind CSS v4 |
+| Frontend | React 19 + Vite + Tailwind CSS v4 + Framer Motion |
 | Data Fetching | TanStack Query v5 |
 | Validation | Zod |
 | Cache | Upstash Redis (via CacheProvider abstraction) |
@@ -41,6 +41,10 @@ Backend and frontend are built in **separate Claude Code sessions** that share `
 
 **Deploy:** Push to `main` on GitHub → Railway auto-deploys via `Dockerfile` (multi-stage build). Express serves the React client in production.
 
+**Production URL:** `https://priority-reports-production.up.railway.app`
+
+**Airtable embed:** The dashboard is embedded in Airtable via an Omni block (Interface page "Reports > Food Safety"). The Omni block renders an iframe pointing to the production Railway URL. Test production changes at the Airtable page, not just the direct Railway URL — iframe constraints can surface different behavior.
+
 **Local Docker test:** `docker build -t priority-dashboard . && docker run --rm -p 3001:3001 -e NODE_ENV=production -e PORT=3001 priority-dashboard`
 
 **Pre-deploy checklist (run before pushing to `main`):**
@@ -56,6 +60,7 @@ Both must pass cleanly — any TypeScript error kills the Railway Docker build.
 ├── server/          ← Backend (Express + TypeScript)
 ├── client/          ← Frontend (React + Vite + Tailwind)
 ├── shared/types/    ← Shared TypeScript types (both import from here)
+├── shared/utils/    ← Shared utility functions (e.g., weekUtils.ts)
 ├── specs/           ← Build specs & plans, organized by workstream
 │   ├── 02a-backend/ ← Backend spec + plan (current)
 │   ├── 02b-frontend/← Frontend spec + plan (current)
@@ -163,3 +168,5 @@ This code is maintained exclusively by LLMs. Every decision optimizes for AI rea
 - Modifying Dockerfile paths without checking `__dirname` math — server at `/app/server/dist/server/src/` serves client from `../../../../client/dist` (4 levels up to `/app/`)
 - Leaving unused variables/destructured bindings — `noUnusedLocals: true` in `tsconfig.app.json` means `tsc -b` fails, killing the Railway Docker build. Always clean up unused destructured props.
 - Deleting `railway.json` — Railway needs this file to use the Dockerfile builder. Without it, deploy breaks.
+- Using `text-slate-300` or `text-slate-400` for important UI text — these wash out completely in JPEG screenshots and Airtable iframe embeds. Use `text-slate-500` minimum for any text that must be visible. The dashboard renders inside an Airtable iframe where JPEG compression makes light colors invisible.
+- Assuming a blank-looking production page is a bug — the light color palette (`slate-300`/`slate-400`) often appears invisible in screenshots. Always check the DOM (`read_page`/accessibility tree) before debugging rendering issues. If the DOM has the elements, it's a color contrast issue, not a rendering bug.
