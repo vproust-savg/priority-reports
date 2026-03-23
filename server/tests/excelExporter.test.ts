@@ -43,6 +43,63 @@ describe('generateFallbackExcel', () => {
     expect(ws.getRow(3).getCell(1).value).toBe('Bob');
   });
 
+  it('applies print setup and excelStyle when provided', async () => {
+    const style = {
+      columnWidths: { name: 20, amount: 12, date: 15 },
+      fontSize: 9,
+    };
+    const buffer = await generateFallbackExcel(testRows, testColumns, 'Styled Report', style);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as Buffer);
+    const ws = wb.getWorksheet(1)!;
+
+    // Print setup
+    expect(ws.pageSetup.paperSize).toBe(1); // Letter
+    expect(ws.pageSetup.orientation).toBe('landscape');
+    expect(ws.pageSetup.fitToPage).toBe(true);
+    expect(ws.pageSetup.fitToWidth).toBe(1);
+    expect(ws.pageSetup.fitToHeight).toBe(0);
+    expect(ws.pageSetup.printTitlesRow).toBe('1:1');
+
+    // Margins
+    expect(ws.pageSetup.margins?.left).toBe(0.25);
+    expect(ws.pageSetup.margins?.right).toBe(0.25);
+    expect(ws.pageSetup.margins?.top).toBe(0.25);
+    expect(ws.pageSetup.margins?.bottom).toBe(0.25);
+
+    // Column widths from excelStyle
+    expect(ws.getColumn(1).width).toBe(20); // name
+    expect(ws.getColumn(2).width).toBe(12); // amount
+    expect(ws.getColumn(3).width).toBe(15); // date
+
+    // Font size on header (bold + Arial + 9pt)
+    const headerFont = ws.getRow(1).getCell(1).font;
+    expect(headerFont?.bold).toBe(true);
+    expect(headerFont?.size).toBe(9);
+    expect(headerFont?.name).toBe('Arial');
+
+    // Font size on data row (Arial + 9pt, not bold)
+    const dataFont = ws.getRow(2).getCell(1).font;
+    expect(dataFont?.size).toBe(9);
+    expect(dataFont?.name).toBe('Arial');
+    expect(dataFont?.bold).toBeFalsy();
+  });
+
+  it('uses auto-width when no excelStyle provided', async () => {
+    const buffer = await generateFallbackExcel(testRows, testColumns, 'Auto Report');
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as Buffer);
+    const ws = wb.getWorksheet(1)!;
+
+    // Should still have print setup (applied universally)
+    expect(ws.pageSetup.paperSize).toBe(1);
+    expect(ws.pageSetup.orientation).toBe('landscape');
+
+    // Auto-width should be based on content length (not excelStyle)
+    // "Amount" header = 6 chars + 2 padding = 8 width
+    expect(ws.getColumn(2).width).toBe(8);
+  });
+
   it('creates workbook with headers only when no data', async () => {
     const buffer = await generateFallbackExcel([], testColumns, 'Empty Report');
     const wb = new ExcelJS.Workbook();

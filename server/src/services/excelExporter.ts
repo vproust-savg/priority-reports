@@ -9,7 +9,7 @@
 
 import ExcelJS from 'exceljs';
 import type { ColumnDefinition } from '@shared/types';
-import type { ExportConfig } from '../config/reportRegistry';
+import type { ExportConfig, ExcelStyle } from '../config/reportRegistry';
 
 // WHY: Detects ISO date strings (e.g., "2026-01-15" or "2026-01-15T00:00:00Z")
 // and converts them to Date objects so ExcelJS writes proper Excel serial dates.
@@ -103,13 +103,18 @@ export async function generateFallbackExcel(
   rows: Record<string, unknown>[],
   columns: ColumnDefinition[],
   reportName: string,
+  excelStyle?: ExcelStyle,
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(reportName);
 
   // WHY: Row 1 = bold headers from column definitions.
+  // Font set to Arial at report-specific size for print consistency.
+  const fontSize = excelStyle?.fontSize ?? 10;
   const headerRow = worksheet.addRow(columns.map((c) => c.label));
-  headerRow.font = { bold: true };
+  headerRow.eachCell((cell) => {
+    cell.font = { name: 'Arial', bold: true, size: fontSize };
+  });
 
   // WHY: Track which columns are dates so we can apply numFmt after writing.
   const dateColIndices: number[] = [];
@@ -134,19 +139,45 @@ export async function generateFallbackExcel(
     for (const colIdx of dateColIndices) {
       excelRow.getCell(colIdx).numFmt = 'MM/DD/YY';
     }
+    // WHY: Apply Arial font at report-specific size to all data cells.
+    excelRow.eachCell((cell) => {
+      cell.font = { name: 'Arial', size: fontSize };
+    });
   }
 
-  // WHY: Auto-width columns based on header + data content.
-  for (let i = 0; i < columns.length; i++) {
-    const maxLength = Math.max(
-      columns[i].label.length,
-      ...rows.map((r) => String(r[columns[i].key] ?? '').length),
-    );
-    worksheet.getColumn(i + 1).width = Math.min(maxLength + 2, 40);
+  // WHY: Use excelStyle column widths when provided (print-optimized).
+  // Fall back to auto-width based on content length when no excelStyle.
+  if (excelStyle?.columnWidths) {
+    for (let i = 0; i < columns.length; i++) {
+      const width = excelStyle.columnWidths[columns[i].key];
+      if (width) worksheet.getColumn(i + 1).width = width;
+    }
+  } else {
+    for (let i = 0; i < columns.length; i++) {
+      const maxLength = Math.max(
+        columns[i].label.length,
+        ...rows.map((r) => String(r[columns[i].key] ?? '').length),
+      );
+      worksheet.getColumn(i + 1).width = Math.min(maxLength + 2, 40);
+    }
   }
 
   // Freeze header row
   worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+  // WHY: Print setup — landscape letter, narrow margins, fit to 1 page wide.
+  // Applied universally so every export is print-ready out of the box.
+  worksheet.pageSetup.paperSize = 1; // Letter
+  worksheet.pageSetup.orientation = 'landscape';
+  worksheet.pageSetup.fitToPage = true;
+  worksheet.pageSetup.fitToWidth = 1;
+  worksheet.pageSetup.fitToHeight = 0;
+  worksheet.pageSetup.printTitlesRow = '1:1';
+  worksheet.pageSetup.margins = {
+    left: 0.25, right: 0.25,
+    top: 0.25, bottom: 0.25,
+    header: 0.25, footer: 0.25,
+  };
 
   const arrayBuffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(arrayBuffer);
