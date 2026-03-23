@@ -58,7 +58,8 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await fetch(`/api/v1/reports/${reportId}/refresh`, { method: 'POST' });
+      const res = await fetch(`/api/v1/reports/${reportId}/refresh`, { method: 'POST' });
+      if (!res.ok) console.warn(`[refresh] Server returned ${res.status}`);
       await queryClient.invalidateQueries({ queryKey: ['report', reportId] });
     } finally {
       setIsRefreshing(false);

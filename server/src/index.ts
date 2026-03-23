@@ -18,7 +18,6 @@ import { createFiltersRouter } from './routes/filters';
 import { createExportRouter } from './routes/export';
 import { logStartup } from './services/logger';
 import { getMonday, getSunday, toISODate } from '../../shared/utils/weekUtils';
-import type { CacheProvider } from './services/cache';
 
 const app = express();
 
@@ -51,7 +50,7 @@ export { app };
 
 // WHY: Pre-cache the default view (current week) so the first user
 // sees data instantly instead of waiting 3-5s on cold load.
-async function warmCache(_cache: CacheProvider) {
+async function warmCache() {
   const monday = getMonday(new Date());
   const sunday = getSunday(monday);
 
@@ -103,6 +102,6 @@ if (isDirectRun) {
     });
     console.log(`Server running on http://localhost:${env.PORT}`);
     // WHY: Fire-and-forget — don't block server readiness on cache warming
-    warmCache(cache);
+    warmCache();
   });
 }

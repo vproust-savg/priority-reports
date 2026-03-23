@@ -5,7 +5,7 @@
 //          data matches what the user sees in the dashboard.
 // WHY NOT SHARED: The shared/ directory is types-only per project
 //          convention. This is intentional duplication (~70 lines).
-// USED BY: routes/export.ts
+// USED BY: routes/export.ts, routes/query.ts
 // EXPORTS: applyServerClientFilters
 // ═══════════════════════════════════════════════════════════════
 
