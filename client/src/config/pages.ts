@@ -42,4 +42,18 @@ export const pages = z.array(PageConfigSchema).parse([
       },
     ],
   },
+  {
+    id: 'purchasing-reports',
+    name: 'Purchasing Reports',
+    path: '/purchasing-reports',
+    widgets: [
+      {
+        id: 'bbd',
+        reportId: 'bbd',
+        type: 'table',
+        title: 'BBD — Best By Dates',
+        colSpan: 12,
+      },
+    ],
+  },
 ]);
