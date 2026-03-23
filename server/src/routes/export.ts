@@ -20,6 +20,7 @@ import { ExportRequestSchema } from './exportSchemas';
 // WHY: Import report definitions so they self-register into reportRegistry.
 // Same pattern as query.ts — ensures reports are available when this router loads.
 import '../reports/grvLog';
+import '../reports/bbdReport';
 
 const ROW_CAP = 5000;
 const PAGE_SIZE = 1000;

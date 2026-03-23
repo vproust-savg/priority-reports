@@ -8,6 +8,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import ErrorBoundary from './components/ErrorBoundary';
 import DepartmentLayout from './components/DepartmentLayout';
 import PageRenderer from './components/PageRenderer';
 import NotFoundPage from './components/NotFoundPage';
@@ -18,9 +19,10 @@ const queryClient = new QueryClient();
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <Routes>
           {/* WHY: No standalone root page — dashboard is always accessed via
               department URLs in Airtable iframe embeds. Redirect to first department. */}
           <Route path="/" element={<Navigate to={departments[0].basePath} replace />} />
@@ -66,8 +68,9 @@ export default function App() {
           {/* WHY: Catch-all for paths that don't match any department.
               React Router uses path="*" for splat routes (not /{*path} which is Express syntax). */}
           <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-      </BrowserRouter>
-    </QueryClientProvider>
+          </Routes>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
