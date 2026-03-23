@@ -8,6 +8,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { AnimatePresence, motion } from 'framer-motion';
+import { SPRING_STIFF } from '../../config/animationConstants';
 import { DndContext, DragOverlay, useDroppable, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useFilterDrag } from '../../hooks/useFilterDrag';
@@ -144,14 +145,16 @@ export default function FilterBuilder({
 
         {/* Add buttons */}
         <div className="flex gap-4 mt-3">
-          <button onClick={addCondition}
+          <motion.button onClick={addCondition}
+            whileTap={{ scale: 0.97 }} transition={SPRING_STIFF}
             className="text-xs font-medium text-primary hover:text-primary/70 transition-colors">
             + Add condition
-          </button>
-          <button onClick={addGroup}
+          </motion.button>
+          <motion.button onClick={addGroup}
+            whileTap={{ scale: 0.97 }} transition={SPRING_STIFF}
             className="text-xs font-medium text-primary hover:text-primary/70 transition-colors">
             + Add group
-          </button>
+          </motion.button>
         </div>
       </div>
 
