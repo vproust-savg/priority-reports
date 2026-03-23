@@ -123,22 +123,44 @@ export function createExportRouter(): Router {
       transformedRows, body.filterGroup, report.filterColumns,
     );
 
+    // --- Determine export columns (visibility + order from UI) ---
+    // WHY: Only applies to fallback mode. Template mode ignores visibility
+    // because the template has a fixed layout with baked-in headers.
+    let exportColumns = report.columns;
+    if (body.visibleColumnKeys && !report.exportConfig) {
+      const validKeys = new Set(report.columns.map((c) => c.key));
+      const filtered = body.visibleColumnKeys
+        .filter((key) => validKeys.has(key))
+        .map((key) => report.columns.find((c) => c.key === key)!)
+        .filter(Boolean);
+      // WHY: If all keys were invalid, fall back to all columns rather
+      // than producing an empty export.
+      if (filtered.length > 0) exportColumns = filtered;
+    }
+
     // --- Generate Excel ---
     let excelBuffer: Buffer;
     try {
       const template = await getTemplate(reportId);
 
       if (template && report.exportConfig) {
-        excelBuffer = await generateTemplateExcel(template, filteredRows, report.exportConfig);
+        excelBuffer = await generateTemplateExcel(
+          template, filteredRows, report.exportConfig, report.excelStyle,
+        );
       } else {
-        excelBuffer = await generateFallbackExcel(filteredRows, report.columns, report.name);
+        excelBuffer = await generateFallbackExcel(
+          filteredRows, exportColumns, report.name, report.excelStyle,
+        );
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       console.error(`[export] Excel generation failed, falling back: ${message}`);
       // WHY: Fallback on template failure — never block the export entirely.
+      // Pass excelStyle to fallback too so it stays print-ready.
       try {
-        excelBuffer = await generateFallbackExcel(filteredRows, report.columns, report.name);
+        excelBuffer = await generateFallbackExcel(
+          filteredRows, exportColumns, report.name, report.excelStyle,
+        );
       } catch (fallbackErr) {
         const fbMsg = fallbackErr instanceof Error ? fallbackErr.message : 'Unknown error';
         console.error(`[export] Fallback Excel also failed: ${fbMsg}`);

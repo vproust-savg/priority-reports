@@ -11,4 +11,8 @@ import { FilterGroupSchema } from './querySchemas';
 
 export const ExportRequestSchema = z.object({
   filterGroup: FilterGroupSchema,
+  // WHY: Optional list of visible column keys from the UI. When present,
+  // the export only includes these columns in the specified order.
+  // Only applies to fallback Excel mode (not template mode).
+  visibleColumnKeys: z.array(z.string()).min(1).optional(),
 });

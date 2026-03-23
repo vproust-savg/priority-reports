@@ -110,7 +110,7 @@ export async function generateTemplateExcel(
 
   // WHY: Print setup — same as fallback except printTitlesRow repeats the
   // full header block (e.g., rows 1-4 for GRV Log) on every printed page.
-  worksheet.pageSetup.paperSize = 1;
+  worksheet.pageSetup.paperSize = 1 as unknown as ExcelJS.PaperSize;
   worksheet.pageSetup.orientation = 'landscape';
   worksheet.pageSetup.fitToPage = true;
   worksheet.pageSetup.fitToWidth = 1;
@@ -194,7 +194,7 @@ export async function generateFallbackExcel(
 
   // WHY: Print setup — landscape letter, narrow margins, fit to 1 page wide.
   // Applied universally so every export is print-ready out of the box.
-  worksheet.pageSetup.paperSize = 1; // Letter
+  worksheet.pageSetup.paperSize = 1 as unknown as ExcelJS.PaperSize; // Letter
   worksheet.pageSetup.orientation = 'landscape';
   worksheet.pageSetup.fitToPage = true;
   worksheet.pageSetup.fitToWidth = 1;
