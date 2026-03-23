@@ -1,25 +1,51 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/src/routes/query.ts
 // PURPOSE: POST /api/v1/reports/:reportId/query endpoint.
-//          Accepts a FilterGroup tree, translates server-side
-//          conditions to OData, fetches from Priority, returns
-//          same ApiResponse envelope as the GET endpoint.
+//          Single-phase: OData filter → Priority fetch → enrich →
+//          post-enrichment filter (client-only columns) → cache.
+//          POST /:reportId/refresh invalidates all cached queries.
 // USED BY: index.ts (mounted at /api/v1/reports)
 // EXPORTS: createQueryRouter
 // ═══════════════════════════════════════════════════════════════
 
 import { Router } from 'express';
 import type { CacheProvider } from '../services/cache';
-import { buildQueryCacheKey, buildBaseCacheKey } from '../services/cache';
+import { buildQueryCacheKey } from '../services/cache';
 import { getReport } from '../config/reportRegistry';
 import { queryPriority } from '../services/priorityClient';
 import { buildODataFilter } from '../services/odataFilterBuilder';
+import { applyServerClientFilters } from '../services/serverClientFilter';
 import { logApiCall } from '../services/logger';
 import { QueryRequestSchema } from './querySchemas';
-import type { ApiResponse } from '@shared/types';
+import type { ApiResponse, FilterGroup, ColumnFilterMeta } from '@shared/types';
 
 // WHY: Import report definitions so they self-register into reportRegistry
 import '../reports/grvLog';
+
+// WHY: When request has client-only filter conditions, the server can't
+// rely on OData $top for accurate pagination because post-enrichment
+// filtering reduces the row count. Fetch up to this many rows, filter,
+// then paginate server-side.
+const CLIENT_FILTER_MAX_FETCH = 500;
+
+const CLIENT_ONLY_OPS = new Set(['contains', 'notContains', 'startsWith', 'endsWith']);
+
+// WHY: Recursively checks nested groups — a client-only condition
+// inside a nested OR group must still trigger post-enrichment filtering.
+function hasClientOnlyConditions(
+  filterGroup: FilterGroup,
+  filterColumns: ColumnFilterMeta[],
+): boolean {
+  for (const c of filterGroup.conditions) {
+    if (!c.field) continue;
+    const col = filterColumns.find((fc) => fc.key === c.field);
+    if (col?.filterLocation === 'client' || CLIENT_ONLY_OPS.has(c.operator)) return true;
+  }
+  for (const g of filterGroup.groups) {
+    if (hasClientOnlyConditions(g, filterColumns)) return true;
+  }
+  return false;
+}
 
 export function createQueryRouter(cache: CacheProvider): Router {
   const router = Router();
@@ -42,16 +68,9 @@ export function createQueryRouter(cache: CacheProvider): Router {
       return;
     }
 
-    // WHY: Base mode fetches ALL rows for the date range, caches for 15 min,
-    // and lets the frontend apply non-date filters client-side instantly.
-    // Standard mode works as before for backward compatibility.
-    const isBase = body.baseMode === true;
-    const cacheKey = isBase
-      ? buildBaseCacheKey(reportId, body.filterGroup)
-      : buildQueryCacheKey(reportId, body);
-    const cacheTtl = isBase ? 900 : 300;
+    const cacheKey = buildQueryCacheKey(reportId, body);
+    const cacheTtl = 900; // 15 minutes
 
-    const baseParams = report.buildQuery({ page: body.page, pageSize: body.pageSize });
     const odataFilter = buildODataFilter(body.filterGroup, report.filterColumns);
 
     let cached: ApiResponse | null = null;
@@ -61,9 +80,6 @@ export function createQueryRouter(cache: CacheProvider): Router {
       console.warn(`[query] Cache read failed for ${cacheKey}, continuing as miss:`, err);
     }
     if (cached) {
-      // WHY: Override stale meta fields — the cached response has the
-      // original fetch's timing and 'miss' marker. Update them so the
-      // frontend (and debugging) can see this was served from cache.
       cached.meta.cache = 'hit';
       cached.meta.executionTimeMs = Date.now() - startTime;
       logApiCall({
@@ -71,16 +87,19 @@ export function createQueryRouter(cache: CacheProvider): Router {
         durationMs: Date.now() - startTime, cacheHit: true,
         rowCount: cached.data.length, statusCode: 200,
         odataFilter: odataFilter ?? 'none',
-        baseMode: isBase,
       });
       res.json(cached);
       return;
     }
 
-    // WHY: In base mode, fetch up to 1000 rows (the full date range)
-    // so the frontend has everything it needs for client-side filtering.
-    const fetchTop = isBase ? 1000 : body.pageSize;
-    const fetchSkip = isBase ? 0 : (body.page - 1) * body.pageSize;
+    // WHY: When client-only filters are active, OData can't filter those
+    // columns. Fetch more rows, apply post-enrichment filter, then
+    // paginate server-side. $skip=0 because we paginate after filtering.
+    const hasClientFilters = hasClientOnlyConditions(body.filterGroup, report.filterColumns);
+    const fetchTop = hasClientFilters ? CLIENT_FILTER_MAX_FETCH : body.pageSize;
+    const fetchSkip = hasClientFilters ? 0 : (body.page - 1) * body.pageSize;
+
+    const baseParams = report.buildQuery({ page: body.page, pageSize: body.pageSize });
 
     let priorityData;
     try {
@@ -98,8 +117,6 @@ export function createQueryRouter(cache: CacheProvider): Router {
       return;
     }
 
-    // WHY: Some reports need sub-form data that can't use $expand.
-    // enrichRows fetches sub-forms individually before transformRow parses them.
     let rawRows = priorityData.value;
     const warnings: string[] = [];
     if (report.enrichRows) {
@@ -111,9 +128,30 @@ export function createQueryRouter(cache: CacheProvider): Router {
         warnings.push('Sub-form data unavailable — some columns may be blank');
       }
     }
-    const rows = rawRows.map(report.transformRow);
+    let rows = rawRows.map(report.transformRow);
 
-    const totalCount = rows.length;
+    // WHY: Apply post-enrichment filtering for client-only columns.
+    // OData can't filter on fields that come from HTML sub-form parsing.
+    if (hasClientFilters) {
+      rows = applyServerClientFilters(rows, body.filterGroup, report.filterColumns);
+    }
+
+    // WHY: When client-only filters are active, we fetched all matching
+    // rows (up to 500) and filtered server-side. Now paginate manually.
+    const totalBeforePagination = rows.length;
+    if (hasClientFilters) {
+      const start = (body.page - 1) * body.pageSize;
+      rows = rows.slice(start, start + body.pageSize);
+    }
+
+    // WHY: Priority OData doesn't reliably support $count=true.
+    // With client filters: we have the exact total from filtering.
+    // Without: estimate — if fewer rows than pageSize, last page.
+    const totalCount = hasClientFilters
+      ? totalBeforePagination
+      : rows.length < body.pageSize
+        ? (body.page - 1) * body.pageSize + rows.length
+        : (body.page - 1) * body.pageSize + rows.length + 1;
 
     const response: ApiResponse = {
       meta: {
@@ -126,10 +164,10 @@ export function createQueryRouter(cache: CacheProvider): Router {
       },
       data: rows,
       pagination: {
-        page: isBase ? 1 : body.page,
-        pageSize: isBase ? totalCount : body.pageSize,
+        page: body.page,
+        pageSize: body.pageSize,
         totalCount,
-        totalPages: isBase ? 1 : Math.ceil(totalCount / body.pageSize),
+        totalPages: Math.ceil(totalCount / body.pageSize),
       },
       columns: report.columns,
       warnings: warnings.length > 0 ? warnings : undefined,
@@ -144,10 +182,24 @@ export function createQueryRouter(cache: CacheProvider): Router {
       durationMs: Date.now() - startTime, cacheHit: false,
       rowCount: rows.length, statusCode: 200,
       odataFilter: odataFilter ?? 'none',
-      baseMode: isBase,
     });
 
     res.json(response);
+  });
+
+  // WHY: Refresh endpoint invalidates ALL cached queries for a report.
+  // Uses prefix-based deletion so every filter combination is cleared.
+  router.post('/:reportId/refresh', async (req, res) => {
+    const { reportId } = req.params;
+    try {
+      const deleted = await cache.invalidateByPrefix(`query:${reportId}:`);
+      console.log(`[query] Refreshed cache for ${reportId}: ${deleted} keys deleted`);
+      res.json({ message: `Cache refreshed for ${reportId}`, keysDeleted: deleted });
+    } catch (err) {
+      console.warn(`[query] Cache refresh failed for ${reportId}:`, err);
+      // WHY: Still return success — the client will refetch regardless
+      res.json({ message: `Cache refresh attempted for ${reportId}` });
+    }
   });
 
   return router;

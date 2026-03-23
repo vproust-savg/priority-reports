@@ -152,25 +152,5 @@ export function createReportsRouter(cache: CacheProvider): Router {
     res.json(response);
   });
 
-  // POST /:reportId/refresh — invalidates cache
-  router.post('/:reportId/refresh', async (req, res) => {
-    const { reportId } = req.params;
-    let params;
-    try {
-      params = QueryParamsSchema.parse(req.query);
-    } catch (err) {
-      res.status(400).json({ error: 'Invalid query parameters', details: err });
-      return;
-    }
-    const cacheKey = buildCacheKey(reportId, params);
-
-    try {
-      await cache.invalidate(cacheKey);
-    } catch (err) {
-      console.warn(`[reports] Cache invalidate failed for ${cacheKey}:`, err);
-    }
-    res.json({ message: `Cache invalidated for ${reportId}` });
-  });
-
   return router;
 }
