@@ -52,6 +52,7 @@ export default function CheeseLoader({ variant = 'slice-reveal' }: CheeseLoaderP
               <stop offset="0%" stopColor="#DCBA5C" />
               <stop offset="100%" stopColor="#C89A30" />
             </radialGradient>
+            {/* WHY: Global CSS class names — safe because only one CheeseLoader renders at a time */}
             <style>{`
               @keyframes cheese-sweep {
                 0%   { opacity: 0; }
@@ -71,6 +72,8 @@ export default function CheeseLoader({ variant = 'slice-reveal' }: CheeseLoaderP
                 animation-iteration-count: infinite;
                 animation-fill-mode: both;
               }
+              /* WHY: 6 separate keyframes — each wedge translates 8px along its radial center angle.
+                 Formula: translate(8*sin(angle), -8*cos(angle)) for 30/90/150/210/270/330 deg */
               @keyframes pop-0 {
                 0% { transform: translate(0,0) rotate(0); }
                 6.5% { transform: translate(4px,-6.9px) rotate(3deg); }
