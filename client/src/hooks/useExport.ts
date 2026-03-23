@@ -23,7 +23,11 @@ interface UseExportReturn {
   triggerExport: () => Promise<void>;
 }
 
-export function useExport(reportId: string, filterGroup: FilterGroup): UseExportReturn {
+export function useExport(
+  reportId: string,
+  filterGroup: FilterGroup,
+  visibleColumnKeys?: string[],
+): UseExportReturn {
   const [isExporting, setIsExporting] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
 
@@ -42,7 +46,7 @@ export function useExport(reportId: string, filterGroup: FilterGroup): UseExport
       const response = await fetch(`/api/v1/reports/${reportId}/export`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filterGroup }),
+        body: JSON.stringify({ filterGroup, visibleColumnKeys }),
         signal: controller.signal,
       });
 
@@ -83,7 +87,7 @@ export function useExport(reportId: string, filterGroup: FilterGroup): UseExport
       clearTimeout(timeout);
       setIsExporting(false);
     }
-  }, [reportId, filterGroup]);
+  }, [reportId, filterGroup, visibleColumnKeys]);
 
   return { isExporting, toast, clearToast, triggerExport };
 }

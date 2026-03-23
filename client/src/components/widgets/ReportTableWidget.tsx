@@ -7,7 +7,7 @@
 // EXPORTS: ReportTableWidget
 // ═══════════════════════════════════════════════════════════════
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
 import { useReportQuery } from '../../hooks/useReportQuery';
@@ -49,7 +49,16 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
     toggleColumn, reorderColumns, showAll, hideAll,
   } = useColumnManager(query.data?.columns);
 
-  const { isExporting, toast, clearToast, triggerExport } = useExport(reportId, debouncedGroup);
+  // WHY: Stable reference for useExport dependency — only changes when
+  // the actual set of visible column keys changes, not on every render.
+  const visibleColumnKeys = useMemo(
+    () => visibleColumns.map((c) => c.key),
+    [visibleColumns],
+  );
+
+  const { isExporting, toast, clearToast, triggerExport } = useExport(
+    reportId, debouncedGroup, visibleColumnKeys,
+  );
   const filterLoadError = filtersQuery.error;
 
   // --- Refresh logic ---
