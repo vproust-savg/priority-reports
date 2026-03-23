@@ -31,14 +31,14 @@ export default function NavTabs({ pages, currentPath }: NavTabsProps) {
           <Link
             key={page.id}
             to={page.path}
-            className={`relative pb-3 px-3 text-sm font-medium transition-colors duration-150 ${
-              isActive ? 'text-primary' : 'text-slate-500 hover:text-slate-700'
+            className={`relative pb-3 px-3 text-sm transition-colors duration-150 ${
+              isActive ? 'font-semibold text-slate-900' : 'font-medium text-slate-500 hover:text-slate-700'
             }`}
           >
             {isActive && (
               <motion.div
                 layoutId="nav-indicator"
-                className="absolute inset-0 bottom-1 bg-primary/10 rounded-lg"
+                className="absolute inset-0 bottom-1 bg-white rounded-lg border border-slate-200/60 shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
                 transition={reduced ? { duration: 0 } : EASE_DEFAULT}
                 layout={!reduced}
               />
