@@ -22,8 +22,7 @@ import type { ApiResponse } from '@shared/types';
 
 // WHY: Import report definitions so they self-register into reportRegistry
 import '../reports/grvLog';
-// WHY: Temporarily commented until bbdReport.ts exists (Task 4).
-// import '../reports/bbdReport';
+import '../reports/bbdReport';
 
 export function createQueryRouter(cache: CacheProvider): Router {
   const router = Router();

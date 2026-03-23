@@ -18,8 +18,7 @@ import type { ApiResponse } from '@shared/types';
 
 // WHY: Import report definitions so they self-register into reportRegistry
 import '../reports/grvLog';
-// WHY: Temporarily commented until bbdReport.ts exists (Task 4).
-// import '../reports/bbdReport';
+import '../reports/bbdReport';
 
 const QueryParamsSchema = z.object({
   page: z.coerce.number().min(1).default(1),

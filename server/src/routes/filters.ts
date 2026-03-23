@@ -16,8 +16,7 @@ import type { FiltersResponse, FilterOption } from '@shared/types';
 // WHY: Ensure report definitions are registered even if filters.ts
 // loads before reports.ts. Node module cache prevents double-registration.
 import '../reports/grvLog';
-// WHY: Temporarily commented until bbdReport.ts exists (Task 4).
-// import '../reports/bbdReport';
+import '../reports/bbdReport';
 
 export function createFiltersRouter(cache: CacheProvider): Router {
   const router = Router();
