@@ -17,8 +17,9 @@ export interface WidgetConfig {
 
 export interface PageConfig {
   id: string;           // URL-safe page identifier (e.g., 'overview')
+  department: string;   // Department this page belongs to (e.g., 'food-safety')
   name: string;         // Display name shown in navigation tabs
-  path: string;         // URL path (e.g., '/overview')
+  path: string;         // URL path relative to department basePath (e.g., '/receiving-log')
   icon?: string;        // Lucide icon name (optional, for nav tabs)
   widgets: WidgetConfig[];
 }
