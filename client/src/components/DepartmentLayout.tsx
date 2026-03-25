@@ -29,7 +29,7 @@ export default function DepartmentLayout({ department }: DepartmentLayoutProps) 
     <div className="min-h-screen bg-slate-50">
       {/* Top bar */}
       <header className="bg-white border-b border-slate-200/60">
-        <div className="max-w-7xl mx-auto px-6">
+        <div className="max-w-[2400px] mx-auto px-6">
           <div className="flex items-center justify-between h-16">
             <h1 className="text-[28px] font-bold tracking-tight text-slate-900">
               {department.name}
@@ -52,7 +52,7 @@ export default function DepartmentLayout({ department }: DepartmentLayoutProps) 
           to deadlock: exit animation never completes, blocking enter,
           leaving content permanently at opacity:0. NavTabs pill animation
           already provides visual continuity between pages. */}
-      <main className="max-w-7xl mx-auto px-6 py-6">
+      <main className="max-w-[2400px] mx-auto px-6 py-6">
         <Outlet />
       </main>
     </div>
