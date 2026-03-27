@@ -75,6 +75,14 @@ export interface ReportConfig {
   // WHY: Per-report Excel styling for print-ready exports. Column widths and font size
   // are applied by excelExporter.ts. When absent, fallback uses auto-width and default font.
   excelStyle?: ExcelStyle;
+  // WHY: When present, enables the subform endpoint for this report.
+  // The frontend uses rowKeyField to identify rows; the backend uses
+  // keyField and subformName to build the Priority API call.
+  expandConfig?: {
+    subformName: string;
+    keyField: string;
+    rowKeyField: string;
+  };
 }
 
 export const reportRegistry = new Map<string, ReportConfig>();
