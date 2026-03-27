@@ -7,7 +7,7 @@
 // EXPORTS: ReportTableWidget
 // ═══════════════════════════════════════════════════════════════
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
 import { useReportQuery } from '../../hooks/useReportQuery';
@@ -27,6 +27,7 @@ import LoadingToast from '../LoadingToast';
 import EmptyState from '../EmptyState';
 import ErrorState from '../ErrorState';
 import { countActiveFilters } from '../../config/filterConstants';
+import { getDetailComponent } from '../../config/detailRegistry';
 
 export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const {
@@ -77,6 +78,19 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
 
   const data = query.data;
   const displayData = data?.data ?? [];
+
+  // --- Expand state ---
+  const expandConfig = data?.meta?.expandConfig;
+  const DetailComponent = expandConfig ? getDetailComponent(reportId) : null;
+
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(() => new Set());
+  const toggleExpand = useCallback((rowKey: string) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      next.has(rowKey) ? next.delete(rowKey) : next.add(rowKey);
+      return next;
+    });
+  }, []);
 
   return (
     <>
@@ -159,6 +173,13 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
             columns={visibleColumns.length > 0 ? visibleColumns : data!.columns}
             data={displayData}
             rowStyleField={data?.meta?.rowStyleField}
+            reportId={reportId}
+            expandConfig={expandConfig && DetailComponent ? {
+              rowKeyField: expandConfig.rowKeyField,
+              DetailComponent,
+            } : undefined}
+            expandedRows={expandedRows}
+            onToggleExpand={toggleExpand}
           />
           <Pagination
             page={page}
