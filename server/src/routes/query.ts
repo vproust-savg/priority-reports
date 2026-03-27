@@ -93,6 +93,7 @@ export function createQueryRouter(cache: CacheProvider): Router {
     try {
       priorityData = await queryPriority(report.entity, {
         $select: baseParams.$select,
+        $expand: baseParams.$expand,
         $orderby: baseParams.$orderby,
         $filter: combinedFilter,
         $top: fetchTop,
