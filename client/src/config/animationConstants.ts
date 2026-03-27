@@ -40,3 +40,15 @@ export const REDUCED_FADE = {
 };
 
 export const REDUCED_TRANSITION = { duration: 0.15 };
+
+// --- Expandable row reveal ---
+// WHY: Clip-path animation creates a clean top-down "unfold" without
+// layout thrash. Height: auto is unreliable in table contexts.
+export const EXPAND_REVEAL = {
+  initial: { opacity: 0, clipPath: 'inset(0 0 100% 0)' },
+  animate: { opacity: 1, clipPath: 'inset(0 0 0% 0)' },
+  exit: { opacity: 0, clipPath: 'inset(0 0 100% 0)' },
+};
+// WHY: Expand is 200ms, exit is 150ms — closing feels instant.
+export const EASE_EXPAND = { duration: 0.2, ease: [0.25, 0.1, 0.25, 1] as const };
+export const EASE_COLLAPSE = { duration: 0.15, ease: 'easeOut' as const };
