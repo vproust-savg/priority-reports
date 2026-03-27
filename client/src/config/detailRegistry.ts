@@ -7,10 +7,11 @@
 // ═══════════════════════════════════════════════════════════════
 
 import type { DetailComponent } from '../components/details/types';
+import BbdDetailPanel from '../components/details/BbdDetailPanel';
 
-// WHY: Populated as detail panel components are created.
-// BbdDetailPanel will be added in Task 10.
-const detailRegistry: Record<string, DetailComponent> = {};
+const detailRegistry: Record<string, DetailComponent> = {
+  bbd: BbdDetailPanel,
+};
 
 export function getDetailComponent(reportId: string): DetailComponent | null {
   return detailRegistry[reportId] ?? null;
