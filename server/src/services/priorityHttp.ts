@@ -25,8 +25,10 @@ function httpsGet(url: string): Promise<HttpsResponse> {
       headers: {
         // WHY: Without IEEE754Compatible, Priority returns incorrect numeric values
         'IEEE754Compatible': 'true',
-        // WHY: Without this, Priority may silently truncate results below 1000
-        'Prefer': 'odata.maxpagesize=1000',
+        // WHY: Ceiling for Priority API response size. Actual page size
+        // controlled by each report's $top parameter. Set to 49,900
+        // (safety margin below MAXAPILINES=50,000).
+        'Prefer': 'odata.maxpagesize=49900',
         'Authorization': `Basic ${auth}`,
       },
       timeout: 30_000,
