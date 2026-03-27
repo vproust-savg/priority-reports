@@ -98,8 +98,10 @@ export function createFiltersRouter(cache: CacheProvider): Router {
       columns: report.filterColumns,
     };
 
-    // WHY: Cache filter options for 5 min — they change infrequently
-    cache.set(cacheKey, response, 300).catch((err) => {
+    // WHY: Cache filter options for 1 hour — they are reference/lookup data
+    // (supplier names, product families) that change very rarely.
+    // The /refresh endpoint can invalidate by prefix if needed.
+    cache.set(cacheKey, response, 3600).catch((err) => {
       console.warn(`[filters] Cache write failed for ${cacheKey}:`, err);
     });
 
