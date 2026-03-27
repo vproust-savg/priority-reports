@@ -4,7 +4,7 @@
 //          The interface is the contract — swap implementations
 //          without touching any business code.
 // USED BY: routes/reports.ts, routes/filters.ts, routes/query.ts
-// EXPORTS: CacheProvider, buildCacheKey, buildQueryCacheKey, createCacheProvider
+// EXPORTS: CacheProvider, buildCacheKey, buildQueryCacheKey, buildExportCacheKey, createCacheProvider
 // ═══════════════════════════════════════════════════════════════
 
 import { Redis } from '@upstash/redis';
@@ -44,6 +44,11 @@ function stripIds(group: FilterGroup): unknown {
 export function buildQueryCacheKey(reportId: string, body: QueryRequest): string {
   const filterHash = JSON.stringify(stripIds(body.filterGroup));
   return `query:${reportId}:p${body.page}:s${body.pageSize}:${filterHash}`;
+}
+
+export function buildExportCacheKey(reportId: string, filterGroup: FilterGroup, page: number): string {
+  const filterHash = JSON.stringify(stripIds(filterGroup));
+  return `export:${reportId}:p${page}:s5000:${filterHash}`;
 }
 
 class UpstashCacheProvider implements CacheProvider {

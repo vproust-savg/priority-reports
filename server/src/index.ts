@@ -32,7 +32,7 @@ app.use('/api/v1/health', createHealthRouter(cache));
 app.use('/api/v1/reports', createQueryRouter(cache));
 app.use('/api/v1/reports', createReportsRouter(cache));
 app.use('/api/v1/reports', createFiltersRouter(cache));
-app.use('/api/v1/reports', createExportRouter());
+app.use('/api/v1/reports', createExportRouter(cache));
 
 // WHY: In production, Express serves the built React app.
 // In development, Vite's dev server handles the frontend.

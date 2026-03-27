@@ -1,13 +1,15 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/src/routes/export.ts
 // PURPOSE: POST /api/v1/reports/:reportId/export endpoint.
-//          Fetches ALL filtered rows from Priority (paginated),
-//          applies client-side filters, generates Excel, streams file.
+//          Cache-first paginated fetch from Priority, applies
+//          client-side filters, generates Excel, streams file.
 // USED BY: index.ts (mounted at /api/v1/reports)
 // EXPORTS: createExportRouter
 // ═══════════════════════════════════════════════════════════════
 
 import { Router } from 'express';
+import type { CacheProvider } from '../services/cache';
+import { buildExportCacheKey } from '../services/cache';
 import { getReport } from '../config/reportRegistry';
 import { queryPriority } from '../services/priorityClient';
 import { buildODataFilter } from '../services/odataFilterBuilder';
@@ -22,12 +24,13 @@ import { ExportRequestSchema } from './exportSchemas';
 import '../reports/grvLog';
 import '../reports/bbdReport';
 
-const ROW_CAP = 5000;
-const PAGE_SIZE = 1000;
+const ROW_CAP = 100_000;
+const PAGE_SIZE = 5000;
+const CACHE_TTL = 900; // 15 minutes, matches query cache
 
-// WHY: No arguments — unlike createQueryRouter(cache), exports are always
-// fresh (never cached). No CacheProvider dependency.
-export function createExportRouter(): Router {
+// WHY: CacheProvider injected — same pattern as createQueryRouter(cache).
+// Enables cache-first fetching: check Redis before hitting Priority API.
+export function createExportRouter(cache: CacheProvider): Router {
   const router = Router();
 
   router.post('/:reportId/export', async (req, res) => {
@@ -55,26 +58,54 @@ export function createExportRouter(): Router {
     // UI-generated OData filter. Both are ANDed when present. Same pattern as query.ts.
     const combinedFilter = [baseParams.$filter, odataFilter].filter(Boolean).join(' and ') || undefined;
 
-    // --- Paginated fetch: get ALL matching rows ---
+    // --- Cache-first paginated fetch ---
     const allRawRows: Record<string, unknown>[] = [];
     let page = 0;
     let lastPageSize = 0;
+    let truncated = false;
+    let cacheHits = 0;
 
     try {
       while (true) {
-        const response = await queryPriority(report.entity, {
-          $select: baseParams.$select,
-          $orderby: baseParams.$orderby,
-          $filter: combinedFilter,
-          $top: PAGE_SIZE,
-          $skip: page * PAGE_SIZE,
-        });
+        // WHY: Check cache before hitting Priority API. Repeated exports
+        // with the same filters are instant (cached 15 min).
+        const cacheKey = buildExportCacheKey(reportId, body.filterGroup, page);
+        let pageRows: Record<string, unknown>[] | null = null;
 
-        allRawRows.push(...response.value);
-        lastPageSize = response.value.length;
+        try {
+          pageRows = await cache.get<Record<string, unknown>[]>(cacheKey);
+        } catch {
+          // WHY: Cache read failure is non-fatal — fall through to API fetch
+        }
+
+        if (pageRows) {
+          cacheHits++;
+          allRawRows.push(...pageRows);
+          lastPageSize = pageRows.length;
+        } else {
+          const response = await queryPriority(report.entity, {
+            $select: baseParams.$select,
+            $expand: baseParams.$expand,
+            $orderby: baseParams.$orderby,
+            $filter: combinedFilter,
+            $top: PAGE_SIZE,
+            $skip: page * PAGE_SIZE,
+          });
+
+          allRawRows.push(...response.value);
+          lastPageSize = response.value.length;
+
+          // WHY: Cache freshly fetched pages so subsequent exports reuse them.
+          cache.set(cacheKey, response.value, CACHE_TTL).catch((err) => {
+            console.warn(`[export] Cache write failed for ${cacheKey}:`, err);
+          });
+        }
 
         if (lastPageSize < PAGE_SIZE) break; // Last page
-        if (allRawRows.length >= ROW_CAP) break; // Hard cap
+        if (allRawRows.length >= ROW_CAP) {
+          truncated = true;
+          break;
+        }
         page++;
       }
     } catch (err) {
@@ -84,20 +115,9 @@ export function createExportRouter(): Router {
       return;
     }
 
-    // WHY: Hard cap check — if we hit the cap AND the last page was full,
-    // there are more rows we couldn't fetch. Return error instead of
-    // silently truncating the export.
-    if (allRawRows.length >= ROW_CAP && lastPageSize === PAGE_SIZE) {
-      res.status(400).json({
-        error: 'Export limited to 5,000 rows. Apply filters to reduce the dataset.',
-      });
-      return;
-    }
-
-    // --- Enrich rows (sub-form fetch, e.g., GRV Log remarks) ---
-    // WHY: Fail the export if enrichment fails — for GRV Log, enrichRows
-    // populates most columns (driverId, temps, conditions, comments).
-    // Silently continuing would produce a mostly-empty export.
+    // --- Enrich rows (sub-form fetch, e.g., legacy reports without $expand) ---
+    // WHY: Fail the export if enrichment fails — for reports using enrichRows,
+    // it populates most columns. Silently continuing would produce a mostly-empty export.
     let enrichedRows = allRawRows;
     if (report.enrichRows) {
       try {
@@ -179,11 +199,16 @@ export function createExportRouter(): Router {
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    // WHY: Binary response can't include JSON metadata. Custom header
+    // lets the frontend detect truncation and show a warning toast.
+    if (truncated) {
+      res.setHeader('X-Export-Truncated', 'true');
+    }
     res.send(excelBuffer);
 
     logApiCall({
       level: 'info', event: 'export', reportId,
-      durationMs: Date.now() - startTime, cacheHit: false,
+      durationMs: Date.now() - startTime, cacheHit: cacheHits > 0,
       rowCount: filteredRows.length, statusCode: 200,
       odataFilter: odataFilter ?? 'none',
     });
