@@ -21,6 +21,8 @@ const columns: ColumnDefinition[] = [
   { key: 'partDescription', label: 'Part Description', type: 'string' },
   { key: 'balance', label: 'Balance', type: 'number' },
   { key: 'unit', label: 'Unit', type: 'string' },
+  { key: 'value', label: 'Value', type: 'currency' },
+  { key: 'receivingDate', label: 'Recv. Date', type: 'date' },
   { key: 'expiryDate', label: 'Expir. Date', type: 'date' },
   { key: 'daysUntilExpiry', label: 'Days Left', type: 'number' },
   { key: 'status', label: 'Status', type: 'string' },
@@ -36,6 +38,8 @@ const filterColumns: ColumnFilterMeta[] = [
   { key: 'partNumber', label: 'Part Number', filterType: 'text', filterLocation: 'client' },
   { key: 'partDescription', label: 'Part Description', filterType: 'text', filterLocation: 'client' },
   { key: 'balance', label: 'Balance', filterType: 'number', filterLocation: 'client' },
+  { key: 'value', label: 'Value', filterType: 'number', filterLocation: 'client' },
+  { key: 'receivingDate', label: 'Recv. Date', filterType: 'date', filterLocation: 'client' },
   { key: 'expiryDate', label: 'Expir. Date', filterType: 'date', filterLocation: 'client' },
   { key: 'vendor', label: 'Vendor', filterType: 'enum', filterLocation: 'client', enumKey: 'vendors' },
   { key: 'perishable', label: 'Perishable', filterType: 'enum', filterLocation: 'client', enumKey: 'perishables' },
@@ -56,7 +60,7 @@ function buildQuery(_filters: ReportFilters): ODataParams {
   return {
     // WHY: QUANT is the lot quantity on RAWSERIAL (TBALANCE lives on the sub-form only).
     // Filtered in $filter to avoid fetching zero-quantity rows (reduces result set dramatically).
-    $select: 'PARTNAME,PARTDES,EXPIRYDATE,SUPDES,Y_9966_5_ESH,Y_9952_5_ESH,Y_2074_5_ESH,QUANT,UNITNAME',
+    $select: 'PARTNAME,PARTDES,EXPIRYDATE,SUPDES,Y_9966_5_ESH,Y_9952_5_ESH,Y_2074_5_ESH,QUANT,UNITNAME,SERIALNAME,CURDATE,Y_8737_0_ESH',
     $filter: `EXPIRYDATE le ${cutoffIso} and QUANT gt 0`,
     $orderby: 'EXPIRYDATE asc',
     // WHY: Fetch all matching rows (no server pagination). Post-fetch filtering
@@ -114,6 +118,10 @@ function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
     partDescription: raw.PARTDES,
     balance,
     unit: raw.UNITNAME ?? '',
+    serialName: raw.SERIALNAME ?? '',
+    purchasePrice: Number(raw.Y_8737_0_ESH ?? 0),
+    value: Number(raw.QUANT ?? 0) * Number(raw.Y_8737_0_ESH ?? 0),
+    receivingDate: raw.CURDATE,
     expiryDate: raw.EXPIRYDATE,
     daysUntilExpiry,
     status: status ?? '',
@@ -258,6 +266,8 @@ reportRegistry.set('bbd', {
       partDescription: 28,
       balance: 8,
       unit: 6,
+      value: 10,
+      receivingDate: 11,
       expiryDate: 11,
       daysUntilExpiry: 8,
       status: 12,
@@ -267,5 +277,10 @@ reportRegistry.set('bbd', {
       family: 14,
     },
     fontSize: 9,
+  },
+  expandConfig: {
+    subformName: 'RAWSERIALBAL_SUBFORM',
+    keyField: 'SERIALNAME',
+    rowKeyField: 'serialName',
   },
 });
