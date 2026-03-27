@@ -12,7 +12,6 @@ Reports are **widgets** arranged on **configurable pages**. Adding a page or rea
 ## Current State
 
 Building from specifications. Each spec has a matching implementation plan.
-Backend and frontend are built in **separate Claude Code sessions** that share `shared/types/`.
 
 **Parallel session rules:** Backend session only writes to `server/`. Frontend session only writes to `client/`. Shared code in `shared/` (types + utils) must be created before either session starts. Neither session should modify `CLAUDE.md`.
 
@@ -143,7 +142,9 @@ This code is maintained exclusively by LLMs. Every decision optimizes for AI rea
 - **Auth:** HTTP Basic Auth (base64 encoded username:password)
 - **Rate limits:** 100 calls/minute, 15 queued max, 3-minute timeout per request
 - **Pagination:** `$top` + `$skip` params. Always paginate — large entities timeout without it.
-- **Header:** Always include `Prefer: odata.maxpagesize=1000`
+- **MAXAPILINES:** Currently set to 50,000 (raised from default 2,000). Controls max rows per API response.
+- **Optimal pattern:** Use `$expand=SUBFORM($select=field1,field2)` with nested `$select` to avoid N+1 subform calls. See `/priority-erp-api` skill for benchmarks.
+- **Header:** Always include `Prefer: odata.maxpagesize=49900` (safety margin below MAXAPILINES=50,000)
 - **Header:** Always include `IEEE754Compatible: true` (prevents floating-point precision issues)
 - **XML metadata:** `tools/priority_erp.xml` contains all entity names and field definitions
 - **Existing reference:** The sync project at `/Users/victorproust/Documents/Work/Priority/Airtable_Priority_N8N_v1/` uses the same Priority API — check its patterns when in doubt.
@@ -167,7 +168,7 @@ This code is maintained exclusively by LLMs. Every decision optimizes for AI rea
 - Confusing Express and React Router catch-all syntax — Express 5 uses `/{*path}`, React Router uses `path="*"`. They live in the same project but use different path syntaxes.
 - Forgetting catch-all routes inside nested React Router groups — a parent route matching (e.g., `/food-safety`) doesn't 404 on unmatched children (e.g., `/food-safety/nonexistent`). Add `<Route path="*">` inside each nested group, not just at top level.
 - Putting client-only types (e.g., `DepartmentConfig`) in `shared/types/` — only types used by BOTH client and server belong there. Client-only types go in the client config file that defines them.
-- Using `$expand` on DOCUMENTS_P — Priority/CloudFront truncates the response. Use two-step fetch: query parent, then `querySubform()` per row
+- `$expand` on DOCUMENTS_P is BROKEN — Priority/CloudFront aborts the connection (confirmed March 2026 with page sizes 5 and 50, both encoded and raw URLs). Use the two-step `enrichRows` pattern: query parent with TYPE in `$select`, then `querySubform()` per row with composite key `(DOCNO='...',TYPE='...')`. Other entities (ORDERS, LOGPART) work fine with `$expand`.
 - Modifying Dockerfile paths without checking `__dirname` math — server at `/app/server/dist/server/src/` serves client from `../../../../client/dist` (4 levels up to `/app/`)
 - Leaving unused variables/destructured bindings — `noUnusedLocals: true` in `tsconfig.app.json` means `tsc -b` fails, killing the Railway Docker build. Always clean up unused destructured props.
 - Deleting `railway.json` — Railway needs this file to use the Dockerfile builder. Without it, deploy breaks.

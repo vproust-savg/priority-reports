@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/tests/grvTransformRow.test.ts
 // PURPOSE: Characterization tests for GRV Log transformRow.
-//          Proves subform shape compatibility between enrichRows
-//          (current) and $expand (new) approaches.
+//          Proves transformRow handles all subform shapes
+//          (null, undefined, complete, empty TEXT).
 // ═══════════════════════════════════════════════════════════════
 
 import { describe, it, expect } from 'vitest';

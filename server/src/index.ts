@@ -21,7 +21,9 @@ import { getMonday, getSunday, toISODate } from '../../shared/utils/weekUtils';
 
 const app = express();
 
-app.use(cors());
+// WHY: Expose X-Export-Truncated so the frontend can read it.
+// Custom headers are blocked by CORS unless explicitly listed.
+app.use(cors({ exposedHeaders: ['X-Export-Truncated'] }));
 app.use(express.json());
 
 const cache = createCacheProvider();

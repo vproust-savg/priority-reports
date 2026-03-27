@@ -94,8 +94,8 @@ export function createReportsRouter(cache: CacheProvider): Router {
       res.status(502).json({ error: `Failed to fetch from Priority: ${message}` });
       return;
     }
-    // WHY: Some reports use $expand to fetch sub-form data inline.
-    // enrichRows is only needed for entities where $expand doesn't work.
+    // WHY: GRV Log fetches sub-form data via enrichRows (two-step pattern).
+    // $expand on DOCUMENTS_P is broken (CloudFront aborts connection).
     let rawRows = priorityData.value;
     const warnings: string[] = [];
     if (report.enrichRows) {
