@@ -159,6 +159,12 @@ export function createQueryRouter(cache: CacheProvider): Router {
         executionTimeMs: Date.now() - startTime,
         source: 'priority-odata',
         rowStyleField: report.rowStyleField,
+        // WHY: When the report has expandConfig, pass rowKeyField to the frontend
+        // so it knows which row field to use as the expand key. subformName and
+        // keyField stay server-side (used by the subform endpoint).
+        expandConfig: report.expandConfig
+          ? { rowKeyField: report.expandConfig.rowKeyField }
+          : undefined,
       },
       data: rows,
       pagination: {
