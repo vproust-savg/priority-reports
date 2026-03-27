@@ -136,13 +136,33 @@ onToggleExpand?: (rowKey: string) => void;
 ```
 
 **Rendering changes:**
-- When `expandConfig` is present, render a narrow first column with a `ChevronRight` icon (from lucide-react, 16px)
-- Chevron rotates 90° on expand (CSS `transition-transform duration-200`)
-- Row gets `cursor-pointer` and click handler calls `onToggleExpand(rowKey)`
-- After each expanded row's `<tr>`, render a detail `<tr>` with a single `<td colSpan={columns.length + 1}>` containing `<DetailComponent row={row} reportId={reportId} />`
-- Detail row is a plain `<tr>` containing a single `<td colSpan>`. Inside that `<td>`, wrap the detail content in `<AnimatePresence>` + `<motion.div>` using `FADE_SLIDE_UP` preset from `animationConstants.ts`, respecting `useReducedMotion()`. (Note: `motion.tr` is unreliable for height animation — use `motion.div` inside the cell instead.)
+- When `expandConfig` is present, add a narrow first `<th>`/`<td>` column (w-10, no header label) for the expand chevron
+- The entire data `<tr>` is clickable (`cursor-pointer`), not just the chevron — larger hit target feels snappier
+- After each expanded row's `<tr>`, render a detail `<tr>` with a single `<td colSpan={columns.length + 1}>`
+- Inside that `<td>`, wrap detail content in `<AnimatePresence>` + `<motion.div>` (not `motion.tr` — unreliable for height animation)
 
-**Keyboard accessibility:** The chevron cell is a `<button>` with `aria-expanded` and `aria-label="Expand row details"`. Enter/Space toggles.
+**Micro-Animations — Chevron:**
+- Icon: `ChevronRight` from lucide-react, `size={14}`, `text-slate-400`
+- Rotation: `transition-transform duration-200 ease-out` — rotates to 90° when expanded
+- On hover (row hover, not just icon): chevron shifts to `text-slate-600` — subtle signal that the row is interactive
+- The chevron should feel like part of the row, not a standalone button — no background, no border, just the icon
+
+**Micro-Animations — Detail Panel Reveal:**
+- Use a **clip + fade** pattern, not height animation (height: auto is janky):
+  ```ts
+  // New preset in animationConstants.ts
+  export const EXPAND_REVEAL = {
+    initial: { opacity: 0, clipPath: 'inset(0 0 100% 0)' },
+    animate: { opacity: 1, clipPath: 'inset(0 0 0% 0)' },
+    exit: { opacity: 0, clipPath: 'inset(0 0 100% 0)' },
+  };
+  export const EASE_EXPAND = { duration: 0.2, ease: [0.25, 0.1, 0.25, 1] as const };
+  ```
+- This clips from top-down, creating a clean "unfold" effect without layout thrash
+- Respect `useReducedMotion()` — fall back to `REDUCED_FADE` + `REDUCED_TRANSITION`
+- Exit animation is faster than enter (0.15s vs 0.2s) — closing should feel instant
+
+**Keyboard accessibility:** The chevron cell contains a `<button>` with `aria-expanded` and `aria-label="Expand row details"`. Enter/Space toggles. The row click handler also fires on the button, so both work.
 
 ### 3.5 Frontend — Expand Orchestration in ReportTableWidget
 
@@ -234,15 +254,40 @@ A mini-table inside the expanded row with these columns:
 | Unit | `UNITNAME` | string |
 | Value | `BALANCE * purchasePrice` (from parent row) | currency |
 
-### 4.3 Styling
+### 4.3 Visual Design — Detail Panel
 
-- Background: `bg-slate-50/60` — slightly recessed to visually nest under the parent row
-- Left border: `border-l-2 border-l-primary/30` — subtle indicator connecting to parent
-- Padding: `pl-12` (indented to clear the chevron column)
-- Mini-table uses `text-sm` (smaller than main table) with `text-slate-600`
-- Loading state: `<Loader2 className="animate-spin" size={16} />` with "Loading..." text
-- Empty state: "No warehouse data available" in `text-slate-400`
-- Error state: "Failed to load details" in `text-red-500`
+**Goal:** The detail panel should feel like a natural extension of the row — not a modal, not a card. It's inline context that appears and disappears cleanly.
+
+**Container styling:**
+- Background: `bg-slate-50/50` — just barely recessed from the main table background
+- No card shadow, no border-radius — this is a table row extension, not a floating element
+- Left accent: `border-l-2 border-l-primary/20` — thin, subtle vertical line connecting to parent
+- Top border: none (seamless with the parent row above)
+- Bottom border: `border-b border-slate-100` (same as regular rows)
+
+**Spacing & breathing room:**
+- Outer padding: `py-4 pl-14 pr-6` — left indent clears the chevron column (w-10 + cell padding), generous vertical breathing room
+- Between label and mini-table: `mb-2` gap
+- No label/header text above the mini-table — the context is obvious from the parent row
+
+**Mini-table styling:**
+- Font size: `text-xs` (12px) — one step smaller than the main table's 13px. Creates clear visual hierarchy.
+- Text color: `text-slate-600` — slightly muted vs main table's `text-slate-700`
+- Header row: `text-slate-400 uppercase tracking-wider font-medium text-[11px]` — whisper-quiet headers
+- Cell padding: `px-3 py-1.5` — tighter than main table (px-5 py-3). Dense but scannable.
+- No zebra striping in mini-table — keep it minimal, typically 1-3 rows
+- Currency values: right-aligned, `tabular-nums`, same formatting as main table
+- Row hover in mini-table: `hover:bg-slate-100/50` — even subtler than main table hover
+
+**State indicators:**
+- Loading: Single `<Loader2 size={14} className="animate-spin text-slate-400" />` with `text-xs text-slate-400` "Loading..." inline next to it. Horizontally centered in the panel. No skeleton, no shimmer — the panel is small enough that a simple spinner suffices.
+- Empty: `text-xs text-slate-400 italic` "No warehouse data" — left-aligned at the indent level
+- Error: `text-xs text-red-500` "Failed to load details" — same position
+
+**Parent row when expanded:**
+- Add `bg-blue-50/30` to the expanded parent row — a whisper of blue to visually connect it to the detail below
+- The existing status colors (red/orange/amber) take precedence — only apply the blue tint when no status style is active
+- Maintain the existing hover transition on the parent row
 
 ### 4.4 Value Calculation
 
