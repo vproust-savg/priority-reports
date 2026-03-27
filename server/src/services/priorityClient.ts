@@ -29,12 +29,21 @@ function buildUrl(entity: string, params: ODataParams): string {
 
   if (params.$select) url.searchParams.set('$select', params.$select);
   if (params.$filter) url.searchParams.set('$filter', params.$filter);
-  if (params.$expand) url.searchParams.set('$expand', params.$expand);
   if (params.$top !== undefined) url.searchParams.set('$top', String(params.$top));
   if (params.$skip !== undefined) url.searchParams.set('$skip', String(params.$skip));
   if (params.$orderby) url.searchParams.set('$orderby', params.$orderby);
 
-  return url.toString();
+  let urlStr = url.toString();
+  // WHY: $expand uses nested OData syntax like SUBFORM($select=TEXT).
+  // URL.searchParams.set() form-encodes parentheses and $ to %28/%24/%3D/%29.
+  // Priority's OData parser needs these unencoded. Append manually since
+  // ( ) $ = are valid query-string characters per RFC 3986.
+  if (params.$expand) {
+    const separator = urlStr.includes('?') ? '&' : '?';
+    urlStr += `${separator}$expand=${params.$expand}`;
+  }
+
+  return urlStr;
 }
 
 export async function queryPriority(
@@ -63,9 +72,8 @@ export async function queryPriority(
   return { value: data.value ?? [] };
 }
 
-// WHY: Priority's $expand truncates responses on some entities. The proven
-// pattern (from the sync project) is two-step: fetch parent, then fetch
-// each sub-form individually via entity(key)/SUBFORM_NAME.
+// WHY: Some entities don't support $expand (no sub-form).
+// For those, use two-step: fetch parent, then fetch sub-form individually.
 export async function querySubform(
   entity: string,
   keyParts: Record<string, string>,
