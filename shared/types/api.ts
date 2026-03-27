@@ -29,6 +29,11 @@ export interface ResponseMeta {
   // WHY: When present, ReportTable reads this field from each row to apply
   // per-row CSS classes (e.g., red for expired, orange for expiring-perishable).
   rowStyleField?: string;
+  // WHY: When present, the frontend enables expandable rows. rowKeyField tells
+  // it which field in the row data holds the unique key for subform fetching.
+  expandConfig?: {
+    rowKeyField: string;
+  };
 }
 
 // WHY: Every endpoint returns this exact shape so the frontend needs
