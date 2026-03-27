@@ -37,8 +37,8 @@ export function useExport(
     setIsExporting(true);
     setToast(null);
 
-    // WHY: 2-minute timeout — enrichRows on large GRV Log exports can take
-    // 50-100 seconds (500 rows × batched sub-form fetches with 200ms delay).
+    // WHY: 2-minute timeout — large exports (40K+ rows) with multiple
+    // Priority API pages can take over a minute.
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 120_000);
 
@@ -76,7 +76,14 @@ export function useExport(
       document.body.removeChild(a);
       URL.revokeObjectURL(href);
 
-      setToast({ message: 'Export complete', variant: 'success' });
+      // WHY: Export response is a binary file — can't include JSON metadata.
+      // The server sets X-Export-Truncated header when the 100K row cap was hit.
+      const wasTruncated = response.headers.get('X-Export-Truncated') === 'true';
+      if (wasTruncated) {
+        setToast({ message: 'Export limited to 100,000 rows. Apply more filters to narrow results.', variant: 'error' });
+      } else {
+        setToast({ message: 'Export complete', variant: 'success' });
+      }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         setToast({ message: 'Export timed out — try applying more filters', variant: 'error' });
