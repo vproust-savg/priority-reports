@@ -1,8 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: client/src/components/widgets/ReportTableWidget.tsx
-// PURPOSE: Report widget — single-phase server-side filtering.
-//          Shows LoadingToast during fetch, data table when ready.
-//          Refresh button clears server cache for fresh data.
+// PURPOSE: Report widget — server-side filtering, client-side
+//          sorting, column management, expandable rows.
 // USED BY: widgetRegistry.ts (registered as 'table' type)
 // EXPORTS: ReportTableWidget
 // ═══════════════════════════════════════════════════════════════
@@ -14,12 +13,14 @@ import { useReportQuery } from '../../hooks/useReportQuery';
 import { useFiltersQuery } from '../../hooks/useFiltersQuery';
 import { useFilterState } from '../../hooks/useFilterState';
 import { useColumnManager } from '../../hooks/useColumnManager';
+import { useSortManager } from '../../hooks/useSortManager';
 import { useExport } from '../../hooks/useExport';
 import { AnimatePresence, motion } from 'framer-motion';
 import { EASE_FAST } from '../../config/animationConstants';
 import TableToolbar from '../TableToolbar';
 import FilterBuilder from '../filter/FilterBuilder';
 import ColumnManagerPanel from '../columns/ColumnManagerPanel';
+import SortPanel from '../sort/SortPanel';
 import ReportTable from '../ReportTable';
 import Pagination from '../Pagination';
 import Toast from '../Toast';
@@ -49,6 +50,12 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
     isColumnPanelOpen, setIsColumnPanelOpen,
     toggleColumn, reorderColumns, showAll, hideAll,
   } = useColumnManager(query.data?.columns);
+
+  const {
+    sortRules, sortedData, addSort, removeSort, updateSort,
+    reorderSorts, clearAll: clearAllSorts,
+    isSortPanelOpen, setIsSortPanelOpen, sortCount,
+  } = useSortManager(visibleColumns);
 
   // WHY: Stable reference for useExport dependency — only changes when
   // the actual set of visible column keys changes, not on every render.
@@ -92,15 +99,23 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
     });
   }, []);
 
+  // WHY: Only one panel open at a time — opening one closes the others.
+  const handleFilterToggle = () => { setIsFilterOpen(!isFilterOpen); setIsColumnPanelOpen(false); setIsSortPanelOpen(false); };
+  const handleColumnToggle = () => { setIsColumnPanelOpen(!isColumnPanelOpen); setIsFilterOpen(false); setIsSortPanelOpen(false); };
+  const handleSortToggle = () => { setIsSortPanelOpen(!isSortPanelOpen); setIsFilterOpen(false); setIsColumnPanelOpen(false); };
+
   return (
     <>
       <TableToolbar
         activeFilterCount={countActiveFilters(filterGroup)}
         isFilterOpen={isFilterOpen}
-        onFilterToggle={() => setIsFilterOpen(!isFilterOpen)}
+        onFilterToggle={handleFilterToggle}
         hiddenColumnCount={hiddenCount}
         isColumnPanelOpen={isColumnPanelOpen}
-        onColumnToggle={() => setIsColumnPanelOpen(!isColumnPanelOpen)}
+        onColumnToggle={handleColumnToggle}
+        sortCount={sortCount}
+        isSortPanelOpen={isSortPanelOpen}
+        onSortToggle={handleSortToggle}
         isExporting={isExporting}
         onExport={triggerExport}
         isRefreshing={isRefreshing}
@@ -147,6 +162,28 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {isSortPanelOpen && (
+          <motion.div
+            key="sort-panel"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={EASE_FAST}
+          >
+            <SortPanel
+              sortRules={sortRules}
+              columns={visibleColumns}
+              onAddSort={addSort}
+              onRemoveSort={removeSort}
+              onUpdateSort={updateSort}
+              onReorderSorts={reorderSorts}
+              onClearAll={clearAllSorts}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {filterLoadError && (
         <div className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-red-700 bg-red-50/80 border border-red-200/60 rounded-lg">
           <AlertTriangle size={14} className="shrink-0 text-red-500" />
@@ -171,7 +208,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         <>
           <ReportTable
             columns={visibleColumns.length > 0 ? visibleColumns : data!.columns}
-            data={displayData}
+            data={sortedData(displayData)}
             rowStyleField={data?.meta?.rowStyleField}
             reportId={reportId}
             expandConfig={expandConfig && DetailComponent ? {
