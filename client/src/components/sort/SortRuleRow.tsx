@@ -9,7 +9,7 @@
 import { GripVertical, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { FILTER_INPUT_CLASS } from '../../config/filterConstants';
+import { DRAG_HANDLE_CLASS, FILTER_INPUT_CLASS } from '../../config/filterConstants';
 import type { SortRule } from '../../hooks/useSortManager';
 import type { ColumnDefinition } from '@shared/types';
 
@@ -41,18 +41,15 @@ export default function SortRuleRow({
 
   return (
     <div ref={setNodeRef} style={style} className="flex items-center gap-2 py-1.5 group/row">
-      {/* Drag handle */}
       <button
         {...attributes}
         {...listeners}
         aria-label="Drag to reorder"
-        className="cursor-grab active:cursor-grabbing p-0.5 text-slate-300 hover:text-slate-400
-          opacity-0 group-hover/row:opacity-100 transition-opacity touch-none flex-shrink-0"
+        className={DRAG_HANDLE_CLASS}
       >
         <GripVertical size={14} />
       </button>
 
-      {/* Column picker */}
       <select
         role="combobox"
         value={rule.columnKey}
@@ -64,7 +61,6 @@ export default function SortRuleRow({
         ))}
       </select>
 
-      {/* Direction toggle */}
       <button
         onClick={() => onUpdate(rule.id, { direction: rule.direction === 'asc' ? 'desc' : 'asc' })}
         className="flex items-center gap-1 px-2 py-1.5 rounded-lg border border-slate-200
@@ -74,7 +70,6 @@ export default function SortRuleRow({
         <span>{rule.direction === 'asc' ? 'Asc' : 'Desc'}</span>
       </button>
 
-      {/* Delete button */}
       <button
         onClick={() => onRemove(rule.id)}
         aria-label="Remove sort rule"

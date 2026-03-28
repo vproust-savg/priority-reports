@@ -21,7 +21,6 @@ export function useSortManager(columns: ColumnDefinition[]) {
   const [sortRules, setSortRules] = useState<SortRule[]>([]);
   const [isSortPanelOpen, setIsSortPanelOpen] = useState(false);
 
-  // --- Column cleanup ---
   // WHY: When visible columns change (user hides a column), remove sort rules
   // referencing columns that no longer exist. Same defensive pattern as
   // useColumnManager reinitializing on column changes.
@@ -37,8 +36,6 @@ export function useSortManager(columns: ColumnDefinition[]) {
       return filtered.length === prev.length ? prev : filtered;
     });
   }, [columns]);
-
-  // --- CRUD ---
 
   const addSort = useCallback((columnKey?: string) => {
     setSortRules((prev) => {
@@ -68,8 +65,6 @@ export function useSortManager(columns: ColumnDefinition[]) {
   const clearAll = useCallback(() => {
     setSortRules([]);
   }, []);
-
-  // --- Sorting ---
 
   const sortedData = useCallback((data: Record<string, unknown>[]): Record<string, unknown>[] => {
     if (sortRules.length === 0 || data.length === 0) return data;

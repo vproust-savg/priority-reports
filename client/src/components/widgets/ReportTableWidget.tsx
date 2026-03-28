@@ -16,7 +16,7 @@ import { useColumnManager } from '../../hooks/useColumnManager';
 import { useSortManager } from '../../hooks/useSortManager';
 import { useExport } from '../../hooks/useExport';
 import { AnimatePresence, motion } from 'framer-motion';
-import { EASE_FAST } from '../../config/animationConstants';
+import { PANEL_FADE } from '../../config/animationConstants';
 import TableToolbar from '../TableToolbar';
 import FilterBuilder from '../filter/FilterBuilder';
 import ColumnManagerPanel from '../columns/ColumnManagerPanel';
@@ -86,6 +86,13 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const data = query.data;
   const displayData = data?.data ?? [];
 
+  // WHY: Memoize so sorting only re-runs when data or sort rules change,
+  // not on every render (panel toggle, expand, toast dismiss, etc.).
+  const sortedDisplayData = useMemo(
+    () => sortedData(displayData),
+    [sortedData, displayData],
+  );
+
   // --- Expand state ---
   const expandConfig = data?.meta?.expandConfig;
   const DetailComponent = expandConfig ? getDetailComponent(reportId) : null;
@@ -124,13 +131,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
 
       <AnimatePresence>
         {isFilterOpen && (
-          <motion.div
-            key="filter-panel"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={EASE_FAST}
-          >
+          <motion.div key="filter-panel" {...PANEL_FADE}>
             <FilterBuilder
               filterGroup={filterGroup}
               onChange={handleFilterChange}
@@ -144,13 +145,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
 
       <AnimatePresence>
         {isColumnPanelOpen && (
-          <motion.div
-            key="column-panel"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={EASE_FAST}
-          >
+          <motion.div key="column-panel" {...PANEL_FADE}>
             <ColumnManagerPanel
               managedColumns={managedColumns}
               onToggle={toggleColumn}
@@ -164,13 +159,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
 
       <AnimatePresence>
         {isSortPanelOpen && (
-          <motion.div
-            key="sort-panel"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={EASE_FAST}
-          >
+          <motion.div key="sort-panel" {...PANEL_FADE}>
             <SortPanel
               sortRules={sortRules}
               columns={visibleColumns}
@@ -208,7 +197,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         <>
           <ReportTable
             columns={visibleColumns.length > 0 ? visibleColumns : data!.columns}
-            data={sortedData(displayData)}
+            data={sortedDisplayData}
             rowStyleField={data?.meta?.rowStyleField}
             reportId={reportId}
             expandConfig={expandConfig && DetailComponent ? {

@@ -6,6 +6,7 @@
 // EXPORTS: SortPanel
 // ═══════════════════════════════════════════════════════════════
 
+import { useMemo } from 'react';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -31,7 +32,7 @@ export default function SortPanel({
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
-  const usedColumnKeys = new Set(sortRules.map((r) => r.columnKey));
+  const usedColumnKeys = useMemo(() => new Set(sortRules.map((r) => r.columnKey)), [sortRules]);
   const allColumnsUsed = usedColumnKeys.size >= columns.length;
 
   function handleDragEnd(event: DragEndEvent) {
@@ -59,7 +60,6 @@ export default function SortPanel({
         </SortableContext>
       </DndContext>
 
-      {/* Add sort button */}
       <button
         onClick={onAddSort}
         disabled={allColumnsUsed}
@@ -69,7 +69,6 @@ export default function SortPanel({
         + Add sort
       </button>
 
-      {/* Clear all — only visible when rules exist */}
       {sortRules.length > 0 && (
         <div className="mt-3 pt-3 border-t border-slate-100">
           <button

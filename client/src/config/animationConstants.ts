@@ -28,6 +28,15 @@ export const FADE_IN = {
   exit: { opacity: 0 },
 };
 
+// WHY: Toolbar panels (Filter, Columns, Sort) share the same reveal.
+// Single object to spread on motion.div instead of repeating 4 props.
+export const PANEL_FADE = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 },
+  transition: EASE_FAST,
+};
+
 // --- Reduced motion versions — opacity only, no transforms ---
 // WHY: REDUCED_FADE and REDUCED_TRANSITION are separate objects because
 // Framer Motion requires `transition` as its own prop on motion elements.

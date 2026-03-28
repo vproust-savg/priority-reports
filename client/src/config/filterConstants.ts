@@ -14,6 +14,10 @@ import { getMonday, getSunday, toISODate } from '../utils/weekUtils';
 
 // --- Shared CSS classes ---
 
+export const DRAG_HANDLE_CLASS =
+  'cursor-grab active:cursor-grabbing p-0.5 text-slate-300 hover:text-slate-400 ' +
+  'opacity-0 group-hover/row:opacity-100 transition-opacity touch-none flex-shrink-0';
+
 export const FILTER_INPUT_CLASS =
   'text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white ' +
   'focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-colors';
