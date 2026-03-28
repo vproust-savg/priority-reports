@@ -1,12 +1,12 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: client/src/components/TableToolbar.tsx
-// PURPOSE: Toolbar row with Filter, Columns, Refresh, and Export buttons.
-//          Shows active filter count and hidden column count badges.
+// PURPOSE: Toolbar row with Filter, Columns, Sort, Refresh, and
+//          Export buttons. Shows badges for active state.
 // USED BY: ReportTableWidget
 // EXPORTS: TableToolbar
 // ═══════════════════════════════════════════════════════════════
 
-import { SlidersHorizontal, Columns3, ChevronDown, Download, Loader2, RefreshCw } from 'lucide-react';
+import { SlidersHorizontal, Columns3, ArrowUpDown, ChevronDown, Download, Loader2, RefreshCw } from 'lucide-react';
 
 interface TableToolbarProps {
   activeFilterCount: number;
@@ -15,6 +15,9 @@ interface TableToolbarProps {
   hiddenColumnCount: number;
   isColumnPanelOpen: boolean;
   onColumnToggle: () => void;
+  sortCount: number;
+  isSortPanelOpen: boolean;
+  onSortToggle: () => void;
   isExporting: boolean;
   onExport: () => void;
   isRefreshing?: boolean;
@@ -24,11 +27,13 @@ interface TableToolbarProps {
 export default function TableToolbar({
   activeFilterCount, isFilterOpen, onFilterToggle,
   hiddenColumnCount, isColumnPanelOpen, onColumnToggle,
+  sortCount, isSortPanelOpen, onSortToggle,
   isExporting, onExport,
   isRefreshing, onRefresh,
 }: TableToolbarProps) {
   const hasFilters = activeFilterCount > 0;
   const hasHiddenColumns = hiddenColumnCount > 0;
+  const hasSorts = sortCount > 0;
 
   const baseClass = 'flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg transition-colors';
   const activeClass = 'text-primary bg-primary/5 hover:bg-primary/10';
@@ -59,6 +64,19 @@ export default function TableToolbar({
         <ChevronDown
           size={14}
           className={`transition-transform duration-200 ${isColumnPanelOpen ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      <button
+        onClick={onSortToggle}
+        className={`${baseClass} ${hasSorts ? activeClass : inactiveClass}`}
+      >
+        <ArrowUpDown size={16} />
+        <span>Sort</span>
+        {hasSorts && <span>({sortCount})</span>}
+        <ChevronDown
+          size={14}
+          className={`transition-transform duration-200 ${isSortPanelOpen ? 'rotate-180' : ''}`}
         />
       </button>
 
