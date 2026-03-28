@@ -287,7 +287,7 @@ git commit -m "feat: add Value, Recv Date, serialName, purchasePrice to BBD repo
 ## Task 4: Backend — Pass expandConfig Through Response Meta
 
 **Files:**
-- Modify: `server/src/routes/query.ts:152-161`
+- Modify: `server/src/routes/query.ts:153-162`
 
 - [ ] **Step 1: Add expandConfig to response meta**
 
@@ -330,7 +330,7 @@ git commit -m "feat: pass expandConfig through response meta to frontend"
 
 **Files:**
 - Create: `server/src/routes/subform.ts`
-- Modify: `server/src/index.ts:18,35`
+- Modify: `server/src/index.ts:18,37`
 
 - [ ] **Step 1: Create subform router**
 
@@ -411,7 +411,7 @@ In `server/src/index.ts`, add the import (after line 18):
 import { createSubformRouter } from './routes/subform';
 ```
 
-Add the mount (after line 35):
+Add the mount (after line 37):
 
 ```ts
 app.use('/api/v1/reports', createSubformRouter());

@@ -113,8 +113,9 @@ This config travels to the frontend via `ResponseMeta.expandConfig` — the same
 
 **Logic:**
 1. Look up `reportId` in `reportRegistry` — 404 if not found or no `expandConfig`
-2. Call `querySubform(report.entity, { [report.expandConfig.keyField]: rowKey }, report.expandConfig.subformName)`
-3. Return `{ data: value[] }` (the subform rows array)
+2. Build the subform URL directly: `${baseUrl}${entity}(${keyField}='${rowKey}')/${subformName}`
+3. Call `fetchWithRetry(url)` — can't use `querySubform()` because it returns only the first record from Pattern B (multi-record) subforms, but we need all warehouse balance rows
+4. Return `{ data: parsed.value ?? [] }` (the full subform rows array)
 
 **Error handling:**
 - 404 from Priority → return `{ data: [] }` (empty — no warehouse balances)
@@ -348,11 +349,11 @@ Widget config stays the same. Expandability is driven by report config (server-s
 |------|---------|
 | `Y_8737_0_ESH = 0` | Value shows `$0.00` — correct (no purchase price recorded) |
 | RAWSERIALBAL_SUBFORM returns empty array | Detail panel shows "No warehouse data available" |
-| RAWSERIALBAL_SUBFORM returns 404 | Treated as empty (consistent with `querySubform()` returning null) |
+| RAWSERIALBAL_SUBFORM returns 404 | Treated as empty — endpoint returns `{ data: [] }` |
 | Multiple warehouses | All rows displayed in mini-table; values sum may differ from main-line value due to rounding |
 | Row already expanded + data refreshes | `expandedRows` state preserved across refetches; TanStack Query re-fetches stale subform data |
 | Rapid expand/collapse clicks | `AnimatePresence` handles exit animations; no double-fetch due to TanStack Query dedup |
-| Very long SERIALNAME values | URL-encoded in the API call; `querySubform()` already handles single-quote escaping |
+| Very long SERIALNAME values | URL-encoded in the API call; single quotes escaped as `''` (OData convention) |
 | Screen readers | Chevron button has `aria-expanded`, detail row has `role="row"` with nested table |
 
 ---
