@@ -210,11 +210,22 @@ interface ExtendResponse {
 function useExtendExpiry() {
   return {
     extend: (request: ExtendRequest) => Promise<ExtendResponse>;
-    isLoading: boolean;
+    isPending: boolean;   // TanStack Query v5 naming (was `isLoading` in v4)
     error: Error | null;
     reset: () => void;
   };
 }
+```
+
+**Implementation:** Uses `useMutation` from TanStack Query v5. This is the first mutation hook in the codebase — existing hooks are all `useQuery` (read-only). The closest structural analog is `useExport.ts` (plain `fetch` + `useState`), but `useMutation` is preferred here because it provides automatic cache invalidation via `onSuccess`.
+
+**Cache invalidation:** On success, calls `queryClient.invalidateQueries({ queryKey: ['report', 'bbd'] })`. This is a prefix-based invalidation that matches all BBD query variants regardless of filter/pagination params. The same pattern is already used in `ReportTableWidget.tsx` line 73–84 (the refresh handler).
+
+**Test wrapper pattern:** Tests wrap the hook in a `QueryClientProvider` with a test `QueryClient` configured with `retry: false`:
+```ts
+const createTestQueryClient = () => new QueryClient({
+  defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+});
 ```
 
 **Behavior:**
@@ -265,7 +276,11 @@ const ExtendRequestSchema = z.object({
 
 4. **Record result:** `{ serialName, success: true/false, newExpiryDate?, error? }`
 
-**Sequential processing:** Items processed one at a time with 200ms delay between calls. Two Priority API calls per item (GET + PATCH). For 50 items = 100 calls at ~300ms spacing = ~30 seconds. Stays well under Priority's 100 calls/min limit.
+**New Priority HTTP function required:** `priorityHttp.ts` currently only has `httpsGet` (using Node's `https.get`). The extend endpoint needs PATCH support. Add `httpsPatch(url: string, body: unknown): Promise<HttpsResponse>` to `priorityHttp.ts`, using `https.request` with `method: 'PATCH'`. Must include the same auth + `IEEE754Compatible` headers as `httpsGet`, plus `Content-Type: application/json` and the JSON body.
+
+**Sequential processing:** Items processed one at a time. Two Priority API calls per item (GET + PATCH). The existing `priorityRateLimit.ts` already enforces `MIN_SPACING_MS = 200` between all calls to `fetchWithRetry` — no manual `setTimeout` needed between items. For 50 items = 100 calls at ~200ms each = ~20 seconds.
+
+**File:** `server/src/services/priorityHttp.ts` (add `httpsPatch`), `server/src/routes/extend.ts` (new route)
 
 **Response:**
 ```json
@@ -292,7 +307,21 @@ const ExtendRequestSchema = z.object({
 
 ## 10. Integration in ReportTableWidget
 
-**State additions:**
+**Line count concern:** `ReportTableWidget.tsx` is already 227 lines (over the CLAUDE.md 200-line limit). Adding modal state + cellRenderers + callbacks would push it to ~269 lines. **Solution:** Extract a `useBBDExtend` hook that owns all BBD-specific write logic.
+
+**New file: `client/src/hooks/useBBDExtend.ts`**
+
+Encapsulates:
+- `extendModal` state
+- `handleExtendClick(row)`, `handleBulkExtend()`, `handleExtendSuccess()` callbacks
+- `cellRenderers` memo
+- `useExtendExpiry()` hook usage
+
+Returns: `{ extendModal, cellRenderers, handleExtendClick, handleBulkExtend, handleExtendSuccess, closeModal }`
+
+`ReportTableWidget` calls the hook and spreads its values into JSX. The modal render blocks (~15 lines) stay in the widget since they're JSX. After extraction, the widget stays at ~244 lines — just inside the threshold.
+
+**State additions (inside `useBBDExtend`):**
 ```ts
 const [extendModal, setExtendModal] = useState<{
   type: 'single' | 'bulk';
@@ -348,25 +377,97 @@ const cellRenderers = useMemo(() => {
 
 ## 11. TDD Testing Strategy
 
-Tests are written **before** implementation (red-green-refactor). Each test file covers one unit.
+Tests are written **before** implementation (red-green-refactor). Each test file covers one unit. Patterns follow exactly the existing codebase conventions discovered in `useSortManager.test.ts`, `TableToolbar.test.tsx`, `SortPanel.test.tsx`, and `SortRuleRow.test.tsx`.
+
+### 11.0 Test Infrastructure & Patterns
+
+**Imports (client component tests):**
+```ts
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+```
+
+**Imports (client hook tests):**
+```ts
+import { renderHook, act, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { describe, it, expect, vi } from 'vitest';
+```
+
+**Imports (server tests):**
+```ts
+import { describe, it, expect, vi } from 'vitest';
+import request from 'supertest';
+```
+
+**Test QueryClient wrapper** (shared pattern for mutation hook tests):
+```ts
+const createTestQueryClient = () => new QueryClient({
+  defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+});
+
+const queryClientWrapper = ({ children }: { children: React.ReactNode }) => (
+  <QueryClientProvider client={createTestQueryClient()}>
+    {children}
+  </QueryClientProvider>
+);
+```
+
+**Fetch mocking** (for API calls — no MSW in the project):
+```ts
+vi.stubGlobal('fetch', vi.fn(() =>
+  Promise.resolve(new Response(
+    JSON.stringify({ results: [{ serialName: 'LOT123', success: true }] }),
+    { status: 200 }
+  ))
+));
+```
+
+**defaultProps pattern** (from `TableToolbar.test.tsx` — used for all component tests):
+```ts
+const defaultProps = { /* all required props with vi.fn() callbacks */ };
+render(<Component {...defaultProps} propOverride={value} />);
+```
+
+**Assertion patterns:**
+- Element exists: `expect(screen.getByText('Extend')).toBeTruthy()`
+- Element absent: `expect(screen.queryByText('text')).toBeNull()`
+- Role query: `screen.getByRole('button', { name: /extend/i })`
+- CSS class: `expect(button.className).toContain('text-primary')`
+- Disabled: `expect(button).toBeDisabled()`
+- Callback: `expect(onExtend).toHaveBeenCalledTimes(1)`
+
+**Note:** `@testing-library/user-event` is NOT installed. Use `fireEvent` for all interactions.
 
 ### 11.1 Hook Tests
 
 **`client/src/hooks/useExtendExpiry.test.ts`**
 
-Uses `renderHook` + mock `fetch`. Pattern follows `useSortManager.test.ts`.
+Uses `renderHook` + `waitFor` + mock `fetch` + `QueryClientProvider` wrapper. First mutation hook test in the codebase.
 
 | Test Case | What it verifies |
 |-----------|-----------------|
-| Returns `isLoading: false` initially | Initial state |
-| Sets `isLoading: true` during mutation | Loading state |
-| Calls correct endpoint with correct body | API contract |
-| Returns results on success | Happy path |
-| Handles network error | Error state |
+| Returns `isPending: false` initially | Initial state (v5 naming) |
+| Sets `isPending: true` during mutation | Loading state |
+| Calls `POST /api/v1/reports/bbd/extend` with correct body | API contract — method, URL, headers, JSON body |
+| Returns results array on success | Happy path response shape |
+| Handles network error gracefully | Error state populated |
 | Resets error state via `reset()` | State cleanup |
-| Invalidates BBD query on success | Cache invalidation |
+| Invalidates `['report', 'bbd']` query on success | Cache invalidation — table auto-refreshes |
 
-**Mocking approach:** Mock `fetch` globally (`vi.stubGlobal('fetch', ...)`). Wrap hook in a `QueryClientProvider` with a test `QueryClient`.
+**Mocking approach:** `vi.stubGlobal('fetch', mockFn)`. Wrap hook in `queryClientWrapper`. Use `waitFor()` for async assertions. Reset mocks via `vi.clearAllMocks()` in `beforeEach`.
+
+**`client/src/hooks/useBBDExtend.test.ts`**
+
+| Test Case | What it verifies |
+|-----------|-----------------|
+| Returns null `extendModal` initially | Initial state |
+| `handleExtendClick(row)` sets modal type to 'single' with row data | Single-row modal open |
+| `handleBulkExtend()` sets modal type to 'bulk' | Bulk modal open |
+| `closeModal()` sets `extendModal` to null | Modal close |
+| `handleExtendSuccess()` closes modal | Success cleanup |
+| Returns `cellRenderers` with `expiryDate` key when reportId is 'bbd' | BBD-specific renderer |
+| Returns `undefined` cellRenderers when reportId is not 'bbd' | Non-BBD reports unaffected |
 
 ### 11.2 Component Tests
 
@@ -374,83 +475,110 @@ Uses `renderHook` + mock `fetch`. Pattern follows `useSortManager.test.ts`.
 
 | Test Case | What it verifies |
 |-----------|-----------------|
-| Renders formatted date | Date display |
-| Renders Extend button | Button presence |
-| Calls `onExtend` when button clicked | Click handler |
-| Stops event propagation on click | No row expand trigger |
-| Handles null/undefined date value | Edge case |
+| Renders formatted date text | `screen.getByText(/Apr 15, 2026/)` |
+| Renders Extend button | `screen.getByRole('button', { name: /extend/i })` |
+| Calls `onExtend` when button clicked | `fireEvent.click` → `expect(onExtend).toHaveBeenCalledTimes(1)` |
+| Stops event propagation on click | Mock `stopPropagation` on event, verify it's called |
+| Renders gracefully with null date value | No crash, shows empty or dash |
 
 **`client/src/components/modals/Modal.test.tsx`**
 
 | Test Case | What it verifies |
 |-----------|-----------------|
-| Renders children when `isOpen` is true | Open state |
-| Does not render when `isOpen` is false | Closed state |
-| Calls `onClose` on backdrop click | Backdrop dismiss |
-| Calls `onClose` on Escape key | Keyboard dismiss |
-| Does NOT call `onClose` when `preventClose` is true | Submission guard |
-| Renders title in header | Title display |
-| Applies custom `maxWidth` | Width override |
+| Renders children when `isOpen` is true | Children visible in DOM |
+| Does not render when `isOpen` is false | `queryByText` returns null |
+| Calls `onClose` on backdrop click | `fireEvent.click(backdrop)` → callback fired |
+| Calls `onClose` on Escape key | `fireEvent.keyDown(document, { key: 'Escape' })` → callback fired |
+| Does NOT call `onClose` when `preventClose` is true (backdrop) | Backdrop click ignored |
+| Does NOT call `onClose` when `preventClose` is true (Escape) | Escape key ignored |
+| Renders title in header | `screen.getByText(title)` |
+| Applies custom `maxWidth` class | Check rendered element className |
 
 **`client/src/components/modals/ExtendExpiryModal.test.tsx`**
 
+Needs `queryClientWrapper` since it uses `useExtendExpiry` internally. Mock `fetch` for API calls.
+
 | Test Case | What it verifies |
 |-----------|-----------------|
-| Displays lot number, part name, current expiry | Read-only fields |
-| Defaults days input to 7 | Default value |
-| Computes new expiry date when days change | Live calculation |
-| Shows confirmation on Extend click | State: idle → confirming |
-| Calls extend mutation on confirm | State: confirming → submitting |
-| Shows success message and auto-closes | State: submitting → success |
-| Shows error with retry option | State: submitting → error |
-| Disables inputs during submission | preventClose behavior |
+| Displays lot number, part name, current expiry as read-only | `screen.getByText('LOT123')`, etc. |
+| Defaults days input to 7 | `screen.getByRole('spinbutton')` has value "7" |
+| Computes new expiry date when days change | `fireEvent.change(input, { target: { value: '14' } })` → new date text updates |
+| Shows confirmation summary on Extend click | `fireEvent.click(extendBtn)` → confirmation text appears |
+| Returns to form on Back click from confirmation | Back button → form fields visible again |
+| Calls extend mutation on Confirm | `fireEvent.click(confirmBtn)` → `fetch` called with correct body |
+| Shows success message after API success | `waitFor` → "Extended successfully" text |
+| Shows error with retry option after API failure | Mock fetch rejection → error text + Retry button |
+| Disables form inputs during submission | Buttons + input disabled while `isPending` |
 
 **`client/src/components/modals/BulkExtendModal.test.tsx`**
 
+Needs `queryClientWrapper`. Uses factory helper for mock rows:
+
+```ts
+const makeRows = (count: number) => Array.from({ length: count }, (_, i) => ({
+  serialName: `LOT${i}`, partNumber: `PART${i}`, partDescription: `Desc ${i}`,
+  expiryDate: '2026-04-15T00:00:00Z', status: i % 2 === 0 ? 'expired' : '',
+}));
+```
+
 | Test Case | What it verifies |
 |-----------|-----------------|
-| Renders all rows from props | Row list |
-| Select all checkbox selects/deselects all | Bulk selection |
-| Individual checkbox toggles one row | Single selection |
-| Submit button shows selected count | "Extend 5 items" |
-| Submit button disabled when none selected | Validation |
-| Days input shared across all items | Shared days |
-| New expiry column updates when days change | Live calculation |
-| Shows spinner during bulk submission | "Extending X items..." |
-| Shows partial success summary | "10/12 succeeded, 2 failed" |
-| Applies status row colors | Visual styling |
+| Renders all rows from props | `screen.getAllByRole('checkbox')` has correct length |
+| Select all checkbox selects all rows | `fireEvent.click(selectAll)` → all checkboxes checked |
+| Select all checkbox deselects all when all selected | Toggle behavior |
+| Individual checkbox toggles one row | Single checkbox click |
+| Submit button shows selected count | "Extend 5 items" text |
+| Submit button disabled when none selected | `expect(button).toBeDisabled()` |
+| Days input defaults to 7 and is shared | Single input, value "7" |
+| New expiry column updates when days change | Change days → all computed dates update |
+| Shows spinner during submission | `fireEvent.click(submitBtn)` → spinner visible |
+| Shows partial success/failure summary | Mock mixed results → "10/12 succeeded" text |
+| Applies expired row background color | Check className contains `bg-red-50` for expired rows |
 
 ### 11.3 Server Tests
 
 **`server/src/routes/extend.test.ts`**
 
-First server-side test file. Uses `supertest` (already in devDependencies) + mocked Priority API calls.
+First server-side test file. Uses Zod schema validation tests (unit) + mocked Priority API functions (integration). `supertest` available in devDependencies for endpoint-level tests.
 
 | Test Case | What it verifies |
 |-----------|-----------------|
-| Rejects invalid body (missing items) | Zod validation — 400 |
-| Rejects invalid serialName (injection chars) | OData injection prevention — 400 |
-| Rejects days outside 1-365 range | Range validation — 400 |
-| Processes single item successfully | Happy path — 200 |
-| Handles EXPDSERIAL 404 gracefully | Lot not found — partial failure |
-| Handles PATCH failure gracefully | Priority error — partial failure |
-| Returns per-item results | Response shape |
-| Processes multiple items sequentially | Bulk flow |
+| Rejects empty body | `ExtendRequestSchema.safeParse({})` → `success: false` |
+| Rejects invalid serialName with injection chars | `safeParse({ items: [{ serialName: "'; DROP--", days: 7 }] })` → `success: false` |
+| Accepts valid serialName with spaces/hyphens | `safeParse({ items: [{ serialName: "LOT 123-A", days: 7 }] })` → `success: true` |
+| Rejects days = 0 or negative | Range validation |
+| Rejects days > 365 | Range validation |
+| Rejects more than 100 items | Array max length |
+| Processes single item — GET lookup + PATCH write | Mock `httpsGet` + `httpsPatch`, verify both called with correct URLs |
+| Returns `success: false` when EXPDSERIAL returns 404 | Mock 404 response → item in results has `success: false` |
+| Returns `success: false` when PATCH fails | Mock PATCH error → item has `error` message from `extractErrorMessage` |
+| Processes multiple items and returns per-item results | 3 items (2 success, 1 fail) → results array has 3 entries |
+| Uses ISO 8601 date format with Z suffix | Verify PATCH body contains `"2026-04-22T00:00:00Z"` format |
 
-**Mocking approach:** Mock the Priority API fetch function (the existing `fetchWithRetry` or equivalent). No real API calls in tests.
+**Mocking approach:** Mock `httpsGet` and `httpsPatch` from `priorityHttp.ts` via `vi.mock('../services/priorityHttp')`. No real Priority API calls in tests.
+
+**`server/src/services/priorityHttp.test.ts`** (new — for the `httpsPatch` function)
+
+| Test Case | What it verifies |
+|-----------|-----------------|
+| Sends PATCH method with JSON body | Correct `https.request` options |
+| Includes IEEE754Compatible header | Required header present |
+| Includes Basic Auth header | Auth from `getPriorityConfig()` |
+| Returns parsed JSON response | Response body parsing |
+| Handles non-2xx status codes | Error propagation |
 
 ### 11.4 Test Count Target
 
 | Area | Test files | Estimated cases |
 |------|-----------|----------------|
-| Hooks | 1 | ~7 |
-| Components | 4 | ~30 |
-| Server | 1 | ~8 |
-| **Total** | **6** | **~45** |
+| Hooks | 2 | ~14 |
+| Components | 4 | ~35 |
+| Server | 2 | ~16 |
+| **Total** | **8** | **~65** |
 
 ## 12. File Summary
 
-### New Files (8)
+### New Files (10)
 
 | File | Lines (est.) | Purpose |
 |------|-------------|---------|
@@ -458,19 +586,21 @@ First server-side test file. Uses `supertest` (already in devDependencies) + moc
 | `client/src/components/modals/ExtendExpiryModal.tsx` | ~150 | Single-row extend form + confirmation + state machine |
 | `client/src/components/modals/BulkExtendModal.tsx` | ~180 | Multi-select list + shared days + progress tracking |
 | `client/src/components/cells/ExpiryDateCell.tsx` | ~30 | Custom cell renderer — date + Extend button |
-| `client/src/hooks/useExtendExpiry.ts` | ~50 | TanStack mutation hook for extend API |
+| `client/src/hooks/useExtendExpiry.ts` | ~50 | TanStack mutation hook for extend API (`useMutation` from TanStack Query v5) |
+| `client/src/hooks/useBBDExtend.ts` | ~60 | BBD-specific extend orchestration — modal state, cellRenderers, callbacks. Extracted to keep ReportTableWidget under 200 lines. |
 | `server/src/routes/extend.ts` | ~120 | POST endpoint — lookup + deep PATCH flow |
-| 6 test files | ~350 total | TDD test suite (see Section 11) |
+| 6 test files | ~400 total | TDD test suite (see Section 11) |
 
-### Modified Files (5)
+### Modified Files (6)
 
 | File | Change |
 |------|--------|
 | `server/src/reports/bbdReport.ts` | Add `serialName` column at index 0, add excel width |
-| `client/src/components/ReportTable.tsx` | Support `cellRenderers` prop — check before `formatCellValue()` |
+| `client/src/components/ReportTable.tsx` | Accept `cellRenderers` prop, thread it through to `ExpandableRow`. In the `columns.map` cell render loop, check `cellRenderers?.[col.key]` before calling `formatCellValue()`. If custom renderer exists, skip `isNegative` class (renderer owns its styling). |
 | `client/src/components/widgets/ReportTableWidget.tsx` | Modal state, cell renderer registration, toolbar callback, modal rendering |
 | `client/src/components/TableToolbar.tsx` | Add `onBulkExtend` prop + Extend button |
-| `server/src/routes/reports.ts` | Import and mount extend route |
+| `server/src/index.ts` | Mount extend route: `app.use('/api/v1/reports', createExtendRouter())` — same pattern as `createSubformRouter()` (no cache param) |
+| `server/src/services/priorityHttp.ts` | Add `httpsPatch(url, body)` function for PATCH requests |
 
 ## 13. Edge Cases
 
@@ -484,7 +614,7 @@ Must be a positive integer 1–365. Client-side: `type="number"` with `min`/`max
 If someone extends the same lot in Priority while the modal is open, the server-side flow uses the latest EXPIRYDATE from the lookup (step 1), so the extension is based on current state — not stale modal data.
 
 **Rate limiting:**
-Bulk extend with many items could approach Priority's 100 calls/min limit (2 calls per item). Sequential processing with 200ms delay keeps us safe up to ~50 items. The Zod schema caps at 100 items max.
+Bulk extend with many items could approach Priority's 100 calls/min limit (2 calls per item). The existing `priorityRateLimit.ts` enforces `MIN_SPACING_MS = 200` automatically for every `fetchWithRetry` call — no manual delay needed. The Zod schema caps at 100 items max (200 API calls). At 200ms spacing, 200 calls = ~40 seconds, well under the rate limit.
 
 **Modal interaction guards:**
 - Backdrop click and Escape disabled during `submitting` state (`preventClose=true`)
@@ -500,7 +630,7 @@ If no BBD data is loaded, the bulk Extend button is still visible but the modal 
 
 **Single-row extend:** 2 API calls (GET + PATCH) — completes in <2 seconds.
 
-**Bulk extend (50 items):** 100 API calls at ~300ms each = ~30 seconds. Progress indicator keeps the user informed. No parallel calls to avoid Priority rate limit issues.
+**Bulk extend (50 items):** 100 API calls. Rate limiting handled automatically by `priorityRateLimit.ts` (200ms minimum spacing). ~20 seconds total. Spinner + "Extending..." keeps the user informed. No parallel calls.
 
 **Table refresh:** TanStack Query invalidation triggers a single refetch of the BBD report data. The cache is invalidated only on success.
 
