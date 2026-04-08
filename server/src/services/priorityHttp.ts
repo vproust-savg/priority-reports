@@ -4,7 +4,7 @@
 //          https module (not undici fetch) because Priority's CloudFront
 //          terminates undici connections mid-response on some queries.
 // USED BY: services/priorityClient.ts
-// EXPORTS: fetchWithRetry, patchWithRetry, extractErrorMessage, HttpsResponse
+// EXPORTS: fetchWithRetry, postWithRetry, patchWithRetry, extractErrorMessage, HttpsResponse
 // ═══════════════════════════════════════════════════════════════
 
 import https from 'node:https';
@@ -131,6 +131,35 @@ export async function fetchWithRetry(url: string, attempt = 0, maxRetries = 3): 
     console.warn(`[priority] Server error ${response.status} (${errMsg}) — retrying once`);
     await new Promise((resolve) => setTimeout(resolve, 500));
     return fetchWithRetry(url, attempt + 1, 1);
+  }
+
+  return response;
+}
+
+// WHY: Same retry logic as fetchWithRetry but for POST requests.
+// Used by the extend endpoint to create subform records in Priority.
+export async function postWithRetry(url: string, body: unknown, attempt = 0, maxRetries = 3): Promise<HttpsResponse> {
+  await rateLimitDelay();
+
+  const response = await httpsRequest(url, 'POST', body);
+
+  if (response.status === 401) {
+    throw new Error('Priority auth failed — check credentials');
+  }
+
+  if (response.status === 429 && attempt < maxRetries) {
+    const errMsg = extractErrorMessage(response.body);
+    const delay = Math.pow(2, attempt) * 1000;
+    console.warn(`[priority] Rate limited on POST (${errMsg}) — retry ${attempt + 1}/${maxRetries} after ${delay}ms`);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    return postWithRetry(url, body, attempt + 1, maxRetries);
+  }
+
+  if (response.status >= 500 && attempt < 1) {
+    const errMsg = extractErrorMessage(response.body);
+    console.warn(`[priority] Server error ${response.status} on POST (${errMsg}) — retrying once`);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return postWithRetry(url, body, attempt + 1, 1);
   }
 
   return response;

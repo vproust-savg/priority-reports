@@ -10,7 +10,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { getPriorityConfig } from '../config/priority';
-import { fetchWithRetry, patchWithRetry, extractErrorMessage } from '../services/priorityHttp';
+import { fetchWithRetry, postWithRetry, extractErrorMessage } from '../services/priorityHttp';
 
 const ExtendRequestSchema = z.object({
   items: z.array(z.object({
@@ -61,19 +61,19 @@ async function processExtendItem(
   // Step 2: Calculate new expiry date
   const newExpiryDate = addDaysToDate(currentExpiryDate, days);
 
-  // Step 3: Deep PATCH — create EXPDEXT record via parent
-  const patchUrl = `${baseUrl}EXPDSERIAL(SERIALNAME='${escapedName}')`;
-  const patchBody = {
-    EXPDEXT_SUBFORM: [{
-      RENEWDATE: currentExpiryDate,
-      EXPIRYDATE: newExpiryDate,
-    }],
+  // Step 3: POST new extension record via subform navigation
+  // WHY: Direct PATCH on EXPDSERIAL fails with "insufficient form privileges".
+  // Priority requires navigating to the subform collection and POSTing there.
+  const postUrl = `${baseUrl}EXPDSERIAL(SERIALNAME='${escapedName}')/EXPDEXT_SUBFORM`;
+  const postBody = {
+    RENEWDATE: currentExpiryDate,
+    EXPIRYDATE: newExpiryDate,
   };
 
-  const patchResponse = await patchWithRetry(patchUrl, patchBody);
+  const postResponse = await postWithRetry(postUrl, postBody);
 
-  if (patchResponse.status < 200 || patchResponse.status >= 300) {
-    const msg = extractErrorMessage(patchResponse.body);
+  if (postResponse.status < 200 || postResponse.status >= 300) {
+    const msg = extractErrorMessage(postResponse.body);
     return { serialName, success: false, error: `Extension failed: ${msg}` };
   }
 
