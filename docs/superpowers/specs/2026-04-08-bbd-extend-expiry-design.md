@@ -4,10 +4,11 @@
 
 The BBD (Best By Dates) report shows raw material lots nearing or past expiration. Currently it's read-only — users identify expired lots but must switch to Priority ERP to extend expiration dates. This creates friction and delays, especially when extending multiple lots.
 
-**Goal:** Add three capabilities to the BBD report:
+**Goal:** Add four capabilities to the BBD report:
 1. **Lot Number column** — make the lot identifier (SERIALNAME) visible as the first table column
-2. **Per-row Extend button** — inline "Extend" button next to each expiry date, opening a modal to extend that single lot
-3. **Bulk Extend button** — toolbar button opening a modal to select and extend multiple lots at once
+2. **Days Extended column** — show total days each lot has been extended, fetched from EXPDSERIAL/EXPDEXT subform
+3. **Per-row Extend button** — inline "Extend" button next to each expiry date, opening a modal to extend that single lot
+4. **Bulk Extend button** — toolbar button opening a modal to select and extend multiple lots at once
 
 This is the dashboard's **first write operation** to Priority ERP. All previous features are read-only.
 
@@ -29,7 +30,65 @@ This is the dashboard's **first write operation** to Priority ERP. All previous 
 
 **File:** `server/src/reports/bbdReport.ts`
 
-## 3. Per-Row Extend Button (ExpiryDateCell)
+## 3. Days Extended Column
+
+**Purpose:** Show the total number of days each lot has been extended via the EXPDEXT subform. Gives users immediate visibility into extension history without leaving the table.
+
+**Column definition:**
+- Key: `daysExtended`
+- Label: `Days Ext.`
+- Type: `number`
+- Position: after Expiry Date, before Days Left
+
+**Calculation:** Sum of `(EXPIRYDATE - RENEWDATE)` in days across all EXPDEXT records for each lot. E.g., extended 7 days twice = 14 total.
+
+**Data source — batch fetch from EXPDSERIAL:**
+
+The BBD report queries `RAWSERIAL`, but extension data lives in `EXPDSERIAL` (a different entity). After the main RAWSERIAL fetch, make a single additional API call:
+
+```
+GET /EXPDSERIAL?$select=SERIALNAME&$expand=EXPDEXT_SUBFORM($select=RENEWDATE,EXPIRYDATE)&$top=2000
+```
+
+**Critical per `/priority-erp-api`:**
+- Always use nested `$select` inside `$expand` — without it, payloads inflate 72x and risk timeout (Section 6)
+- Append `$expand` raw to the URL string — do NOT use `URL.searchParams.set()` which form-encodes `(` → `%28` and breaks Priority's OData parser (Section 16)
+- `$expand` on EXPDSERIAL works fine — only DOCUMENTS_P is known to have `$expand` issues (Section 16)
+- Include `Prefer: odata.maxpagesize=49900` header (already set by `httpsGet`)
+
+**Enrichment pattern:**
+
+```ts
+// 1. Fetch all EXPDSERIAL with their extension subform records
+const expdResponse = await fetchWithRetry(expdserialUrl);
+const expdRecords = JSON.parse(expdResponse.body).value ?? [];
+
+// 2. Build lookup map: serialName → totalDaysExtended
+const extensionMap = new Map<string, number>();
+for (const record of expdRecords) {
+  const extensions = record.EXPDEXT_SUBFORM ?? [];
+  const totalDays = extensions.reduce((sum: number, ext: { RENEWDATE: string; EXPIRYDATE: string }) => {
+    const renewDate = new Date(ext.RENEWDATE).getTime();
+    const newExpiry = new Date(ext.EXPIRYDATE).getTime();
+    const days = Math.round((newExpiry - renewDate) / (1000 * 60 * 60 * 24));
+    return sum + (days > 0 ? days : 0);  // Guard against negative values
+  }, 0);
+  extensionMap.set(record.SERIALNAME.trim(), totalDays);
+}
+
+// 3. In transformRow, look up from the map
+daysExtended: extensionMap.get(raw.SERIALNAME?.trim()) ?? 0
+```
+
+**Display:** Lots with no extensions show `0`. Lots not found in EXPDSERIAL also show `0` (they were never registered for expiry tracking — no data is missing, there simply are no extensions).
+
+**Performance:** One additional API call during report fetch. EXPDSERIAL typically has fewer records than RAWSERIAL (only lots with expiry tracking). The `$expand` with nested `$select` keeps the payload minimal (~2 fields per subform record).
+
+**Excel export:** Add `daysExtended: 8` to `excelStyle.columnWidths`.
+
+**File:** `server/src/reports/bbdReport.ts`
+
+## 4. Per-Row Extend Button (ExpiryDateCell)
 
 **Placement:** Inline in the Expiry Date cell, right of the formatted date value.
 
@@ -54,7 +113,7 @@ Currently, `formatCellValue()` returns `{ formatted: string, isNegative: boolean
 
 **File:** `client/src/components/cells/ExpiryDateCell.tsx`
 
-## 4. Toolbar Extend Button
+## 5. Toolbar Extend Button
 
 **Placement:** In `TableToolbar`, right side, before the Export button. Inside the `ml-auto` flex group.
 
@@ -72,7 +131,7 @@ Currently, `formatCellValue()` returns `{ formatted: string, isNegative: boolean
 
 **File:** `client/src/components/TableToolbar.tsx`
 
-## 5. Modal Base Component
+## 6. Modal Base Component
 
 **First modal in the codebase** — establishes a reusable pattern for future write operations.
 
@@ -101,7 +160,7 @@ interface ModalProps {
 
 **File:** `client/src/components/modals/Modal.tsx`
 
-## 6. ExtendExpiryModal (Single Row)
+## 7. ExtendExpiryModal (Single Row)
 
 **Opened by:** Per-row "Extend" button in ExpiryDateCell.
 
@@ -138,7 +197,7 @@ interface ExtendExpiryModalProps {
 
 **File:** `client/src/components/modals/ExtendExpiryModal.tsx`
 
-## 7. BulkExtendModal (Multi Row)
+## 8. BulkExtendModal (Multi Row)
 
 **Opened by:** Toolbar "Extend" button.
 
@@ -184,7 +243,7 @@ interface BulkExtendModalProps {
 
 **File:** `client/src/components/modals/BulkExtendModal.tsx`
 
-## 8. useExtendExpiry Hook
+## 9. useExtendExpiry Hook
 
 **Purpose:** TanStack mutation hook wrapping the backend API call. Used by both modals.
 
@@ -236,7 +295,7 @@ const createTestQueryClient = () => new QueryClient({
 
 **File:** `client/src/hooks/useExtendExpiry.ts`
 
-## 9. Backend Endpoint
+## 10. Backend Endpoint
 
 **Route:** `POST /api/v1/reports/bbd/extend`
 
@@ -305,7 +364,7 @@ const ExtendRequestSchema = z.object({
 
 **File:** `server/src/routes/extend.ts`
 
-## 10. Integration in ReportTableWidget
+## 11. Integration in ReportTableWidget
 
 **Line count concern:** `ReportTableWidget.tsx` is already 227 lines (over the CLAUDE.md 200-line limit). Adding modal state + cellRenderers + callbacks would push it to ~269 lines. **Solution:** Extract a `useBBDExtend` hook that owns all BBD-specific write logic.
 
@@ -375,11 +434,11 @@ const cellRenderers = useMemo(() => {
 
 **File:** `client/src/components/widgets/ReportTableWidget.tsx`
 
-## 11. TDD Testing Strategy
+## 12. TDD Testing Strategy
 
 Tests are written **before** implementation (red-green-refactor). Each test file covers one unit. Patterns follow exactly the existing codebase conventions discovered in `useSortManager.test.ts`, `TableToolbar.test.tsx`, `SortPanel.test.tsx`, and `SortRuleRow.test.tsx`.
 
-### 11.0 Test Infrastructure & Patterns
+### 12.0 Test Infrastructure & Patterns
 
 **Imports (client component tests):**
 ```ts
@@ -439,7 +498,7 @@ render(<Component {...defaultProps} propOverride={value} />);
 
 **Note:** `@testing-library/user-event` is NOT installed. Use `fireEvent` for all interactions.
 
-### 11.1 Hook Tests
+### 12.1 Hook Tests
 
 **`client/src/hooks/useExtendExpiry.test.ts`**
 
@@ -469,7 +528,7 @@ Uses `renderHook` + `waitFor` + mock `fetch` + `QueryClientProvider` wrapper. Fi
 | Returns `cellRenderers` with `expiryDate` key when reportId is 'bbd' | BBD-specific renderer |
 | Returns `undefined` cellRenderers when reportId is not 'bbd' | Non-BBD reports unaffected |
 
-### 11.2 Component Tests
+### 12.2 Component Tests
 
 **`client/src/components/cells/ExpiryDateCell.test.tsx`**
 
@@ -535,7 +594,7 @@ const makeRows = (count: number) => Array.from({ length: count }, (_, i) => ({
 | Shows partial success/failure summary | Mock mixed results → "10/12 succeeded" text |
 | Applies expired row background color | Check className contains `bg-red-50` for expired rows |
 
-### 11.3 Server Tests
+### 12.3 Server Tests
 
 **`server/src/routes/extend.test.ts`**
 
@@ -557,6 +616,20 @@ First server-side test file. Uses Zod schema validation tests (unit) + mocked Pr
 
 **Mocking approach:** Mock `httpsGet` and `httpsPatch` from `priorityHttp.ts` via `vi.mock('../services/priorityHttp')`. No real Priority API calls in tests.
 
+**`server/src/reports/bbdReport.test.ts`** (new — for the enrichment/extension map logic)
+
+| Test Case | What it verifies |
+|-----------|-----------------|
+| Builds extension map from EXPDSERIAL response | Map has correct serialName → totalDays entries |
+| Calculates total days from multiple EXPDEXT records | 7 + 14 = 21 total days |
+| Returns 0 for lots with empty EXPDEXT_SUBFORM | No extensions → 0 |
+| Handles missing EXPDEXT_SUBFORM gracefully | `undefined` subform → 0 |
+| Guards against negative day values | If RENEWDATE > EXPIRYDATE, ignores (adds 0) |
+| Trims SERIALNAME for map lookup | `"LOT123 "` matches `"LOT123"` |
+| Returns empty map when EXPDSERIAL fetch returns no records | Graceful empty state |
+
+**Mocking approach:** Extract the enrichment logic into a testable pure function `buildExtensionMap(expdRecords)`. Test it directly without API mocking.
+
 **`server/src/services/priorityHttp.test.ts`** (new — for the `httpsPatch` function)
 
 | Test Case | What it verifies |
@@ -567,16 +640,16 @@ First server-side test file. Uses Zod schema validation tests (unit) + mocked Pr
 | Returns parsed JSON response | Response body parsing |
 | Handles non-2xx status codes | Error propagation |
 
-### 11.4 Test Count Target
+### 12.4 Test Count Target
 
 | Area | Test files | Estimated cases |
 |------|-----------|----------------|
 | Hooks | 2 | ~14 |
 | Components | 4 | ~35 |
-| Server | 2 | ~16 |
-| **Total** | **8** | **~65** |
+| Server | 3 | ~23 |
+| **Total** | **9** | **~72** |
 
-## 12. File Summary
+## 13. File Summary
 
 ### New Files (10)
 
@@ -602,7 +675,7 @@ First server-side test file. Uses Zod schema validation tests (unit) + mocked Pr
 | `server/src/index.ts` | Mount extend route: `app.use('/api/v1/reports', createExtendRouter())` — same pattern as `createSubformRouter()` (no cache param) |
 | `server/src/services/priorityHttp.ts` | Add `httpsPatch(url, body)` function for PATCH requests |
 
-## 13. Edge Cases
+## 14. Edge Cases
 
 **EXPDSERIAL lookup fails (404):**
 The lot exists in RAWSERIAL but not in EXPDSERIAL — it was never set up for expiry tracking in Priority. Per-row modal shows error message. Bulk modal marks that item as failed, continues processing others.
@@ -626,7 +699,7 @@ Bulk extend with many items could approach Priority's 100 calls/min limit (2 cal
 **Empty table:**
 If no BBD data is loaded, the bulk Extend button is still visible but the modal shows an empty list. No special handling needed.
 
-## 14. Performance
+## 15. Performance
 
 **Single-row extend:** 2 API calls (GET + PATCH) — completes in <2 seconds.
 
@@ -636,22 +709,28 @@ If no BBD data is loaded, the bulk Extend button is still visible but the modal 
 
 **Modal rendering:** Portal-rendered via `createPortal` — no performance impact on the table. Framer Motion animations use `will-change: transform` for GPU acceleration.
 
-## 15. Priority API Reference
+## 16. Priority API Reference
 
 **Entities used:**
 
 | Entity | Purpose | Key | Access |
 |--------|---------|-----|--------|
-| `EXPDSERIAL` | Expiration date tracking | `SERIALNAME` (string) | GET (lookup) + PATCH (write) |
-| `EXPDEXT` | Extension history subform | `KLINE` (int, auto) | Via deep PATCH on parent |
+| `EXPDSERIAL` | Expiration date tracking | `SERIALNAME` (string) | GET (lookup + enrichment) + PATCH (write) |
+| `EXPDEXT` | Extension history subform | `KLINE` (int, auto) | Read via `$expand` on parent, write via deep PATCH |
 
 **EXPDSERIAL fields used:**
 - `SERIALNAME` — lot identifier (key)
 - `EXPIRYDATE` — current expiration date
 
-**EXPDEXT fields written:**
+**EXPDEXT fields read (for Days Extended column):**
+- `RENEWDATE` — renewal date (old expiry)
+- `EXPIRYDATE` — new expiry date after extension
+
+**EXPDEXT fields written (for extend operation):**
 - `RENEWDATE` — the date we're renewing from (= current EXPIRYDATE)
 - `EXPIRYDATE` — the new expiration date (= RENEWDATE + days)
+
+**Read pattern (enrichment):** `$expand=EXPDEXT_SUBFORM($select=RENEWDATE,EXPIRYDATE)` on the parent EXPDSERIAL query. Always use nested `$select` (per `/priority-erp-api` Section 6). Append `$expand` raw to URL string — do NOT use `URL.searchParams.set()` (per `/priority-erp-api` Section 16).
 
 **Write pattern:** Deep PATCH on parent (Pattern C from `/priority-erp-api` Section 7). This is the safest approach — works regardless of subform key type. Priority auto-fills `PREVEXPIRYDATE`, `USERLOGIN`, `UDATE`, and `KLINE`.
 
@@ -659,7 +738,7 @@ If no BBD data is loaded, the bulk Extend button is still visible but the modal 
 
 **Headers:** `Content-Type: application/json`, `IEEE754Compatible: true`, HTTP Basic Auth.
 
-## 16. Exclusions
+## 17. Exclusions
 
 - **No date picker for RENEWDATE** — always uses current EXPIRYDATE from Priority (prevents user from entering arbitrary renewal dates)
 - **No undo/rollback** — extension history is maintained by Priority in EXPDEXT subform but we don't expose a "revert" action
