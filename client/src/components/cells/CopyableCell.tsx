@@ -13,13 +13,44 @@ interface CopyableCellProps {
   onCopy: (value: string) => void;
 }
 
+// WHY: navigator.clipboard.writeText() fails silently inside iframes (Airtable Omni embed)
+// without the clipboard-write permission. This fallback uses a temporary textarea + execCommand.
+function execCommandCopy(text: string): boolean {
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  // Try modern Clipboard API first (works on direct HTTPS, may work in some iframes)
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch { /* fall through to execCommand */ }
+  }
+  // Fallback for restricted iframe contexts
+  return execCommandCopy(text);
+}
+
 export default function CopyableCell({ value, onCopy }: CopyableCellProps) {
   return (
     <button
       onClick={(e) => {
         e.stopPropagation();
-        navigator.clipboard.writeText(value);
-        onCopy(value);
+        copyToClipboard(value).then((ok) => {
+          if (ok) onCopy(value);
+        });
       }}
       className="group/copy flex items-center gap-1.5 hover:text-primary transition-colors"
       title="Click to copy"
