@@ -4,7 +4,7 @@
 //          https module (not undici fetch) because Priority's CloudFront
 //          terminates undici connections mid-response on some queries.
 // USED BY: services/priorityClient.ts
-// EXPORTS: fetchWithRetry, extractErrorMessage, HttpsResponse
+// EXPORTS: fetchWithRetry, patchWithRetry, extractErrorMessage, HttpsResponse
 // ═══════════════════════════════════════════════════════════════
 
 import https from 'node:https';
@@ -43,6 +43,42 @@ function httpsGet(url: string): Promise<HttpsResponse> {
 
     req.on('error', reject);
     req.on('timeout', () => { req.destroy(new Error('Request timed out')); });
+  });
+}
+
+// WHY: Extend endpoint needs PATCH support. Uses https.request (not https.get)
+// to send a JSON body with PATCH method. Same auth + headers as httpsGet.
+function httpsRequest(url: string, method: string, body: unknown): Promise<HttpsResponse> {
+  const config = getPriorityConfig();
+  const auth = Buffer.from(`${config.username}:${config.password}`).toString('base64');
+  const jsonBody = JSON.stringify(body);
+
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(url);
+    const req = https.request({
+      hostname: parsedUrl.hostname,
+      path: parsedUrl.pathname + parsedUrl.search,
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'IEEE754Compatible': 'true',
+        'Authorization': `Basic ${auth}`,
+        'Content-Length': Buffer.byteLength(jsonBody),
+      },
+      timeout: 30_000,
+    }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk: Buffer) => chunks.push(chunk));
+      res.on('end', () => {
+        resolve({ status: res.statusCode ?? 500, body: Buffer.concat(chunks).toString('utf-8') });
+      });
+      res.on('error', reject);
+    });
+
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(new Error('Request timed out')); });
+    req.write(jsonBody);
+    req.end();
   });
 }
 
@@ -95,6 +131,35 @@ export async function fetchWithRetry(url: string, attempt = 0, maxRetries = 3): 
     console.warn(`[priority] Server error ${response.status} (${errMsg}) — retrying once`);
     await new Promise((resolve) => setTimeout(resolve, 500));
     return fetchWithRetry(url, attempt + 1, 1);
+  }
+
+  return response;
+}
+
+// WHY: Same retry logic as fetchWithRetry but for PATCH requests.
+// Used by the extend endpoint to write to Priority.
+export async function patchWithRetry(url: string, body: unknown, attempt = 0, maxRetries = 3): Promise<HttpsResponse> {
+  await rateLimitDelay();
+
+  const response = await httpsRequest(url, 'PATCH', body);
+
+  if (response.status === 401) {
+    throw new Error('Priority auth failed — check credentials');
+  }
+
+  if (response.status === 429 && attempt < maxRetries) {
+    const errMsg = extractErrorMessage(response.body);
+    const delay = Math.pow(2, attempt) * 1000;
+    console.warn(`[priority] Rate limited on PATCH (${errMsg}) — retry ${attempt + 1}/${maxRetries} after ${delay}ms`);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    return patchWithRetry(url, body, attempt + 1, maxRetries);
+  }
+
+  if (response.status >= 500 && attempt < 1) {
+    const errMsg = extractErrorMessage(response.body);
+    console.warn(`[priority] Server error ${response.status} on PATCH (${errMsg}) — retrying once`);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return patchWithRetry(url, body, attempt + 1, 1);
   }
 
   return response;
