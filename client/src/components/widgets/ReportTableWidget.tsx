@@ -15,6 +15,7 @@ import { useFilterState } from '../../hooks/useFilterState';
 import { useColumnManager } from '../../hooks/useColumnManager';
 import { useSortManager } from '../../hooks/useSortManager';
 import { useExport } from '../../hooks/useExport';
+import { useBBDExtend } from '../../hooks/useBBDExtend';
 import { AnimatePresence, motion } from 'framer-motion';
 import { PANEL_FADE } from '../../config/animationConstants';
 import TableToolbar from '../TableToolbar';
@@ -27,6 +28,8 @@ import Toast from '../Toast';
 import LoadingToast from '../LoadingToast';
 import EmptyState from '../EmptyState';
 import ErrorState from '../ErrorState';
+import ExtendExpiryModal from '../modals/ExtendExpiryModal';
+import BulkExtendModal from '../modals/BulkExtendModal';
 import { countActiveFilters } from '../../config/filterConstants';
 import { getDetailComponent } from '../../config/detailRegistry';
 
@@ -67,6 +70,11 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const { isExporting, toast, clearToast, triggerExport } = useExport(
     reportId, debouncedGroup, visibleColumnKeys,
   );
+
+  const {
+    extendModal, cellRenderers, handleBulkExtend, handleExtendSuccess, closeModal,
+  } = useBBDExtend(reportId);
+
   const filterLoadError = filtersQuery.error;
 
   // --- Refresh logic ---
@@ -127,8 +135,8 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         onExport={triggerExport}
         isRefreshing={isRefreshing}
         onRefresh={handleRefresh}
+        onBulkExtend={reportId === 'bbd' ? handleBulkExtend : undefined}
       />
-
       <AnimatePresence>
         {isFilterOpen && (
           <motion.div key="filter-panel" {...PANEL_FADE}>
@@ -142,7 +150,6 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
           </motion.div>
         )}
       </AnimatePresence>
-
       <AnimatePresence>
         {isColumnPanelOpen && (
           <motion.div key="column-panel" {...PANEL_FADE}>
@@ -156,7 +163,6 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
           </motion.div>
         )}
       </AnimatePresence>
-
       <AnimatePresence>
         {isSortPanelOpen && (
           <motion.div key="sort-panel" {...PANEL_FADE}>
@@ -172,25 +178,20 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
           </motion.div>
         )}
       </AnimatePresence>
-
       {filterLoadError && (
         <div className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-red-700 bg-red-50/80 border border-red-200/60 rounded-lg">
           <AlertTriangle size={14} className="shrink-0 text-red-500" />
           <span>Failed to load filter options. Try refreshing the page.</span>
         </div>
       )}
-
       {data?.warnings && data.warnings.length > 0 && data.warnings.map((msg, i) => (
         <div key={`warn-${i}`} className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-amber-700 bg-amber-50/80 border border-amber-200/60 rounded-lg">
           <AlertTriangle size={14} className="shrink-0 text-amber-500" />
           <span>{msg}</span>
         </div>
       ))}
-
       {query.isLoading && <LoadingToast />}
-
       {query.error && <ErrorState onRetry={() => query.refetch()} />}
-
       {!query.isLoading && !query.error && displayData.length === 0 && <EmptyState />}
 
       {!query.isLoading && displayData.length > 0 && (
@@ -206,6 +207,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
             } : undefined}
             expandedRows={expandedRows}
             onToggleExpand={toggleExpand}
+            cellRenderers={cellRenderers}
           />
           <Pagination
             page={page}
@@ -222,6 +224,27 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
           <Toast message={toast.message} variant={toast.variant} onDismiss={clearToast} />
         )}
       </AnimatePresence>
+
+      {extendModal?.type === 'single' && extendModal.row && (
+        <ExtendExpiryModal
+          isOpen
+          onClose={closeModal}
+          serialName={extendModal.row.serialName as string}
+          partName={extendModal.row.partNumber as string}
+          partDescription={extendModal.row.partDescription as string}
+          currentExpiryDate={extendModal.row.expiryDate as string}
+          onSuccess={handleExtendSuccess}
+        />
+      )}
+
+      {extendModal?.type === 'bulk' && (
+        <BulkExtendModal
+          isOpen
+          onClose={closeModal}
+          rows={sortedDisplayData}
+          onSuccess={handleExtendSuccess}
+        />
+      )}
     </>
   );
 }

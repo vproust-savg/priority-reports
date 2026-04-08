@@ -6,7 +6,7 @@
 // EXPORTS: TableToolbar
 // ═══════════════════════════════════════════════════════════════
 
-import { SlidersHorizontal, Columns3, ArrowUpDown, ChevronDown, Download, Loader2, RefreshCw } from 'lucide-react';
+import { SlidersHorizontal, Columns3, ArrowUpDown, ChevronDown, Download, Loader2, RefreshCw, CalendarClock } from 'lucide-react';
 
 interface TableToolbarProps {
   activeFilterCount: number;
@@ -22,6 +22,7 @@ interface TableToolbarProps {
   onExport: () => void;
   isRefreshing?: boolean;
   onRefresh?: () => void;
+  onBulkExtend?: () => void;
 }
 
 export default function TableToolbar({
@@ -30,6 +31,7 @@ export default function TableToolbar({
   sortCount, isSortPanelOpen, onSortToggle,
   isExporting, onExport,
   isRefreshing, onRefresh,
+  onBulkExtend,
 }: TableToolbarProps) {
   const hasFilters = activeFilterCount > 0;
   const hasHiddenColumns = hiddenColumnCount > 0;
@@ -90,6 +92,16 @@ export default function TableToolbar({
         >
           <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
         </button>
+
+        {onBulkExtend && (
+          <button
+            onClick={onBulkExtend}
+            className={`${baseClass} ${inactiveClass}`}
+          >
+            <CalendarClock size={16} />
+            <span>Extend</span>
+          </button>
+        )}
 
         <button
           onClick={onExport}

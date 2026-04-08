@@ -9,6 +9,7 @@
 
 import { ChevronRight } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import type { ReactNode } from 'react';
 import type { ColumnDefinition } from '@shared/types';
 import type { DetailComponent } from './details/types';
 import { formatCellValue } from '../utils/formatters';
@@ -39,11 +40,13 @@ interface ReportTableProps {
   expandConfig?: ExpandConfig;
   expandedRows?: Set<string>;
   onToggleExpand?: (rowKey: string) => void;
+  cellRenderers?: Record<string, (value: unknown, row: Record<string, unknown>) => ReactNode>;
 }
 
 export default function ReportTable({
   columns, data, rowStyleField,
   reportId, expandConfig, expandedRows, onToggleExpand,
+  cellRenderers,
 }: ReportTableProps) {
   const reduced = useReducedMotion();
   const isExpandable = !!(expandConfig && expandedRows && onToggleExpand);
@@ -98,6 +101,7 @@ export default function ReportTable({
                 expandConfig={expandConfig}
                 onToggleExpand={onToggleExpand}
                 reduced={reduced}
+                cellRenderers={cellRenderers}
               />
             );
           })}
@@ -122,12 +126,13 @@ interface ExpandableRowProps {
   expandConfig?: ExpandConfig;
   onToggleExpand?: (rowKey: string) => void;
   reduced: boolean;
+  cellRenderers?: Record<string, (value: unknown, row: Record<string, unknown>) => ReactNode>;
 }
 
 function ExpandableRow({
   row, columns, rowStyle, zebraClass, expandedClass,
   isExpandable, isExpanded, rowKey, reportId, expandConfig,
-  onToggleExpand, reduced,
+  onToggleExpand, reduced, cellRenderers,
 }: ExpandableRowProps) {
   const DetailComponent = expandConfig?.DetailComponent;
 
@@ -161,6 +166,14 @@ function ExpandableRow({
           </td>
         )}
         {columns.map((col) => {
+          const customRenderer = cellRenderers?.[col.key];
+          if (customRenderer) {
+            return (
+              <td key={col.key} className="px-5 py-3 text-slate-700 whitespace-nowrap">
+                {customRenderer(row[col.key], row)}
+              </td>
+            );
+          }
           const { formatted, isNegative } = formatCellValue(row[col.key], col.type);
           return (
             <td
