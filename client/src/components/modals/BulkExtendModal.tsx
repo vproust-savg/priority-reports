@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ChevronUp, ChevronDown } from 'lucide-react';
 import Modal from './Modal';
 import { useExtendExpiry } from '../../hooks/useExtendExpiry';
 import { formatCellValue } from '../../utils/formatters';
@@ -46,6 +46,9 @@ export default function BulkExtendModal({
   const [failedItems, setFailedItems] = useState<Array<{ serialName: string; error: string }>>([]);
   const { extend, reset } = useExtendExpiry();
 
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
   // WHY: Reset state when modal opens.
   useEffect(() => {
     if (isOpen) {
@@ -54,9 +57,38 @@ export default function BulkExtendModal({
       setState('idle');
       setResultSummary('');
       setFailedItems([]);
+      setSortKey(null);
+      setSortDir('asc');
       reset();
     }
   }, [isOpen, reset]);
+
+  const handleHeaderClick = (key: string) => {
+    if (sortKey === key) {
+      setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  };
+
+  const sortedRows = useMemo(() => {
+    if (!sortKey) return rows;
+    return [...rows].sort((a, b) => {
+      const aVal = a[sortKey];
+      const bVal = b[sortKey];
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
+      let cmp: number;
+      if (sortKey === 'expiryDate') {
+        cmp = new Date(aVal as string).getTime() - new Date(bVal as string).getTime();
+      } else {
+        cmp = String(aVal).localeCompare(String(bVal));
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [rows, sortKey, sortDir]);
 
   const allSerialNames = useMemo(
     () => rows.map((r) => r.serialName as string),
@@ -173,15 +205,29 @@ export default function BulkExtendModal({
                 <thead className="bg-slate-50 sticky top-0">
                   <tr className="text-left text-xs text-slate-500 uppercase tracking-wider">
                     <th className="px-3 py-2 w-8"></th>
-                    <th className="px-3 py-2">Lot Number</th>
-                    <th className="px-3 py-2">Part Number</th>
-                    <th className="px-3 py-2">Description</th>
-                    <th className="px-3 py-2">Current Expiry</th>
+                    {[
+                      { key: 'serialName', label: 'Lot Number' },
+                      { key: 'partNumber', label: 'Part Number' },
+                      { key: 'partDescription', label: 'Description' },
+                      { key: 'expiryDate', label: 'Current Expiry' },
+                    ].map((col) => (
+                      <th key={col.key} className="px-3 py-2">
+                        <button
+                          onClick={() => handleHeaderClick(col.key)}
+                          className="flex items-center gap-1 hover:text-slate-700 transition-colors"
+                        >
+                          {col.label}
+                          {sortKey === col.key && (sortDir === 'asc'
+                            ? <ChevronUp size={12} />
+                            : <ChevronDown size={12} />)}
+                        </button>
+                      </th>
+                    ))}
                     <th className="px-3 py-2">New Expiry</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => {
+                  {sortedRows.map((row) => {
                     const sn = row.serialName as string;
                     const status = row.status as string;
                     const { formatted: currentFmt } = formatCellValue(row.expiryDate, 'date');

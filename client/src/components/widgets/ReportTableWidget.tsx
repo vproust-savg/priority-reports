@@ -71,13 +71,16 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
     reportId, debouncedGroup, visibleColumnKeys,
   );
 
+  const [copyToast, setCopyToast] = useState<string | null>(null);
+  const handleCopy = useCallback((value: string) => {
+    setCopyToast(`Copied "${value}"`);
+  }, []);
+
   const {
     extendModal, cellRenderers, handleBulkExtend, handleExtendSuccess, closeModal,
-  } = useBBDExtend(reportId);
+  } = useBBDExtend(reportId, handleCopy);
 
   const filterLoadError = filtersQuery.error;
-
-  // --- Refresh logic ---
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const handleRefresh = async () => {
@@ -93,15 +96,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
 
   const data = query.data;
   const displayData = data?.data ?? [];
-
-  // WHY: Memoize so sorting only re-runs when data or sort rules change,
-  // not on every render (panel toggle, expand, toast dismiss, etc.).
-  const sortedDisplayData = useMemo(
-    () => sortedData(displayData),
-    [sortedData, displayData],
-  );
-
-  // --- Expand state ---
+  const sortedDisplayData = useMemo(() => sortedData(displayData), [sortedData, displayData]);
   const expandConfig = data?.meta?.expandConfig;
   const DetailComponent = expandConfig ? getDetailComponent(reportId) : null;
 
@@ -222,6 +217,11 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
       <AnimatePresence>
         {toast && (
           <Toast message={toast.message} variant={toast.variant} onDismiss={clearToast} />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {copyToast && (
+          <Toast message={copyToast} variant="success" onDismiss={() => setCopyToast(null)} />
         )}
       </AnimatePresence>
 
