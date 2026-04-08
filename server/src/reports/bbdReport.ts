@@ -13,10 +13,13 @@ import type { ODataParams } from '../services/priorityClient';
 import type { ReportFilters } from '../config/reportRegistry';
 import { reportRegistry } from '../config/reportRegistry';
 import { queryPriority } from '../services/priorityClient';
+import { fetchWithRetry } from '../services/priorityHttp';
+import { getPriorityConfig } from '../config/priority';
 
 // --- Column Definitions ---
 
 const columns: ColumnDefinition[] = [
+  { key: 'serialName', label: 'Lot Number', type: 'string' },
   { key: 'partNumber', label: 'Part Number', type: 'string' },
   { key: 'partDescription', label: 'Part Description', type: 'string' },
   { key: 'balance', label: 'Balance', type: 'number' },
@@ -24,6 +27,7 @@ const columns: ColumnDefinition[] = [
   { key: 'value', label: 'Value', type: 'currency' },
   { key: 'receivingDate', label: 'Recv. Date', type: 'date' },
   { key: 'expiryDate', label: 'Expir. Date', type: 'date' },
+  { key: 'daysExtended', label: 'Days Ext.', type: 'number' },
   { key: 'daysUntilExpiry', label: 'Days Left', type: 'number' },
   { key: 'status', label: 'Status', type: 'string' },
   { key: 'vendor', label: 'Vendor', type: 'string' },
@@ -77,6 +81,58 @@ function buildQuery(_filters: ReportFilters): ODataParams {
 // Maps family code (Y_2074_5_ESH value) -> family description for display.
 let familyLookupMap: Map<string, string> = new Map();
 
+// WHY: Extension data from EXPDSERIAL/EXPDEXT_SUBFORM. Built once by
+// fetchFilters() via fetchExtensionData(), read by transformRow().
+let extensionMap: Map<string, number> = new Map();
+
+// --- Extension Data Helpers ---
+
+interface ExpdExtRecord {
+  RENEWDATE: string;
+  EXPIRYDATE: string;
+}
+
+interface ExpdSerialRecord {
+  SERIALNAME: string;
+  EXPDEXT_SUBFORM?: ExpdExtRecord[];
+}
+
+// WHY: Pure function extracted for testability. Calculates total days
+// extended per lot from EXPDSERIAL + EXPDEXT_SUBFORM response data.
+export function buildExtensionMap(records: ExpdSerialRecord[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const record of records) {
+    const extensions = record.EXPDEXT_SUBFORM ?? [];
+    const totalDays = extensions.reduce((sum, ext) => {
+      const renewDate = new Date(ext.RENEWDATE).getTime();
+      const newExpiry = new Date(ext.EXPIRYDATE).getTime();
+      const days = Math.round((newExpiry - renewDate) / (1000 * 60 * 60 * 24));
+      return sum + (days > 0 ? days : 0);
+    }, 0);
+    map.set(record.SERIALNAME.trim(), totalDays);
+  }
+  return map;
+}
+
+// WHY: Fetches extension history for all lots from EXPDSERIAL with $expand.
+// Uses raw URL concatenation for $expand (not searchParams.set) because
+// Priority's OData parser chokes on form-encoded nested syntax.
+async function fetchExtensionData(): Promise<void> {
+  try {
+    const config = getPriorityConfig();
+    const baseUrl = `${config.baseUrl}EXPDSERIAL?$select=SERIALNAME`;
+    // WHY: $expand must be appended raw — searchParams.set encodes () → %28%29
+    const url = `${baseUrl}&$expand=EXPDEXT_SUBFORM($select=RENEWDATE,EXPIRYDATE)&$top=2000`;
+    const response = await fetchWithRetry(url);
+    const parsed = JSON.parse(response.body);
+    const records = (parsed.value ?? []) as ExpdSerialRecord[];
+    extensionMap = buildExtensionMap(records);
+  } catch (err) {
+    console.warn('[bbd] EXPDSERIAL fetch failed, Days Ext. column will show 0:', err instanceof Error ? err.message : err);
+    extensionMap = new Map();
+  }
+}
+
 // --- Row Transformer ---
 
 function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
@@ -119,6 +175,7 @@ function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
     balance,
     unit: raw.UNITNAME ?? '',
     serialName: raw.SERIALNAME ?? '',
+    daysExtended: extensionMap.get((raw.SERIALNAME as string)?.trim()) ?? 0,
     purchasePrice: Number(raw.Y_8737_0_ESH ?? 0),
     value: Number(raw.QUANT ?? 0) * Number(raw.Y_8737_0_ESH ?? 0),
     receivingDate: raw.CURDATE,
@@ -193,6 +250,11 @@ async function fetchFilters(): Promise<Record<string, FilterOption[]>> {
     }),
   ]);
 
+  // WHY: Fetch extension data in parallel with filter processing.
+  // Not in the Promise.all above because it uses fetchWithRetry directly
+  // (different from queryPriority). Fires concurrently with the filter building below.
+  const extensionPromise = fetchExtensionData();
+
   // Vendors — deduplicate
   const vendorSet = new Set<string>();
   for (const row of suppliersData.value) {
@@ -240,6 +302,9 @@ async function fetchFilters(): Promise<Record<string, FilterOption[]>> {
     { value: 'expiring-non-perishable', label: 'Expiring Soon' },
   ];
 
+  // WHY: Wait for extension data to be populated before transformRow runs.
+  await extensionPromise;
+
   return { vendors, brands, families, perishables, statuses };
 }
 
@@ -262,6 +327,7 @@ reportRegistry.set('bbd', {
   clientSidePagination: true,
   excelStyle: {
     columnWidths: {
+      serialName: 12,
       partNumber: 14,
       partDescription: 28,
       balance: 8,
@@ -269,6 +335,7 @@ reportRegistry.set('bbd', {
       value: 10,
       receivingDate: 11,
       expiryDate: 11,
+      daysExtended: 8,
       daysUntilExpiry: 8,
       status: 12,
       vendor: 18,
