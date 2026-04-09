@@ -27,14 +27,14 @@ export default function ReportSubTabs({ activeTab, onTabChange, extendedCount }:
 
   return (
     <LayoutGroup id="sub-tab-group">
-      <div className="flex overflow-x-auto px-5 pt-2 pb-0 border-b border-slate-100">
+      <div className="flex gap-1 overflow-x-auto px-5 pb-0 border-b border-slate-100">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => { if (!isActive) onTabChange(tab.id); }}
-              className={`relative pb-2 pr-4 text-sm whitespace-nowrap transition-colors duration-150 ${
+              className={`relative pb-3 px-3 text-sm whitespace-nowrap transition-colors duration-150 ${
                 isActive ? 'font-semibold text-slate-900' : 'font-medium text-slate-500 hover:text-slate-700'
               }`}
             >
