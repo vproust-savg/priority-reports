@@ -1,8 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/src/routes/extend.ts
-// PURPOSE: POST endpoint for extending expiration dates via the
-//          Priority EXPDSERIAL/EXPDEXT_SUBFORM API. Supports
-//          single and bulk operations.
+// PURPOSE: POST /bbd/extend (Priority expiry extension) and
+//          GET /bbd/extended (Airtable extended items tab).
 // USED BY: index.ts (mounted at /api/v1/reports)
 // EXPORTS: createExtendRouter
 // ═══════════════════════════════════════════════════════════════
@@ -11,11 +10,34 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getPriorityConfig } from '../config/priority';
 import { fetchWithRetry, postWithRetry, extractErrorMessage } from '../services/priorityHttp';
+import type { ColumnDefinition } from '../../../shared/types/api';
+import {
+  snapshotExtendedItem,
+  fetchExtendedItems,
+  refreshBalancesFromPriority,
+  mergeBalances,
+  batchUpdateAirtableBalances,
+} from '../services/airtableShortDated';
+
+const RowDataSchema = z.object({
+  partNumber: z.string(),
+  partDescription: z.string(),
+  balance: z.number(),
+  unit: z.string(),
+  value: z.number(),
+  purchasePrice: z.number(),
+  vendor: z.string(),
+  perishable: z.string(),
+  brand: z.string(),
+  family: z.string(),
+  expiryDate: z.string(),
+}).optional();
 
 const ExtendRequestSchema = z.object({
   items: z.array(z.object({
     serialName: z.string().regex(/^[a-zA-Z0-9_\- ]+$/),
     days: z.number().int().min(1).max(365),
+    rowData: RowDataSchema,
   })).min(1).max(100),
 });
 
@@ -80,6 +102,23 @@ async function processExtendItem(
   return { serialName, success: true, newExpiryDate };
 }
 
+const EXTENDED_COLUMNS: ColumnDefinition[] = [
+  { key: 'serialName', label: 'Lot Number', type: 'string' },
+  { key: 'partNumber', label: 'Part Number', type: 'string' },
+  { key: 'partDescription', label: 'Part Description', type: 'string' },
+  { key: 'balance', label: 'Balance', type: 'number' },
+  { key: 'unit', label: 'Unit', type: 'string' },
+  { key: 'value', label: 'Value', type: 'currency' },
+  { key: 'vendor', label: 'Vendor', type: 'string' },
+  { key: 'perishable', label: 'Perishable', type: 'string' },
+  { key: 'brand', label: 'Brand', type: 'string' },
+  { key: 'family', label: 'Family', type: 'string' },
+  { key: 'originalExpiryDate', label: 'Orig. Expiry', type: 'date' },
+  { key: 'newExpiryDate', label: 'New Expiry', type: 'date' },
+  { key: 'daysExtended', label: 'Days Ext.', type: 'number' },
+  { key: 'extensionDate', label: 'Extended On', type: 'date' },
+];
+
 export function createExtendRouter(): Router {
   const router = Router();
 
@@ -102,7 +141,68 @@ export function createExtendRouter(): Router {
     const successCount = results.filter((r) => r.success).length;
     console.log(`[bbd-extend] Extended ${successCount}/${results.length} lots`);
 
+    // WHY: Fire-and-forget — snapshot to Airtable after successful Priority extend.
+    // Do not await — Airtable failure must not block the response.
+    for (const [i, result] of results.entries()) {
+      if (result.success && result.newExpiryDate && items[i].rowData) {
+        snapshotExtendedItem(
+          result.serialName, items[i].rowData!, result.newExpiryDate, items[i].days,
+        ).catch((err) => console.warn(`[bbd-extend] Airtable snapshot failed for ${result.serialName}:`, err));
+      }
+    }
+
     res.json({ results });
+  });
+
+  router.get('/bbd/extended', async (_req, res) => {
+    try {
+      const airtableRows = await fetchExtendedItems();
+
+      if (airtableRows.length === 0) {
+        res.json({
+          columns: EXTENDED_COLUMNS,
+          data: [],
+          pagination: { totalCount: 0, totalPages: 1, page: 1, pageSize: 0 },
+          meta: { source: 'airtable', generatedAt: new Date().toISOString() },
+        });
+        return;
+      }
+
+      const lotNumbers = airtableRows.map((r) => r.serialName);
+      let priorityMap = new Map<string, { balance: number; purchasePrice: number }>();
+      const warnings: string[] = [];
+
+      try {
+        priorityMap = await refreshBalancesFromPriority(lotNumbers);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        warnings.push(`Balance refresh failed: ${msg}`);
+      }
+
+      const { mergedRows, changedRecords } = mergeBalances(airtableRows, priorityMap);
+
+      // WHY: Fire-and-forget — update Airtable balances in background.
+      if (changedRecords.length > 0) {
+        batchUpdateAirtableBalances(changedRecords).catch((err) =>
+          console.warn('[bbd-extended] Background balance update failed:', err),
+        );
+      }
+
+      // WHY: Strip _recordId from response — internal Airtable field, not for the client.
+      const data = mergedRows.map(({ _recordId, ...rest }) => rest);
+
+      res.json({
+        columns: EXTENDED_COLUMNS,
+        data,
+        pagination: { totalCount: data.length, totalPages: 1, page: 1, pageSize: data.length },
+        meta: { source: 'airtable', generatedAt: new Date().toISOString() },
+        ...(warnings.length > 0 ? { warnings } : {}),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('[bbd-extended] GET /bbd/extended failed:', msg);
+      res.status(502).json({ error: `Failed to load extended items: ${msg}` });
+    }
   });
 
   return router;

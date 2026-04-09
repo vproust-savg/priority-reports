@@ -23,6 +23,7 @@ interface ExtendExpiryModalProps {
   partDescription: string;
   currentExpiryDate: string;
   onSuccess: () => void;
+  row?: Record<string, unknown>;
 }
 
 function computeNewDate(currentDate: string, days: number): string {
@@ -33,7 +34,7 @@ function computeNewDate(currentDate: string, days: number): string {
 
 export default function ExtendExpiryModal({
   isOpen, onClose, serialName, partName,
-  partDescription, currentExpiryDate, onSuccess,
+  partDescription, currentExpiryDate, onSuccess, row,
 }: ExtendExpiryModalProps) {
   const [days, setDays] = useState(7);
   const [state, setState] = useState<ModalState>('idle');
@@ -67,7 +68,19 @@ export default function ExtendExpiryModal({
   const handleSubmit = async () => {
     setState('submitting');
     try {
-      const response = await extend({ items: [{ serialName, days }] });
+      const response = await extend({ items: [{ serialName, days, rowData: row ? {
+        partNumber: row.partNumber as string,
+        partDescription: row.partDescription as string,
+        balance: row.balance as number,
+        unit: row.unit as string,
+        value: row.value as number,
+        purchasePrice: row.purchasePrice as number,
+        vendor: row.vendor as string,
+        perishable: row.perishable as string,
+        brand: row.brand as string,
+        family: row.family as string,
+        expiryDate: row.expiryDate as string,
+      } : undefined }] });
       const result = response.results[0];
       if (result?.success) {
         setState('success');

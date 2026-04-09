@@ -5,6 +5,7 @@
 // USED BY: npm run dev, npm run build
 // ═══════════════════════════════════════════════════════════════
 
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -24,5 +25,9 @@ export default defineConfig({
       // In production, Express serves both API and static files.
       '/api': 'http://localhost:3001',
     },
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
   },
 });

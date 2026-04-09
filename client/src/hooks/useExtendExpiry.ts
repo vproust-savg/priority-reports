@@ -9,8 +9,22 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
+export interface RowData {
+  partNumber: string;
+  partDescription: string;
+  balance: number;
+  unit: string;
+  value: number;
+  purchasePrice: number;
+  vendor: string;
+  perishable: string;
+  brand: string;
+  family: string;
+  expiryDate: string;
+}
+
 export interface ExtendRequest {
-  items: Array<{ serialName: string; days: number }>;
+  items: Array<{ serialName: string; days: number; rowData?: RowData }>;
 }
 
 export interface ExtendResult {

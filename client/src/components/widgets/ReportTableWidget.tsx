@@ -30,6 +30,8 @@ import EmptyState from '../EmptyState';
 import ErrorState from '../ErrorState';
 import ExtendExpiryModal from '../modals/ExtendExpiryModal';
 import BulkExtendModal from '../modals/BulkExtendModal';
+import ReportSubTabs from '../ReportSubTabs';
+import BBDExtendedView from '../BBDExtendedView';
 import { countActiveFilters } from '../../config/filterConstants';
 import { getDetailComponent } from '../../config/detailRegistry';
 
@@ -76,6 +78,8 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
     setCopyToast(`Copied "${value}"`);
   }, []);
 
+  const [activeSubTab, setActiveSubTab] = useState<'active' | 'extended'>('active');
+
   const {
     extendModal, cellRenderers, handleBulkExtend, handleExtendSuccess, closeModal,
   } = useBBDExtend(reportId, handleCopy);
@@ -116,101 +120,114 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
 
   return (
     <>
-      <TableToolbar
-        activeFilterCount={countActiveFilters(filterGroup)}
-        isFilterOpen={isFilterOpen}
-        onFilterToggle={handleFilterToggle}
-        hiddenColumnCount={hiddenCount}
-        isColumnPanelOpen={isColumnPanelOpen}
-        onColumnToggle={handleColumnToggle}
-        sortCount={sortCount}
-        isSortPanelOpen={isSortPanelOpen}
-        onSortToggle={handleSortToggle}
-        isExporting={isExporting}
-        onExport={triggerExport}
-        isRefreshing={isRefreshing}
-        onRefresh={handleRefresh}
-        onBulkExtend={reportId === 'bbd' ? handleBulkExtend : undefined}
-      />
-      <AnimatePresence>
-        {isFilterOpen && (
-          <motion.div key="filter-panel" {...PANEL_FADE}>
-            <FilterBuilder
-              filterGroup={filterGroup}
-              onChange={handleFilterChange}
-              columns={filterColumns}
-              filterOptions={filtersQuery.data?.filters}
-              filterOptionsLoading={filtersQuery.isLoading}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {isColumnPanelOpen && (
-          <motion.div key="column-panel" {...PANEL_FADE}>
-            <ColumnManagerPanel
-              managedColumns={managedColumns}
-              onToggle={toggleColumn}
-              onReorder={reorderColumns}
-              onShowAll={showAll}
-              onHideAll={hideAll}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {isSortPanelOpen && (
-          <motion.div key="sort-panel" {...PANEL_FADE}>
-            <SortPanel
-              sortRules={sortRules}
-              columns={visibleColumns}
-              onAddSort={addSort}
-              onRemoveSort={removeSort}
-              onUpdateSort={updateSort}
-              onReorderSorts={reorderSorts}
-              onClearAll={clearAllSorts}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-      {filterLoadError && (
-        <div className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-red-700 bg-red-50/80 border border-red-200/60 rounded-lg">
-          <AlertTriangle size={14} className="shrink-0 text-red-500" />
-          <span>Failed to load filter options. Try refreshing the page.</span>
-        </div>
+      {reportId === 'bbd' && (
+        <ReportSubTabs
+          activeTab={activeSubTab}
+          onTabChange={setActiveSubTab}
+        />
       )}
-      {data?.warnings && data.warnings.length > 0 && data.warnings.map((msg, i) => (
-        <div key={`warn-${i}`} className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-amber-700 bg-amber-50/80 border border-amber-200/60 rounded-lg">
-          <AlertTriangle size={14} className="shrink-0 text-amber-500" />
-          <span>{msg}</span>
-        </div>
-      ))}
-      {query.isLoading && <LoadingToast />}
-      {query.error && <ErrorState onRetry={() => query.refetch()} />}
-      {!query.isLoading && !query.error && displayData.length === 0 && <EmptyState />}
 
-      {!query.isLoading && displayData.length > 0 && (
+      {reportId === 'bbd' && activeSubTab === 'extended' ? (
+        <BBDExtendedView />
+      ) : (
         <>
-          <ReportTable
-            columns={visibleColumns.length > 0 ? visibleColumns : data!.columns}
-            data={sortedDisplayData}
-            rowStyleField={data?.meta?.rowStyleField}
-            reportId={reportId}
-            expandConfig={expandConfig && DetailComponent ? {
-              rowKeyField: expandConfig.rowKeyField,
-              DetailComponent,
-            } : undefined}
-            expandedRows={expandedRows}
-            onToggleExpand={toggleExpand}
-            cellRenderers={cellRenderers}
+          <TableToolbar
+            activeFilterCount={countActiveFilters(filterGroup)}
+            isFilterOpen={isFilterOpen}
+            onFilterToggle={handleFilterToggle}
+            hiddenColumnCount={hiddenCount}
+            isColumnPanelOpen={isColumnPanelOpen}
+            onColumnToggle={handleColumnToggle}
+            sortCount={sortCount}
+            isSortPanelOpen={isSortPanelOpen}
+            onSortToggle={handleSortToggle}
+            isExporting={isExporting}
+            onExport={triggerExport}
+            isRefreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            onBulkExtend={reportId === 'bbd' && activeSubTab === 'active' ? handleBulkExtend : undefined}
           />
-          <Pagination
-            page={page}
-            pageSize={50}
-            totalCount={data!.pagination.totalCount}
-            totalPages={data!.pagination.totalPages}
-            onPageChange={setPage}
-          />
+          <AnimatePresence>
+            {isFilterOpen && (
+              <motion.div key="filter-panel" {...PANEL_FADE}>
+                <FilterBuilder
+                  filterGroup={filterGroup}
+                  onChange={handleFilterChange}
+                  columns={filterColumns}
+                  filterOptions={filtersQuery.data?.filters}
+                  filterOptionsLoading={filtersQuery.isLoading}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {isColumnPanelOpen && (
+              <motion.div key="column-panel" {...PANEL_FADE}>
+                <ColumnManagerPanel
+                  managedColumns={managedColumns}
+                  onToggle={toggleColumn}
+                  onReorder={reorderColumns}
+                  onShowAll={showAll}
+                  onHideAll={hideAll}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {isSortPanelOpen && (
+              <motion.div key="sort-panel" {...PANEL_FADE}>
+                <SortPanel
+                  sortRules={sortRules}
+                  columns={visibleColumns}
+                  onAddSort={addSort}
+                  onRemoveSort={removeSort}
+                  onUpdateSort={updateSort}
+                  onReorderSorts={reorderSorts}
+                  onClearAll={clearAllSorts}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {filterLoadError && (
+            <div className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-red-700 bg-red-50/80 border border-red-200/60 rounded-lg">
+              <AlertTriangle size={14} className="shrink-0 text-red-500" />
+              <span>Failed to load filter options. Try refreshing the page.</span>
+            </div>
+          )}
+          {data?.warnings && data.warnings.length > 0 && data.warnings.map((msg, i) => (
+            <div key={`warn-${i}`} className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-amber-700 bg-amber-50/80 border border-amber-200/60 rounded-lg">
+              <AlertTriangle size={14} className="shrink-0 text-amber-500" />
+              <span>{msg}</span>
+            </div>
+          ))}
+          {query.isLoading && <LoadingToast />}
+          {query.error && <ErrorState onRetry={() => query.refetch()} />}
+          {!query.isLoading && !query.error && displayData.length === 0 && <EmptyState />}
+
+          {!query.isLoading && displayData.length > 0 && (
+            <>
+              <ReportTable
+                columns={visibleColumns.length > 0 ? visibleColumns : data!.columns}
+                data={sortedDisplayData}
+                rowStyleField={data?.meta?.rowStyleField}
+                reportId={reportId}
+                expandConfig={expandConfig && DetailComponent ? {
+                  rowKeyField: expandConfig.rowKeyField,
+                  DetailComponent,
+                } : undefined}
+                expandedRows={expandedRows}
+                onToggleExpand={toggleExpand}
+                cellRenderers={activeSubTab === 'active' ? cellRenderers : undefined}
+              />
+              <Pagination
+                page={page}
+                pageSize={50}
+                totalCount={data!.pagination.totalCount}
+                totalPages={data!.pagination.totalPages}
+                onPageChange={setPage}
+              />
+            </>
+          )}
         </>
       )}
 
@@ -234,6 +251,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
           partDescription={extendModal.row.partDescription as string}
           currentExpiryDate={extendModal.row.expiryDate as string}
           onSuccess={handleExtendSuccess}
+          row={extendModal.row}
         />
       )}
 

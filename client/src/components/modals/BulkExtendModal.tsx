@@ -8,32 +8,18 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useEffect } from 'react';
-import { Loader2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import Modal from './Modal';
+import BulkExtendRowTable from './BulkExtendRowTable';
 import { useExtendExpiry } from '../../hooks/useExtendExpiry';
-import { formatCellValue } from '../../utils/formatters';
 
 type ModalState = 'idle' | 'confirming' | 'submitting' | 'done';
-
-// WHY: Same map as ReportTable ROW_STYLE_MAP — duplicated here because
-// importing from ReportTable would create a circular dependency.
-const STATUS_BG: Record<string, string> = {
-  'expired': 'bg-red-50',
-  'expiring-perishable': 'bg-orange-50',
-  'expiring-non-perishable': 'bg-amber-50',
-};
 
 interface BulkExtendModalProps {
   isOpen: boolean;
   onClose: () => void;
   rows: Array<Record<string, unknown>>;
   onSuccess: () => void;
-}
-
-function computeNewDate(currentDate: string, days: number): string {
-  const date = new Date(currentDate);
-  date.setDate(date.getDate() + days);
-  return date.toISOString();
 }
 
 export default function BulkExtendModal({
@@ -116,7 +102,26 @@ export default function BulkExtendModal({
   const handleSubmit = async () => {
     setState('submitting');
     try {
-      const items = Array.from(selected).map((serialName) => ({ serialName, days }));
+      const items = Array.from(selected).map((serialName) => {
+        const row = rows.find((r) => r.serialName === serialName);
+        return {
+          serialName,
+          days,
+          rowData: row ? {
+            partNumber: row.partNumber as string,
+            partDescription: row.partDescription as string,
+            balance: row.balance as number,
+            unit: row.unit as string,
+            value: row.value as number,
+            purchasePrice: row.purchasePrice as number,
+            vendor: row.vendor as string,
+            perishable: row.perishable as string,
+            brand: row.brand as string,
+            family: row.family as string,
+            expiryDate: row.expiryDate as string,
+          } : undefined,
+        };
+      });
       const response = await extend({ items });
       const successCount = response.results.filter((r) => r.success).length;
       const failed = response.results
@@ -199,67 +204,16 @@ export default function BulkExtendModal({
               Select all ({rows.length} items)
             </label>
 
-            {/* Scrollable row list */}
-            <div className="max-h-96 overflow-y-auto border border-slate-200 rounded-lg">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 sticky top-0">
-                  <tr className="text-left text-xs text-slate-500 uppercase tracking-wider">
-                    <th className="px-3 py-2 w-8"></th>
-                    {[
-                      { key: 'serialName', label: 'Lot Number' },
-                      { key: 'partNumber', label: 'Part Number' },
-                      { key: 'partDescription', label: 'Description' },
-                      { key: 'expiryDate', label: 'Current Expiry' },
-                    ].map((col) => (
-                      <th key={col.key} className="px-3 py-2">
-                        <button
-                          onClick={() => handleHeaderClick(col.key)}
-                          className="flex items-center gap-1 hover:text-slate-700 transition-colors"
-                        >
-                          {col.label}
-                          {sortKey === col.key && (sortDir === 'asc'
-                            ? <ChevronUp size={12} />
-                            : <ChevronDown size={12} />)}
-                        </button>
-                      </th>
-                    ))}
-                    <th className="px-3 py-2">New Expiry</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedRows.map((row) => {
-                    const sn = row.serialName as string;
-                    const status = row.status as string;
-                    const { formatted: currentFmt } = formatCellValue(row.expiryDate, 'date');
-                    const newDate = computeNewDate(row.expiryDate as string, days);
-                    const { formatted: newFmt } = formatCellValue(newDate, 'date');
-                    const bgClass = STATUS_BG[status] ?? '';
-
-                    return (
-                      <tr
-                        key={sn}
-                        className={`border-b border-slate-100 ${bgClass}`}
-                      >
-                        <td className="px-3 py-2">
-                          <input
-                            type="checkbox"
-                            checked={selected.has(sn)}
-                            onChange={() => toggleRow(sn)}
-                            disabled={isSubmitting}
-                            className="rounded border-slate-300"
-                          />
-                        </td>
-                        <td className="px-3 py-2 font-medium">{sn}</td>
-                        <td className="px-3 py-2">{row.partNumber as string}</td>
-                        <td className="px-3 py-2 max-w-[200px] truncate">{row.partDescription as string}</td>
-                        <td className="px-3 py-2">{currentFmt}</td>
-                        <td className="px-3 py-2 font-medium text-primary">{newFmt}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <BulkExtendRowTable
+              rows={sortedRows}
+              selected={selected}
+              days={days}
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onHeaderClick={handleHeaderClick}
+              onToggleRow={toggleRow}
+              isSubmitting={isSubmitting}
+            />
 
             {/* Confirmation */}
             {state === 'confirming' && (
