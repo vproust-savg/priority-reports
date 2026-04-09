@@ -27,21 +27,21 @@ export default function ReportSubTabs({ activeTab, onTabChange, extendedCount }:
 
   return (
     <LayoutGroup id="sub-tab-group">
-      <div className="flex gap-1 overflow-x-auto px-5 pb-0 border-b border-slate-100">
+      <div className="flex gap-1 overflow-x-auto px-5 py-2 border-b border-[var(--color-gold-subtle)]">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => { if (!isActive) onTabChange(tab.id); }}
-              className={`relative pb-3 px-3 text-sm whitespace-nowrap transition-colors duration-150 ${
-                isActive ? 'font-semibold text-slate-900' : 'font-medium text-slate-500 hover:text-slate-700'
+              className={`relative py-2 px-3 text-sm whitespace-nowrap transition-colors duration-150 ${
+                isActive ? 'font-semibold text-white' : 'font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
               }`}
             >
               {isActive && (
                 <motion.div
                   layoutId="sub-tab-indicator"
-                  className="absolute inset-0 bottom-1 bg-white rounded-lg border border-slate-200/60 shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+                  className="absolute inset-0 bg-[var(--color-dark)] rounded-[var(--radius-base)]"
                   transition={reduced ? { duration: 0 } : EASE_DEFAULT}
                   layout={!reduced}
                 />
@@ -49,7 +49,7 @@ export default function ReportSubTabs({ activeTab, onTabChange, extendedCount }:
               <span className="relative z-10">
                 {tab.label}
                 {tab.id === 'extended' && extendedCount != null && extendedCount > 0 && (
-                  <span className="font-normal text-slate-500"> ({extendedCount})</span>
+                  <span className="font-normal text-[var(--color-text-secondary)]"> ({extendedCount})</span>
                 )}
               </span>
             </button>

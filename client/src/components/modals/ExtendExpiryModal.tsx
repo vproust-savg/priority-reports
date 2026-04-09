@@ -106,14 +106,14 @@ export default function ExtendExpiryModal({
       <div className="px-6 py-4 space-y-4">
         {state === 'success' ? (
           <div className="text-center py-6">
-            <p className="text-lg font-medium text-green-600">Extended successfully</p>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-lg font-medium text-[var(--color-green)]">Extended successfully</p>
+            <p className="text-sm text-[var(--color-text-secondary)] mt-1">
               {serialName}: {currentFormatted} &rarr; {newFormatted}
             </p>
           </div>
         ) : state === 'confirming' ? (
           <div className="space-y-4">
-            <p className="text-sm text-slate-700">
+            <p className="text-sm text-[var(--color-text-primary)]">
               Extend lot <span className="font-semibold">{serialName}</span> from{' '}
               <span className="font-semibold">{currentFormatted}</span> to{' '}
               <span className="font-semibold">{newFormatted}</span> ({days} days)?
@@ -121,13 +121,13 @@ export default function ExtendExpiryModal({
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setState('idle')}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-gold-hover)] rounded-lg transition-colors"
               >
                 Back
               </button>
               <button
                 onClick={handleSubmit}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-dark)] hover:bg-[var(--color-dark-hover)] rounded-lg transition-colors"
               >
                 Confirm
               </button>
@@ -138,26 +138,26 @@ export default function ExtendExpiryModal({
             {/* Read-only info */}
             <div className="space-y-2 text-sm">
               <div className="flex">
-                <span className="w-32 text-slate-500">Lot Number</span>
-                <span className="font-medium text-slate-900">{serialName}</span>
+                <span className="w-32 text-[var(--color-text-secondary)]">Lot Number</span>
+                <span className="font-medium text-[var(--color-text-primary)]">{serialName}</span>
               </div>
               <div className="flex">
-                <span className="w-32 text-slate-500">Part Number</span>
-                <span className="font-medium text-slate-900">{partName}</span>
+                <span className="w-32 text-[var(--color-text-secondary)]">Part Number</span>
+                <span className="font-medium text-[var(--color-text-primary)]">{partName}</span>
               </div>
               <div className="flex">
-                <span className="w-32 text-slate-500">Description</span>
-                <span className="font-medium text-slate-900">{partDescription}</span>
+                <span className="w-32 text-[var(--color-text-secondary)]">Description</span>
+                <span className="font-medium text-[var(--color-text-primary)]">{partDescription}</span>
               </div>
               <div className="flex">
-                <span className="w-32 text-slate-500">Current Expiry</span>
-                <span className="font-medium text-slate-900">{currentFormatted}</span>
+                <span className="w-32 text-[var(--color-text-secondary)]">Current Expiry</span>
+                <span className="font-medium text-[var(--color-text-primary)]">{currentFormatted}</span>
               </div>
             </div>
 
             {/* Days input */}
             <div className="flex items-center gap-3 pt-2">
-              <label htmlFor="extend-days" className="text-sm text-slate-600">Extend by</label>
+              <label htmlFor="extend-days" className="text-sm text-[var(--color-text-secondary)]">Extend by</label>
               <input
                 id="extend-days"
                 type="number"
@@ -166,37 +166,37 @@ export default function ExtendExpiryModal({
                 value={days}
                 onChange={(e) => setDays(Math.max(1, Math.min(365, Number(e.target.value) || 1)))}
                 disabled={isSubmitting}
-                className="w-20 px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50"
+                className="w-20 px-3 py-1.5 text-sm border border-[var(--color-gold-subtle)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-gold-primary)]/30 focus:border-[var(--color-gold-primary)] disabled:opacity-50"
               />
-              <span className="text-sm text-slate-600">days</span>
+              <span className="text-sm text-[var(--color-text-secondary)]">days</span>
             </div>
 
             {/* New expiry */}
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-slate-500">New expiry:</span>
-              <span className="font-semibold text-slate-900">{newFormatted}</span>
+              <span className="text-[var(--color-text-secondary)]">New expiry:</span>
+              <span className="font-semibold text-[var(--color-text-primary)]">{newFormatted}</span>
             </div>
 
             {/* Error message */}
             {state === 'error' && (
-              <div className="px-3 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
+              <div className="px-3 py-2 text-sm text-[var(--color-red)] bg-[var(--color-red)]/5 border border-[var(--color-red)]/20 rounded-lg">
                 {errorMessage}
               </div>
             )}
 
             {/* Actions */}
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--color-gold-subtle)]">
               <button
                 onClick={onClose}
                 disabled={isSubmitting}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-gold-hover)] rounded-lg transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={() => setState('confirming')}
                 disabled={isSubmitting}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-dark)] hover:bg-[var(--color-dark-hover)] rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
               >
                 {isSubmitting && <Loader2 size={14} className="animate-spin" />}
                 {state === 'error' ? 'Retry' : 'Extend'}

@@ -42,7 +42,7 @@ export default function ColumnRow({
         disabled={isLocked}
         aria-label={`${column.visible ? 'Hide' : 'Show'} ${column.label} column`}
         className={`relative w-8 h-[18px] rounded-full transition-colors flex-shrink-0 ${
-          column.visible ? 'bg-primary' : 'bg-slate-200'
+          column.visible ? 'bg-[var(--color-gold-primary)]' : 'bg-[var(--color-gold-subtle)]'
         } ${isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
       >
         <motion.div
@@ -53,7 +53,7 @@ export default function ColumnRow({
       </button>
 
       {/* Column label */}
-      <span className={`text-sm flex-1 ${column.visible ? 'text-slate-700' : 'text-slate-400'}`}>
+      <span className={`text-sm flex-1 ${column.visible ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>
         {column.label}
       </span>
 
@@ -63,7 +63,7 @@ export default function ColumnRow({
           {...attributes}
           {...listeners}
           aria-label="Drag to reorder"
-          className="cursor-grab active:cursor-grabbing p-0.5 text-slate-300 hover:text-slate-400
+          className="cursor-grab active:cursor-grabbing p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text-muted)]
             opacity-0 group-hover/row:opacity-100 transition-opacity touch-none flex-shrink-0"
         >
           <GripVertical size={14} />

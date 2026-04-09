@@ -68,19 +68,19 @@ export default function Modal({
           {/* Content */}
           <motion.div
             ref={contentRef}
-            className={`relative bg-white rounded-2xl shadow-xl w-full ${maxWidth} max-h-[85vh] overflow-hidden flex flex-col`}
+            className={`relative bg-[var(--color-bg-card)] rounded-[var(--radius-3xl)] shadow-[var(--shadow-dropdown)] w-full ${maxWidth} max-h-[85vh] overflow-hidden flex flex-col`}
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={EASE_FAST}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-              <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-gold-subtle)]">
+              <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">{title}</h2>
               {!preventClose && (
                 <button
                   onClick={onClose}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                  className="p-1 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-gold-hover)] transition-colors"
                   aria-label="Close"
                 >
                   <X size={18} />

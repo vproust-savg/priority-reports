@@ -64,7 +64,7 @@ export default function FilterValueInput({
         <div className="flex items-center gap-1">
           <input type="date" value={value} onChange={(e) => onChange(e.target.value, valueTo)}
             className={`${FILTER_INPUT_CLASS} w-36`} />
-          <span className="text-xs text-slate-400 px-1">and</span>
+          <span className="text-xs text-[var(--color-text-muted)] px-1">and</span>
           <input type="date" value={valueTo ?? ''} onChange={(e) => onChange(value, e.target.value)}
             className={`${FILTER_INPUT_CLASS} w-36`} />
         </div>
@@ -84,7 +84,7 @@ export default function FilterValueInput({
           <input type="number" step={step} value={value}
             onChange={(e) => onChange(e.target.value, valueTo)}
             placeholder="Min" className={`${FILTER_INPUT_CLASS} w-28`} />
-          <span className="text-xs text-slate-400 px-1">and</span>
+          <span className="text-xs text-[var(--color-text-muted)] px-1">and</span>
           <input type="number" step={step} value={valueTo ?? ''}
             onChange={(e) => onChange(value, e.target.value)}
             placeholder="Max" className={`${FILTER_INPUT_CLASS} w-28`} />

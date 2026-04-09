@@ -46,9 +46,9 @@ export default class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="min-h-screen bg-[var(--color-bg-page)] flex items-center justify-center">
           <div className="text-center max-w-sm px-6">
-            <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4">
+            <div className="w-12 h-12 rounded-2xl bg-[var(--color-red)]/5 flex items-center justify-center mx-auto mb-4">
               <svg
                 width="24"
                 height="24"
@@ -58,22 +58,22 @@ export default class ErrorBoundary extends Component<Props, State> {
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="text-red-400"
+                className="text-[var(--color-red)]"
               >
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
             </div>
-            <h1 className="text-lg font-semibold text-slate-900 mb-1">
+            <h1 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1">
               Something went wrong
             </h1>
-            <p className="text-sm text-slate-500 mb-5">
+            <p className="text-sm text-[var(--color-text-secondary)] mb-5">
               The dashboard encountered an unexpected error.
             </p>
             <button
               onClick={this.handleReload}
-              className="text-sm font-medium text-primary hover:underline"
+              className="text-sm font-medium text-[var(--color-gold-primary)] hover:underline"
             >
               Reload page
             </button>

@@ -64,18 +64,18 @@ export default function ColumnManagerPanel({
     : null;
 
   return (
-    <div className="bg-white border-b border-slate-200 px-5 py-4">
+    <div className="bg-[var(--color-bg-card)] border-b border-[var(--color-gold-subtle)] px-5 py-4">
       {/* Search bar */}
       <div className="relative mb-3">
-        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
         <input
           type="text"
           placeholder="Find a column..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full text-sm border border-slate-200 rounded-lg py-1.5 pl-8 pr-3
-            focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40
-            placeholder:text-slate-400"
+          className="w-full text-sm border border-[var(--color-gold-subtle)] rounded-lg py-1.5 pl-8 pr-3
+            focus:outline-none focus:ring-2 focus:ring-[var(--color-gold-primary)]/20 focus:border-[var(--color-gold-primary)]/40
+            placeholder:text-[var(--color-text-muted)]"
         />
       </div>
 
@@ -109,21 +109,21 @@ export default function ColumnManagerPanel({
 
       {/* Empty search state */}
       {filteredColumns.length === 0 && (
-        <p className="text-xs text-slate-400 text-center py-3">No matching columns</p>
+        <p className="text-xs text-[var(--color-text-muted)] text-center py-3">No matching columns</p>
       )}
 
       {/* Bulk actions — hidden during search */}
       {!isSearching && (
-        <div className="flex gap-4 mt-3 pt-3 border-t border-slate-100">
+        <div className="flex gap-4 mt-3 pt-3 border-t border-[var(--color-gold-subtle)]">
           <button
             onClick={onHideAll}
-            className="text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
+            className="text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
           >
             Hide all
           </button>
           <button
             onClick={onShowAll}
-            className="text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
+            className="text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
           >
             Show all
           </button>

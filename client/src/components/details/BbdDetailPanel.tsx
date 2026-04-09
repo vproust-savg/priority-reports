@@ -19,31 +19,31 @@ export default function BbdDetailPanel({ row, reportId }: DetailPanelProps) {
   const subformRows = data?.data ?? [];
 
   return (
-    <div className="bg-slate-50/50 border-l-2 border-l-primary/20 border-b border-slate-100 py-4 pl-14 pr-6">
+    <div className="bg-[var(--color-gold-hover)] border-l-2 border-l-[var(--color-gold-primary)]/20 border-b border-[var(--color-gold-subtle)] py-4 pl-14 pr-6">
       {isLoading && (
         <div className="flex items-center gap-2">
-          <Loader2 size={14} className="animate-spin text-slate-400" />
-          <span className="text-xs text-slate-400">Loading...</span>
+          <Loader2 size={14} className="animate-spin text-[var(--color-text-muted)]" />
+          <span className="text-xs text-[var(--color-text-muted)]">Loading...</span>
         </div>
       )}
 
       {error && (
-        <span className="text-xs text-red-500">Failed to load details</span>
+        <span className="text-xs text-[var(--color-red)]">Failed to load details</span>
       )}
 
       {!isLoading && !error && subformRows.length === 0 && (
-        <span className="text-xs text-slate-400 italic">No warehouse data</span>
+        <span className="text-xs text-[var(--color-text-muted)] italic">No warehouse data</span>
       )}
 
       {!isLoading && !error && subformRows.length > 0 && (
-        <table className="text-xs text-slate-600">
+        <table className="text-xs text-[var(--color-text-secondary)]">
           <thead>
             <tr>
-              <th className="px-3 py-1.5 text-left text-[11px] font-medium text-slate-400 uppercase tracking-wider">Warehouse</th>
-              <th className="px-3 py-1.5 text-left text-[11px] font-medium text-slate-400 uppercase tracking-wider">Bin</th>
-              <th className="px-3 py-1.5 text-right text-[11px] font-medium text-slate-400 uppercase tracking-wider">Qty</th>
-              <th className="px-3 py-1.5 text-left text-[11px] font-medium text-slate-400 uppercase tracking-wider">Unit</th>
-              <th className="px-3 py-1.5 text-right text-[11px] font-medium text-slate-400 uppercase tracking-wider">Value</th>
+              <th className="px-3 py-1.5 text-left text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-wider">Warehouse</th>
+              <th className="px-3 py-1.5 text-left text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-wider">Bin</th>
+              <th className="px-3 py-1.5 text-right text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-wider">Qty</th>
+              <th className="px-3 py-1.5 text-left text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-wider">Unit</th>
+              <th className="px-3 py-1.5 text-right text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-wider">Value</th>
             </tr>
           </thead>
           <tbody>
@@ -51,7 +51,7 @@ export default function BbdDetailPanel({ row, reportId }: DetailPanelProps) {
               const balance = Number(sfRow.BALANCE ?? 0);
               const value = balance * purchasePrice;
               return (
-                <tr key={idx} className="hover:bg-slate-100/50 transition-colors duration-100">
+                <tr key={idx} className="hover:bg-[var(--color-gold-hover)] transition-colors duration-100">
                   <td className="px-3 py-1.5">{String(sfRow.WARHSNAME ?? '')}</td>
                   <td className="px-3 py-1.5">{String(sfRow.LOCNAME ?? '')}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{formatNumber(balance)}</td>

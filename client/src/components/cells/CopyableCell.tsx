@@ -52,13 +52,13 @@ export default function CopyableCell({ value, onCopy }: CopyableCellProps) {
           if (ok) onCopy(value);
         });
       }}
-      className="group/copy flex items-center gap-1.5 hover:text-primary transition-colors"
+      className="group/copy flex items-center gap-1.5 hover:text-[var(--color-gold-primary)] transition-colors"
       title="Click to copy"
     >
       <span>{value}</span>
       <Copy
         size={12}
-        className="text-slate-300 opacity-0 group-hover/copy:opacity-100 transition-opacity"
+        className="text-[var(--color-text-faint)] opacity-0 group-hover/copy:opacity-100 transition-opacity"
       />
     </button>
   );

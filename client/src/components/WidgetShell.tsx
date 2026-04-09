@@ -15,9 +15,9 @@ interface WidgetShellProps {
 
 export default function WidgetShell({ title, children }: WidgetShellProps) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/60 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-      <div className="px-5 py-4 border-b border-slate-100">
-        <h3 className="text-sm font-semibold text-slate-600">{title}</h3>
+    <div className="bg-[var(--color-bg-card)] rounded-[var(--radius-3xl)] shadow-[var(--shadow-card)]">
+      <div className="px-5 py-4 border-b border-[var(--color-gold-subtle)]">
+        <h3 className="text-sm font-semibold text-[var(--color-text-muted)]">{title}</h3>
       </div>
       <div className="p-0">
         {children}

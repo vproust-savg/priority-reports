@@ -39,15 +39,15 @@ export default function LoadingToast() {
       `}</style>
 
       <div className="flex flex-col items-center justify-center py-12">
-        <div className="inline-flex items-center gap-3 px-5 py-3 bg-white
-          rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] border border-slate-200/60">
+        <div className="inline-flex items-center gap-3 px-5 py-3 bg-[var(--color-bg-card)]
+          rounded-[var(--radius-3xl)] shadow-[var(--shadow-card)] border border-[var(--color-gold-subtle)]">
           {/* WHY: border-t-primary creates the spinning arc; three transparent sides create the gap */}
           <div
             className="loading-toast-spinner h-5 w-5 rounded-full
-              border-2 border-slate-200 border-t-primary"
+              border-2 border-[var(--color-gold-subtle)] border-t-[var(--color-gold-primary)]"
             style={SPINNER_STYLE}
           />
-          <p className="text-sm text-slate-500 font-medium">Loading...</p>
+          <p className="text-sm text-[var(--color-text-secondary)] font-medium">Loading...</p>
         </div>
       </div>
 

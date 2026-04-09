@@ -95,7 +95,7 @@ export default function FilterBuilder({
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="bg-white border-b border-slate-200 px-5 py-4">
+      <div className="bg-[var(--color-bg-card)] border-b border-[var(--color-gold-subtle)] px-5 py-4">
         {/* Root conditions — sortable + droppable container */}
         <div ref={setRootDroppable}>
           <SortableContext items={filterGroup.conditions.map((c) => c.id)} strategy={verticalListSortingStrategy}>
@@ -114,7 +114,7 @@ export default function FilterBuilder({
                   <button
                     onClick={toggleConjunction}
                     className="text-xs font-medium px-2 py-0.5 rounded cursor-pointer select-none
-                      text-slate-400 bg-slate-100 hover:bg-slate-200 transition-colors my-1 block"
+                      text-[var(--color-text-muted)] bg-[var(--color-gold-subtle)] hover:bg-[var(--color-gold-muted)] transition-colors my-1 block"
                   >
                     {filterGroup.conjunction}
                   </button>
@@ -145,11 +145,11 @@ export default function FilterBuilder({
         {/* Add buttons */}
         <div className="flex gap-4 mt-3">
           <button onClick={addCondition}
-            className="text-xs font-medium text-primary hover:text-primary/70 transition-colors">
+            className="text-xs font-medium text-[var(--color-gold-primary)] hover:text-[var(--color-gold-primary)]/70 transition-colors">
             + Add condition
           </button>
           <button onClick={addGroup}
-            className="text-xs font-medium text-primary hover:text-primary/70 transition-colors">
+            className="text-xs font-medium text-[var(--color-gold-primary)] hover:text-[var(--color-gold-primary)]/70 transition-colors">
             + Add group
           </button>
         </div>
@@ -157,7 +157,7 @@ export default function FilterBuilder({
 
       <DragOverlay>
         {activeCondition ? (
-          <div className="bg-white shadow-lg rounded-lg px-3 py-2 text-sm text-slate-600 border border-slate-200">
+          <div className="bg-[var(--color-bg-card)] shadow-[var(--shadow-dropdown)] rounded-[var(--radius-lg)] px-3 py-2 text-sm text-[var(--color-text-secondary)] border border-[var(--color-gold-subtle)]">
             {columns.find((c) => c.key === activeCondition.field)?.label ?? 'New condition'}
           </div>
         ) : null}

@@ -63,8 +63,8 @@ export default function SortRuleRow({
 
       <button
         onClick={() => onUpdate(rule.id, { direction: rule.direction === 'asc' ? 'desc' : 'asc' })}
-        className="flex items-center gap-1 px-2 py-1.5 rounded-lg border border-slate-200
-          hover:bg-slate-50 text-sm text-slate-600 transition-colors flex-shrink-0"
+        className="flex items-center gap-1 px-2 py-1.5 rounded-lg border border-[var(--color-gold-subtle)]
+          hover:bg-[var(--color-gold-hover)] text-sm text-[var(--color-text-secondary)] transition-colors flex-shrink-0"
       >
         {rule.direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
         <span>{rule.direction === 'asc' ? 'Asc' : 'Desc'}</span>
@@ -73,7 +73,7 @@ export default function SortRuleRow({
       <button
         onClick={() => onRemove(rule.id)}
         aria-label="Remove sort rule"
-        className="ml-1 p-1 text-slate-300 hover:text-red-400 rounded transition-colors flex-shrink-0
+        className="ml-1 p-1 text-[var(--color-text-faint)] hover:text-[var(--color-red)] rounded transition-colors flex-shrink-0
           opacity-0 group-hover/row:opacity-100"
       >
         <X size={14} />

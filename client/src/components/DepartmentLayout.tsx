@@ -26,16 +26,16 @@ export default function DepartmentLayout({ department }: DepartmentLayoutProps) 
     .map((p) => ({ ...p, path: department.basePath + p.path }));
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[var(--color-bg-page)]">
       {/* Top bar */}
-      <header className="bg-white border-b border-slate-200/60">
+      <header className="bg-[var(--color-bg-card)] border-b border-[var(--color-gold-subtle)]">
         <div className="max-w-[2400px] mx-auto px-6">
           <div className="flex items-center justify-between h-16">
-            <h1 className="text-[28px] font-bold tracking-tight text-slate-900">
+            <h1 className="text-[28px] font-bold tracking-tight text-[var(--color-text-primary)]">
               {department.name}
             </h1>
             {import.meta.env.DEV && (
-              <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
+              <span className="text-xs font-medium text-[var(--color-text-muted)] bg-[var(--color-gold-subtle)] px-2 py-1 rounded-md">
                 DEV
               </span>
             )}

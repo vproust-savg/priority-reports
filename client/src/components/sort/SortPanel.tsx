@@ -44,7 +44,7 @@ export default function SortPanel({
   }
 
   return (
-    <div className="bg-white border-b border-slate-200 px-5 py-4">
+    <div className="bg-[var(--color-bg-card)] border-b border-[var(--color-gold-subtle)] px-5 py-4">
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={sortRules.map((r) => r.id)} strategy={verticalListSortingStrategy}>
           {sortRules.map((rule) => (
@@ -63,17 +63,17 @@ export default function SortPanel({
       <button
         onClick={onAddSort}
         disabled={allColumnsUsed}
-        className="text-xs font-medium text-primary hover:text-primary/70 transition-colors
+        className="text-xs font-medium text-[var(--color-gold-primary)] hover:text-[var(--color-gold-primary)]/70 transition-colors
           disabled:opacity-50 disabled:cursor-not-allowed mt-2"
       >
         + Add sort
       </button>
 
       {sortRules.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-slate-100">
+        <div className="mt-3 pt-3 border-t border-[var(--color-gold-subtle)]">
           <button
             onClick={onClearAll}
-            className="text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
+            className="text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
           >
             Clear all
           </button>

@@ -55,14 +55,14 @@ export default function ReportTable({
     <div className="overflow-x-auto">
       <table className="w-full text-[13px]">
         <thead>
-          <tr className="bg-slate-50/80">
+          <tr className="bg-[var(--color-gold-hover)]">
             {isExpandable && (
               <th className="w-10 px-2 py-3" aria-label="Expand" />
             )}
             {columns.map((col) => (
               <th
                 key={col.key}
-                className={`px-5 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider ${
+                className={`px-5 py-3 text-left text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wide ${
                   col.type === 'currency' || col.type === 'number' ? 'text-right' : ''
                 }`}
               >
@@ -75,7 +75,7 @@ export default function ReportTable({
           {data.map((row, rowIdx) => {
             const styleValue = rowStyleField ? String(row[rowStyleField] ?? '') : '';
             const rowStyle = ROW_STYLE_MAP[styleValue] ?? '';
-            const zebraClass = !rowStyle && rowIdx % 2 === 1 ? 'bg-slate-50/30' : '';
+            const zebraClass = '';
 
             const rowKey = isExpandable
               ? String(row[expandConfig.rowKeyField] ?? rowIdx)
@@ -84,7 +84,7 @@ export default function ReportTable({
 
             // WHY: Expanded rows without a status color get a subtle blue tint
             // to visually connect the parent row to the detail panel below.
-            const expandedClass = isExpanded && !rowStyle ? 'bg-blue-50/30' : '';
+            const expandedClass = isExpanded && !rowStyle ? 'bg-[var(--color-gold-hover)]' : '';
 
             return (
               <ExpandableRow
@@ -139,7 +139,7 @@ function ExpandableRow({
   return (
     <>
       <tr
-        className={`border-b border-slate-100 hover:bg-blue-50/60 transition-colors duration-150 ${
+        className={`border-b border-[var(--color-gold-subtle)] hover:bg-[var(--color-gold-hover)] transition-colors duration-150 ${
           rowStyle || expandedClass || zebraClass
         } ${isExpandable ? 'cursor-pointer group' : ''}`}
         onClick={isExpandable ? () => onToggleExpand!(rowKey) : undefined}
@@ -158,7 +158,7 @@ function ExpandableRow({
             >
               <ChevronRight
                 size={14}
-                className={`text-slate-400 group-hover:text-slate-600 transition-transform duration-200 ease-out ${
+                className={`text-[var(--color-text-muted)] group-hover:text-[var(--color-text-secondary)] transition-transform duration-200 ease-out ${
                   isExpanded ? 'rotate-90' : ''
                 }`}
               />
@@ -169,7 +169,7 @@ function ExpandableRow({
           const customRenderer = cellRenderers?.[col.key];
           if (customRenderer) {
             return (
-              <td key={col.key} className="px-5 py-3 text-slate-700 whitespace-nowrap">
+              <td key={col.key} className="px-5 py-3 text-[var(--color-text-primary)] whitespace-nowrap">
                 {customRenderer(row[col.key], row)}
               </td>
             );
@@ -178,9 +178,9 @@ function ExpandableRow({
           return (
             <td
               key={col.key}
-              className={`px-5 py-3 text-slate-700 whitespace-nowrap ${
+              className={`px-5 py-3 text-[var(--color-text-primary)] whitespace-nowrap ${
                 col.type === 'currency' || col.type === 'number' ? 'text-right tabular-nums' : ''
-              } ${isNegative ? 'text-red-500' : ''}`}
+              } ${isNegative ? 'text-[var(--color-red)]' : ''}`}
             >
               {formatted}
             </td>

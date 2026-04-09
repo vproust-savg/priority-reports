@@ -61,7 +61,7 @@ export default function FilterConditionRow({
         {...attributes}
         {...listeners}
         aria-label="Drag to reorder"
-        className="cursor-grab active:cursor-grabbing p-0.5 text-slate-300 hover:text-slate-400
+        className="cursor-grab active:cursor-grabbing p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text-muted)]
           opacity-0 group-hover/row:opacity-100 transition-opacity touch-none flex-shrink-0"
       >
         <GripVertical size={14} />
@@ -118,7 +118,7 @@ export default function FilterConditionRow({
       {/* Delete button */}
       <button
         onClick={onDelete}
-        className="ml-1 p-1 text-slate-300 hover:text-red-400 rounded transition-colors flex-shrink-0"
+        className="ml-1 p-1 text-[var(--color-text-faint)] hover:text-[var(--color-red)] rounded transition-colors flex-shrink-0"
       >
         <X size={14} />
       </button>

@@ -12,7 +12,7 @@ interface ColumnDragOverlayProps {
 
 export default function ColumnDragOverlay({ label }: ColumnDragOverlayProps) {
   return (
-    <div className="bg-white shadow-lg rounded-lg px-3 py-2 text-sm text-slate-600 border border-slate-200">
+    <div className="bg-[var(--color-bg-card)] shadow-[var(--shadow-dropdown)] rounded-[var(--radius-lg)] px-3 py-2 text-sm text-[var(--color-text-secondary)] border border-[var(--color-gold-subtle)]">
       {label}
     </div>
   );

@@ -13,9 +13,9 @@ import { formatCellValue } from '../../utils/formatters';
 // WHY: Same map as ReportTable ROW_STYLE_MAP — duplicated here because
 // importing from ReportTable would create a circular dependency.
 const STATUS_BG: Record<string, string> = {
-  'expired': 'bg-red-50',
-  'expiring-perishable': 'bg-orange-50',
-  'expiring-non-perishable': 'bg-amber-50',
+  'expired': 'bg-[var(--color-red)]/5',
+  'expiring-perishable': 'bg-[var(--color-yellow)]/10',
+  'expiring-non-perishable': 'bg-[var(--color-yellow)]/5',
 };
 
 function computeNewDate(currentDate: string, days: number): string {
@@ -39,10 +39,10 @@ export default function BulkExtendRowTable({
   rows, selected, days, sortKey, sortDir, onHeaderClick, onToggleRow, isSubmitting,
 }: BulkExtendRowTableProps) {
   return (
-    <div className="max-h-96 overflow-y-auto border border-slate-200 rounded-lg">
+    <div className="max-h-96 overflow-y-auto border border-[var(--color-gold-subtle)] rounded-lg">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 sticky top-0">
-          <tr className="text-left text-xs text-slate-500 uppercase tracking-wider">
+        <thead className="bg-[var(--color-gold-hover)] sticky top-0">
+          <tr className="text-left text-xs text-[var(--color-text-secondary)] uppercase tracking-wider">
             <th className="px-3 py-2 w-8"></th>
             {[
               { key: 'serialName', label: 'Lot Number' },
@@ -53,7 +53,7 @@ export default function BulkExtendRowTable({
               <th key={col.key} className="px-3 py-2">
                 <button
                   onClick={() => onHeaderClick(col.key)}
-                  className="flex items-center gap-1 hover:text-slate-700 transition-colors"
+                  className="flex items-center gap-1 hover:text-[var(--color-text-primary)] transition-colors"
                 >
                   {col.label}
                   {sortKey === col.key && (sortDir === 'asc'
@@ -75,21 +75,21 @@ export default function BulkExtendRowTable({
             const bgClass = STATUS_BG[status] ?? '';
 
             return (
-              <tr key={sn} className={`border-b border-slate-100 ${bgClass}`}>
+              <tr key={sn} className={`border-b border-[var(--color-gold-subtle)] ${bgClass}`}>
                 <td className="px-3 py-2">
                   <input
                     type="checkbox"
                     checked={selected.has(sn)}
                     onChange={() => onToggleRow(sn)}
                     disabled={isSubmitting}
-                    className="rounded border-slate-300"
+                    className="rounded border-[var(--color-gold-muted)]"
                   />
                 </td>
                 <td className="px-3 py-2 font-medium">{sn}</td>
                 <td className="px-3 py-2">{row.partNumber as string}</td>
                 <td className="px-3 py-2 max-w-[200px] truncate">{row.partDescription as string}</td>
                 <td className="px-3 py-2">{currentFmt}</td>
-                <td className="px-3 py-2 font-medium text-primary">{newFmt}</td>
+                <td className="px-3 py-2 font-medium text-[var(--color-gold-primary)]">{newFmt}</td>
               </tr>
             );
           })}

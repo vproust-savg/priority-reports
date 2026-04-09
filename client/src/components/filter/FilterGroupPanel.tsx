@@ -35,17 +35,17 @@ export default function FilterGroupPanel({
   const { setNodeRef: setDroppableRef } = useDroppable({ id: group.id });
 
   return (
-    <div className="border-l-2 border-primary/20 rounded-r-lg bg-slate-50/50 px-4 py-3 mt-2 ml-2">
+    <div className="border-l-2 border-[var(--color-gold-primary)]/20 rounded-r-lg bg-[var(--color-gold-hover)] px-4 py-3 mt-2 ml-2">
       <div className="flex items-center justify-between mb-2">
         <button
           onClick={toggleConjunction}
-          className="text-xs text-slate-400 font-medium cursor-pointer hover:text-slate-600 transition-colors"
+          className="text-xs text-[var(--color-text-muted)] font-medium cursor-pointer hover:text-[var(--color-text-secondary)] transition-colors"
         >
           {group.conjunction === 'or' ? 'Or' : 'And'} group
         </button>
         <button
           onClick={onDelete}
-          className="text-xs text-slate-300 hover:text-red-400 transition-colors"
+          className="text-xs text-[var(--color-text-faint)] hover:text-[var(--color-red)] transition-colors"
         >
           Remove
         </button>
@@ -59,7 +59,7 @@ export default function FilterGroupPanel({
                 <button
                   onClick={toggleConjunction}
                   className="text-xs font-medium px-2 py-0.5 rounded cursor-pointer select-none
-                    text-slate-400 bg-slate-100 hover:bg-slate-200 transition-colors my-1 block"
+                    text-[var(--color-text-muted)] bg-[var(--color-gold-subtle)] hover:bg-[var(--color-gold-muted)] transition-colors my-1 block"
                 >
                   {group.conjunction}
                 </button>
@@ -82,7 +82,7 @@ export default function FilterGroupPanel({
         </SortableContext>
 
         {group.conditions.length === 0 && (
-          <div className="border border-dashed border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-400 text-center">
+          <div className="border border-dashed border-[var(--color-gold-subtle)] rounded-lg px-3 py-2 text-xs text-[var(--color-text-muted)] text-center">
             Drag a condition here
           </div>
         )}
@@ -92,7 +92,7 @@ export default function FilterGroupPanel({
             ...group,
             conditions: [...group.conditions, createEmptyCondition()],
           })}
-          className="text-xs font-medium text-primary hover:text-primary/70 transition-colors mt-2"
+          className="text-xs font-medium text-[var(--color-gold-primary)] hover:text-[var(--color-gold-primary)]/70 transition-colors mt-2"
         >
           + Add condition
         </button>

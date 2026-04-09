@@ -23,15 +23,15 @@ export default function TableSkeleton() {
     <div className="px-5 py-6 space-y-4">
       {/* Header row placeholder */}
       <div className="flex gap-4">
-        <div className="h-3 bg-slate-100 rounded w-1/6" style={SHIMMER_STYLE} />
-        <div className="h-3 bg-slate-100 rounded w-1/5" style={SHIMMER_STYLE} />
-        <div className="h-3 bg-slate-100 rounded w-1/4" style={SHIMMER_STYLE} />
-        <div className="h-3 bg-slate-100 rounded w-1/6" style={SHIMMER_STYLE} />
+        <div className="h-3 skeleton rounded w-1/6" style={SHIMMER_STYLE} />
+        <div className="h-3 skeleton rounded w-1/5" style={SHIMMER_STYLE} />
+        <div className="h-3 skeleton rounded w-1/4" style={SHIMMER_STYLE} />
+        <div className="h-3 skeleton rounded w-1/6" style={SHIMMER_STYLE} />
       </div>
       {/* Body row placeholders */}
       {ROW_WIDTHS.map((w, i) => (
         <div key={i} className="flex gap-4">
-          <div className={`h-4 bg-slate-100 rounded ${w}`} style={SHIMMER_STYLE} />
+          <div className={`h-4 skeleton rounded ${w}`} style={SHIMMER_STYLE} />
         </div>
       ))}
     </div>

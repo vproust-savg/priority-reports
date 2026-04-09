@@ -155,11 +155,11 @@ export default function BulkExtendModal({
       <div className="px-6 py-4 space-y-4">
         {state === 'done' ? (
           <div className="space-y-3 py-2">
-            <p className="text-sm font-medium text-slate-900">{resultSummary}</p>
+            <p className="text-sm font-medium text-[var(--color-text-primary)]">{resultSummary}</p>
             {failedItems.length > 0 && (
               <div className="space-y-1">
                 {failedItems.map((item) => (
-                  <div key={item.serialName} className="text-xs text-red-700 bg-red-50 px-3 py-1.5 rounded">
+                  <div key={item.serialName} className="text-xs text-[var(--color-red)] bg-[var(--color-red)]/5 px-3 py-1.5 rounded">
                     <span className="font-medium">{item.serialName}:</span> {item.error}
                   </div>
                 ))}
@@ -168,7 +168,7 @@ export default function BulkExtendModal({
             <div className="flex justify-end pt-2">
               <button
                 onClick={() => { onSuccess(); }}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-dark)] hover:bg-[var(--color-dark-hover)] rounded-lg transition-colors"
               >
                 Close
               </button>
@@ -178,7 +178,7 @@ export default function BulkExtendModal({
           <>
             {/* Days input */}
             <div className="flex items-center gap-3">
-              <label htmlFor="bulk-extend-days" className="text-sm text-slate-600">Extend by</label>
+              <label htmlFor="bulk-extend-days" className="text-sm text-[var(--color-text-secondary)]">Extend by</label>
               <input
                 id="bulk-extend-days"
                 type="number"
@@ -187,19 +187,19 @@ export default function BulkExtendModal({
                 value={days}
                 onChange={(e) => setDays(Math.max(1, Math.min(365, Number(e.target.value) || 1)))}
                 disabled={isSubmitting}
-                className="w-20 px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50"
+                className="w-20 px-3 py-1.5 text-sm border border-[var(--color-gold-subtle)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-gold-primary)]/30 focus:border-[var(--color-gold-primary)] disabled:opacity-50"
               />
-              <span className="text-sm text-slate-600">days</span>
+              <span className="text-sm text-[var(--color-text-secondary)]">days</span>
             </div>
 
             {/* Select all */}
-            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)] cursor-pointer">
               <input
                 type="checkbox"
                 checked={isAllSelected}
                 onChange={toggleSelectAll}
                 disabled={isSubmitting || rows.length === 0}
-                className="rounded border-slate-300"
+                className="rounded border-[var(--color-gold-muted)]"
               />
               Select all ({rows.length} items)
             </label>
@@ -217,17 +217,17 @@ export default function BulkExtendModal({
 
             {/* Confirmation */}
             {state === 'confirming' && (
-              <div className="px-3 py-2 text-sm text-slate-700 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="px-3 py-2 text-sm text-[var(--color-text-primary)] bg-[var(--color-blue)]/10 border border-[var(--color-blue)]/20 rounded-lg">
                 Extend <span className="font-semibold">{selected.size}</span> lots by <span className="font-semibold">{days}</span> days?
               </div>
             )}
 
             {/* Actions */}
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--color-gold-subtle)]">
               <button
                 onClick={onClose}
                 disabled={isSubmitting}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-gold-hover)] rounded-lg transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -235,13 +235,13 @@ export default function BulkExtendModal({
                 <>
                   <button
                     onClick={() => setState('idle')}
-                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-gold-hover)] rounded-lg transition-colors"
                   >
                     Back
                   </button>
                   <button
                     onClick={handleSubmit}
-                    className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors flex items-center gap-2"
+                    className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-dark)] hover:bg-[var(--color-dark-hover)] rounded-lg transition-colors flex items-center gap-2"
                   >
                     {isSubmitting && <Loader2 size={14} className="animate-spin" />}
                     Confirm
@@ -251,7 +251,7 @@ export default function BulkExtendModal({
                 <button
                   onClick={() => setState('confirming')}
                   disabled={selected.size === 0 || isSubmitting}
-                  className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                  className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-dark)] hover:bg-[var(--color-dark-hover)] rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
                 >
                   {isSubmitting && <Loader2 size={14} className="animate-spin" />}
                   Extend {selected.size} items

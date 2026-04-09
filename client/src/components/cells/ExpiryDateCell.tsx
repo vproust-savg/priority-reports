@@ -24,7 +24,7 @@ export default function ExpiryDateCell({ value, onExtend }: ExpiryDateCellProps)
           e.stopPropagation();
           onExtend();
         }}
-        className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+        className="text-xs font-medium text-[var(--color-gold-primary)] hover:text-[var(--color-gold-primary)]/80 transition-colors"
       >
         Extend
       </button>

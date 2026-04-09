@@ -72,13 +72,13 @@ export default function WeekPicker({ value, valueTo, onChange }: WeekPickerProps
         }}
         className={`${FILTER_INPUT_CLASS} w-52 flex items-center gap-2 cursor-pointer`}
       >
-        <Calendar size={16} className="text-slate-400 shrink-0" />
-        <span className={`flex-1 text-left truncate ${!value ? 'text-slate-400' : ''}`}>
+        <Calendar size={16} className="text-[var(--color-text-muted)] shrink-0" />
+        <span className={`flex-1 text-left truncate ${!value ? 'text-[var(--color-text-muted)]' : ''}`}>
           {label}
         </span>
         <ChevronDown
           size={14}
-          className={`text-slate-400 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+          className={`text-[var(--color-text-muted)] shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
 

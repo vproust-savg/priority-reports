@@ -28,9 +28,9 @@ export default function EmptyState({
       {...(reduced ? REDUCED_FADE : FADE_IN)}
       transition={reduced ? REDUCED_TRANSITION : EASE_DEFAULT}
     >
-      <SearchX size={32} className="text-slate-300 mx-auto mb-3" />
-      <p className="text-slate-500 text-sm font-medium">{message}</p>
-      <p className="text-slate-400 text-xs mt-1">{hint}</p>
+      <SearchX size={32} className="text-[var(--color-text-faint)] mx-auto mb-3" />
+      <p className="text-[var(--color-text-secondary)] text-sm font-medium">{message}</p>
+      <p className="text-[var(--color-text-muted)] text-xs mt-1">{hint}</p>
     </motion.div>
   );
 }

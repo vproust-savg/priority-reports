@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: client/src/components/TableToolbar.test.tsx
-// PURPOSE: Tests for TableToolbar — sort button rendering, badge,
-//          toggle, and active state.
+// PURPOSE: Tests for TableToolbar — icon buttons, badge rendering,
+//          toggle callbacks, and visual states.
 // USED BY: npm test
 // ═══════════════════════════════════════════════════════════════
 
@@ -25,37 +25,38 @@ const defaultProps = {
 };
 
 describe('TableToolbar — Sort button', () => {
-  it('renders Sort button text', () => {
+  it('renders Sort icon button with aria-label', () => {
     render(<TableToolbar {...defaultProps} />);
-    expect(screen.getByText('Sort')).toBeTruthy();
+    expect(screen.getByLabelText('Sort')).toBeTruthy();
   });
 
   it('shows badge when sortCount > 0', () => {
     render(<TableToolbar {...defaultProps} sortCount={2} />);
-    expect(screen.getByText('(2)')).toBeTruthy();
+    expect(screen.getByText('2')).toBeTruthy();
   });
 
   it('does not show badge when sortCount is 0', () => {
     render(<TableToolbar {...defaultProps} sortCount={0} />);
-    expect(screen.queryByText('(0)')).toBeNull();
+    const sortBtn = screen.getByLabelText('Sort');
+    expect(sortBtn.querySelector('.absolute')).toBeNull();
   });
 
   it('calls onSortToggle when clicked', () => {
     const onSortToggle = vi.fn();
     render(<TableToolbar {...defaultProps} onSortToggle={onSortToggle} />);
-    fireEvent.click(screen.getByText('Sort'));
+    fireEvent.click(screen.getByLabelText('Sort'));
     expect(onSortToggle).toHaveBeenCalledTimes(1);
   });
 
   it('applies active styling when sortCount > 0', () => {
     render(<TableToolbar {...defaultProps} sortCount={1} />);
-    const sortBtn = screen.getByText('Sort').closest('button');
-    expect(sortBtn?.className).toContain('text-primary');
+    const sortBtn = screen.getByLabelText('Sort');
+    expect(sortBtn.className).toContain('color-gold-primary');
   });
 
-  it('applies inactive styling when sortCount is 0', () => {
+  it('applies default styling when sortCount is 0', () => {
     render(<TableToolbar {...defaultProps} sortCount={0} />);
-    const sortBtn = screen.getByText('Sort').closest('button');
-    expect(sortBtn?.className).toContain('text-slate-500');
+    const sortBtn = screen.getByLabelText('Sort');
+    expect(sortBtn.className).toContain('color-text-muted');
   });
 });

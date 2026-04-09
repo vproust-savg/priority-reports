@@ -86,12 +86,12 @@ export default function BBDExtendedView() {
     <>
       {/* WHY: Minimal toolbar — only refresh. Matches Active tab's visual weight
           (same px-5 py-2 border-b) but simpler (no Filter/Columns/Sort/Export). */}
-      <div className="px-5 py-2 border-b border-slate-100 flex items-center">
+      <div className="px-5 py-2 border-b border-[var(--color-gold-subtle)] flex items-center">
         <div className="ml-auto flex items-center gap-1">
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg transition-colors text-slate-500 hover:text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg transition-colors text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-gold-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
             title="Refresh data"
           >
             <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />

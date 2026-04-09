@@ -46,8 +46,8 @@ export default function WeekPickerDropdown({
   const isShortcutActive = (monday: Date) => value === toISODate(monday);
 
   return (
-    <div className="absolute top-full left-0 mt-1 z-50 w-72 bg-white rounded-xl
-      border border-slate-200 shadow-lg p-3 transition-all duration-150"
+    <div className="absolute top-full left-0 mt-1 z-50 w-72 bg-[var(--color-bg-card)] rounded-[var(--radius-xl)]
+      border border-[var(--color-gold-subtle)] shadow-[var(--shadow-dropdown)] p-3 transition-all duration-150"
     >
       {/* Shortcuts */}
       <div className="flex gap-2 mb-3">
@@ -61,8 +61,8 @@ export default function WeekPickerDropdown({
             onClick={() => onSelect(shortcut.monday)}
             className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors
               ${isShortcutActive(shortcut.monday)
-                ? 'bg-primary/10 text-primary font-semibold'
-                : 'bg-slate-100 text-slate-600 hover:bg-primary/10 hover:text-primary'
+                ? 'bg-[var(--color-gold-primary)]/10 text-[var(--color-gold-primary)] font-semibold'
+                : 'bg-[var(--color-gold-subtle)] text-[var(--color-text-secondary)] hover:bg-[var(--color-gold-primary)]/10 hover:text-[var(--color-gold-primary)]'
               }`}
           >
             {shortcut.label}
@@ -73,14 +73,14 @@ export default function WeekPickerDropdown({
       {/* Month navigation */}
       <div className="flex items-center justify-between mb-2">
         <button type="button" onClick={prevMonth}
-          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors">
+          className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-gold-hover)] transition-colors">
           <ChevronLeft size={16} />
         </button>
-        <span className="text-sm font-semibold text-slate-800">
+        <span className="text-sm font-semibold text-[var(--color-text-primary)]">
           {MONTHS[displayMonth.getMonth()]} {displayMonth.getFullYear()}
         </span>
         <button type="button" onClick={nextMonth}
-          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors">
+          className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-gold-hover)] transition-colors">
           <ChevronRight size={16} />
         </button>
       </div>
@@ -88,7 +88,7 @@ export default function WeekPickerDropdown({
       {/* Day headers */}
       <div className="grid grid-cols-7 mb-1">
         {DAY_HEADERS.map((d) => (
-          <div key={d} className="text-[10px] uppercase tracking-wider text-slate-400 font-medium text-center">
+          <div key={d} className="text-[10px] uppercase tracking-wider text-[var(--color-text-muted)] font-medium text-center">
             {d}
           </div>
         ))}
@@ -109,7 +109,7 @@ export default function WeekPickerDropdown({
               onMouseEnter={() => setHoveredMonday(weekMonday)}
               onMouseLeave={() => setHoveredMonday(null)}
               className={`grid grid-cols-7 cursor-pointer rounded-lg transition-colors
-                ${isSelected ? 'bg-primary/10' : isHovered ? 'bg-primary/5' : ''}`}
+                ${isSelected ? 'bg-[var(--color-gold-primary)]/10' : isHovered ? 'bg-[var(--color-gold-primary)]/5' : ''}`}
             >
               {week.map((date, i) => {
                 const dateISO = toISODate(date);
@@ -123,14 +123,14 @@ export default function WeekPickerDropdown({
                     key={dateISO}
                     className={`h-7 flex items-center justify-center text-xs transition-colors
                       ${isSelectedEndpoint
-                        ? `bg-primary text-white ${i === 0 ? 'rounded-l-full' : 'rounded-r-full'}`
+                        ? `bg-[var(--color-dark)] text-white ${i === 0 ? 'rounded-l-full' : 'rounded-r-full'}`
                         : isSelectedMiddle
-                          ? 'bg-primary/15 text-primary'
+                          ? 'bg-[var(--color-gold-primary)]/15 text-[var(--color-gold-primary)]'
                           : isCurrentMonth
-                            ? 'text-slate-600'
-                            : 'text-slate-300'
+                            ? 'text-[var(--color-text-secondary)]'
+                            : 'text-[var(--color-text-faint)]'
                       }
-                      ${isToday && !isSelectedEndpoint ? 'ring-1 ring-primary/30 rounded-full' : ''}
+                      ${isToday && !isSelectedEndpoint ? 'ring-1 ring-[var(--color-gold-primary)]/30 rounded-full' : ''}
                     `}
                   >
                     {date.getDate()}

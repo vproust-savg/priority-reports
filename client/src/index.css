@@ -1,30 +1,111 @@
 @import "tailwindcss";
 
 @theme {
-  /* WHY: System font stack renders as SF Pro on Mac — the actual Apple typeface.
-     This is a deliberate Apple/Stripe design reference, not a lazy default.
-     Zero load time, no external font dependency. */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  /* ─── Spacing scale ─── */
+  --spacing-2xs: 2px;
+  --spacing-xs: 4px;
+  --spacing-sm: 6px;
+  --spacing-md: 8px;
+  --spacing-base: 10px;
+  --spacing-lg: 12px;
+  --spacing-xl: 14px;
+  --spacing-2xl: 16px;
+  --spacing-3xl: 20px;
+  --spacing-4xl: 24px;
 
-  /* WHY: Apple system blue (#007AFF) as primary accent instead of generic blue-500.
-     This is the exact blue used across Apple's UI. */
-  --color-primary: #007AFF;
+  /* ─── Backgrounds ─── */
+  --color-bg-page: #f5f1eb;
+  --color-bg-card: #ffffff;
+
+  /* ─── Gold accent scale (lightest → most saturated) ─── */
+  --color-gold-hover: #faf8f4;
+  --color-gold-subtle: #f0ece5;
+  --color-gold-muted: #e8e0d0;
+  --color-gold-light: #d4c5a9;
+  --color-gold-primary: #b8a88a;
+
+  /* ─── Dark pair ─── */
+  --color-dark: #2c2a26;
+  --color-dark-hover: #3d3a35;
+
+  /* ─── Text scale ─── */
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #555555;
+  --color-text-muted: #999999;
+  --color-text-faint: #bbbbbb;
+
+  /* ─── Semantic ─── */
+  --color-green: #22c55e;
+  --color-red: #ef4444;
+  --color-yellow: #eab308;
+  --color-blue: #3b82f6;
+
+  /* ─── Border radius ─── */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-base: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 14px;
+  --radius-3xl: 16px;
+
+  /* ─── Shadows ─── */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-active: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-glow: -2px 0 8px rgba(184, 168, 138, 0.3);
+
+  /* ─── Font ─── */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
 }
 
-/* WHY: Custom scrollbar matches the Stripe aesthetic.
-   Thin, rounded, subtle — not the default chunky browser scrollbar. */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+/* ─── Global styles ─── */
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: var(--font-sans);
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
 
-/* WHY: tabular-nums ensures numbers in tables/KPIs align in columns.
-   Without this, $1,234 and $999 would have different widths. */
-.tabular-nums { font-variant-numeric: tabular-nums; }
+/* WHY: Gold focus ring — SG Interface uses gold-primary for all focus indicators */
+*:focus-visible {
+  outline: 2px solid var(--color-gold-primary);
+  outline-offset: 2px;
+}
 
-/* WHY: Stripe-style shimmer sweep for skeleton loading placeholders.
-   Pure CSS — no JS animation loop needed. */
+/* WHY: Custom scrollbar — 4px thin, gold-themed to match SG Interface */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--color-gold-subtle); }
+::-webkit-scrollbar-thumb { background: var(--color-gold-light); border-radius: var(--radius-xs); }
+
+/* WHY: Tabular numbers ensure financial columns align vertically */
+.tabular-nums { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
+
+/* WHY: Gold-tinted shimmer for skeleton loading — matches SG Interface palette */
 @keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% { background-position: -200px 0; }
+  100% { background-position: 200px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--color-gold-subtle) 0%, var(--color-gold-hover) 50%, var(--color-gold-subtle) 100%);
+  background-size: 400px 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* WHY: Screen reader utility — visually hidden, accessible */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0;
+}
+
+/* WHY: Respect OS reduced-motion preference for CSS animations */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
