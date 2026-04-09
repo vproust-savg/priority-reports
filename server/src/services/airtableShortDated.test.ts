@@ -398,7 +398,8 @@ describe('fetchExtendedItems', () => {
             fldn4AaeqjPJy9n97: 125,
             fldMzTMbgo4M5Bwtg: 2.5,
             fldi6NqDttCM94WzZ: 'Acme',
-            fldsVAgVQPbAqE6Ua: { id: 'sel1', name: 'Yes', color: 'green' },
+            // WHY: With returnFieldsByFieldId=true, singleSelect returns plain string.
+            fldsVAgVQPbAqE6Ua: 'Yes',
             fld5BAG6CMGvme9o5: 'BrandX',
             fld4VW5P7L2LH1IFW: 'Sweeteners',
             fldyuY9YkSEbWTPtB: '2026-04-01',
@@ -417,13 +418,13 @@ describe('fetchExtendedItems', () => {
     expect(result[0]._recordId).toBe('recABC');
   });
 
-  it('handles singleSelect perishable field — extracts name from object', async () => {
+  it('handles perishable field as plain string (returnFieldsByFieldId)', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         records: [{
           id: 'recABC',
-          fields: { fldsVAgVQPbAqE6Ua: { id: 'sel1', name: 'No', color: 'gray' } },
+          fields: { fldsVAgVQPbAqE6Ua: 'No' },
         }],
       }),
     });

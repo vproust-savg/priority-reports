@@ -127,7 +127,8 @@ export async function snapshotExtendedItem(
   // WHY: Search by lot number using filterByFormula with field ID.
   // encodeURIComponent required — same pattern as templateService.ts line 40.
   const filterFormula = encodeURIComponent(`{${F.lotNumber}}="${lotNumber}"`);
-  const searchUrl = `${AIRTABLE_URL}?filterByFormula=${filterFormula}`;
+  // WHY: returnFieldsByFieldId=true so response keys match our F.* constants.
+  const searchUrl = `${AIRTABLE_URL}?filterByFormula=${filterFormula}&returnFieldsByFieldId=true`;
   const searchRes = await fetch(searchUrl, { headers: airtableHeaders() });
 
   if (!searchRes.ok) {
@@ -217,7 +218,12 @@ export async function fetchExtendedItems(): Promise<ExtendedItemRow[]> {
   // WHY: Airtable returns max 100 records per request. Must paginate
   // with offset cursor until no offset is returned.
   do {
-    const url = offset ? `${AIRTABLE_URL}?offset=${offset}` : AIRTABLE_URL;
+    // WHY: returnFieldsByFieldId=true so response keys match our F.* constants.
+    // Without it, Airtable returns field names ("Lot Number") not IDs ("fldXXX").
+    const params = offset
+      ? `returnFieldsByFieldId=true&offset=${offset}`
+      : 'returnFieldsByFieldId=true';
+    const url = `${AIRTABLE_URL}?${params}`;
     const res = await fetch(url, { headers: airtableHeaders() });
     if (!res.ok) throw new Error(`Airtable fetch failed: ${res.status}`);
     const data = await res.json() as {
@@ -239,8 +245,8 @@ export async function fetchExtendedItems(): Promise<ExtendedItemRow[]> {
     value: (rec.fields[F.value] as number) ?? 0,
     purchasePrice: (rec.fields[F.purchasePrice] as number) ?? 0,
     vendor: (rec.fields[F.vendor] as string) ?? '',
-    // WHY: singleSelect fields return {id, name, color} objects, not plain strings.
-    perishable: (rec.fields[F.perishable] as { name: string })?.name ?? '',
+    // WHY: With returnFieldsByFieldId + typecast, singleSelect returns plain string.
+    perishable: (rec.fields[F.perishable] as string) ?? '',
     brand: (rec.fields[F.brand] as string) ?? '',
     family: (rec.fields[F.family] as string) ?? '',
     originalExpiryDate: (rec.fields[F.originalExpiryDate] as string) ?? '',
