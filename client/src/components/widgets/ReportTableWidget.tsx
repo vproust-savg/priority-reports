@@ -6,7 +6,7 @@
 // EXPORTS: ReportTableWidget
 // ═══════════════════════════════════════════════════════════════
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
 import { useReportQuery } from '../../hooks/useReportQuery';
@@ -16,6 +16,7 @@ import { useColumnManager } from '../../hooks/useColumnManager';
 import { useSortManager } from '../../hooks/useSortManager';
 import { useExport } from '../../hooks/useExport';
 import { useBBDExtend } from '../../hooks/useBBDExtend';
+import { useClickOutside } from '../../hooks/useClickOutside';
 import { AnimatePresence, motion } from 'framer-motion';
 import { PANEL_FADE } from '../../config/animationConstants';
 import TableToolbar from '../TableToolbar';
@@ -118,6 +119,18 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const handleColumnToggle = () => { setIsColumnPanelOpen(!isColumnPanelOpen); setIsFilterOpen(false); setIsSortPanelOpen(false); };
   const handleSortToggle = () => { setIsSortPanelOpen(!isSortPanelOpen); setIsFilterOpen(false); setIsColumnPanelOpen(false); };
 
+  // WHY: Click-outside guard must wrap toolbar AND its panels. If the ref only
+  // wraps the toolbar itself, mousedowns inside a panel register as "outside"
+  // and close it — breaking every interaction (filter inputs, sort rules, etc.)
+  const toolbarWrapRef = useRef<HTMLDivElement>(null);
+  const anyToolbarPanelOpen = isFilterOpen || isColumnPanelOpen || isSortPanelOpen;
+  const closeAllToolbarPanels = useCallback(() => {
+    setIsFilterOpen(false);
+    setIsColumnPanelOpen(false);
+    setIsSortPanelOpen(false);
+  }, [setIsFilterOpen, setIsColumnPanelOpen, setIsSortPanelOpen]);
+  useClickOutside(toolbarWrapRef, closeAllToolbarPanels, anyToolbarPanelOpen);
+
   return (
     <>
       {reportId === 'bbd' && (
@@ -131,63 +144,67 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         <BBDExtendedView />
       ) : (
         <>
-          <TableToolbar
-            activeFilterCount={countActiveFilters(filterGroup)}
-            isFilterOpen={isFilterOpen}
-            onFilterToggle={handleFilterToggle}
-            hiddenColumnCount={hiddenCount}
-            isColumnPanelOpen={isColumnPanelOpen}
-            onColumnToggle={handleColumnToggle}
-            sortCount={sortCount}
-            isSortPanelOpen={isSortPanelOpen}
-            onSortToggle={handleSortToggle}
-            isExporting={isExporting}
-            onExport={triggerExport}
-            isRefreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            onBulkExtend={reportId === 'bbd' && activeSubTab === 'active' ? handleBulkExtend : undefined}
-          />
-          <AnimatePresence>
-            {isFilterOpen && (
-              <motion.div key="filter-panel" {...PANEL_FADE}>
-                <FilterBuilder
-                  filterGroup={filterGroup}
-                  onChange={handleFilterChange}
-                  columns={filterColumns}
-                  filterOptions={filtersQuery.data?.filters}
-                  filterOptionsLoading={filtersQuery.isLoading}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <AnimatePresence>
-            {isColumnPanelOpen && (
-              <motion.div key="column-panel" {...PANEL_FADE}>
-                <ColumnManagerPanel
-                  managedColumns={managedColumns}
-                  onToggle={toggleColumn}
-                  onReorder={reorderColumns}
-                  onShowAll={showAll}
-                  onHideAll={hideAll}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <AnimatePresence>
-            {isSortPanelOpen && (
-              <motion.div key="sort-panel" {...PANEL_FADE}>
-                <SortPanel
-                  sortRules={sortRules}
-                  columns={visibleColumns}
-                  onAddSort={addSort}
-                  onRemoveSort={removeSort}
-                  onUpdateSort={updateSort}
-                  onReorderSorts={reorderSorts}
-                  onClearAll={clearAllSorts}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* WHY: Single wrapper for toolbar + panels so useClickOutside treats
+              clicks inside any panel as "inside" — closes only on real outside clicks. */}
+          <div ref={toolbarWrapRef}>
+            <TableToolbar
+              activeFilterCount={countActiveFilters(filterGroup)}
+              isFilterOpen={isFilterOpen}
+              onFilterToggle={handleFilterToggle}
+              hiddenColumnCount={hiddenCount}
+              isColumnPanelOpen={isColumnPanelOpen}
+              onColumnToggle={handleColumnToggle}
+              sortCount={sortCount}
+              isSortPanelOpen={isSortPanelOpen}
+              onSortToggle={handleSortToggle}
+              isExporting={isExporting}
+              onExport={triggerExport}
+              isRefreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              onBulkExtend={reportId === 'bbd' && activeSubTab === 'active' ? handleBulkExtend : undefined}
+            />
+            <AnimatePresence>
+              {isFilterOpen && (
+                <motion.div key="filter-panel" {...PANEL_FADE}>
+                  <FilterBuilder
+                    filterGroup={filterGroup}
+                    onChange={handleFilterChange}
+                    columns={filterColumns}
+                    filterOptions={filtersQuery.data?.filters}
+                    filterOptionsLoading={filtersQuery.isLoading}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <AnimatePresence>
+              {isColumnPanelOpen && (
+                <motion.div key="column-panel" {...PANEL_FADE}>
+                  <ColumnManagerPanel
+                    managedColumns={managedColumns}
+                    onToggle={toggleColumn}
+                    onReorder={reorderColumns}
+                    onShowAll={showAll}
+                    onHideAll={hideAll}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <AnimatePresence>
+              {isSortPanelOpen && (
+                <motion.div key="sort-panel" {...PANEL_FADE}>
+                  <SortPanel
+                    sortRules={sortRules}
+                    columns={visibleColumns}
+                    onAddSort={addSort}
+                    onRemoveSort={removeSort}
+                    onUpdateSort={updateSort}
+                    onReorderSorts={reorderSorts}
+                    onClearAll={clearAllSorts}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
           {filterLoadError && (
             <div className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-red-700 bg-red-50/80 border border-red-200/60 rounded-lg">
               <AlertTriangle size={14} className="shrink-0 text-red-500" />

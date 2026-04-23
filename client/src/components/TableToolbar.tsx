@@ -42,25 +42,13 @@ export default function TableToolbar({
   searchTerm = '', onSearch,
   totalRows, filteredRows,
 }: TableToolbarProps) {
-  const barRef = useRef<HTMLDivElement>(null);
-
-  /* WHY: Click-outside closes any open panel — matches Sales Dashboard v1 pattern */
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) {
-        if (isFilterOpen) onFilterToggle();
-        if (isColumnPanelOpen) onColumnToggle();
-        if (isSortPanelOpen) onSortToggle();
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [isFilterOpen, isColumnPanelOpen, isSortPanelOpen, onFilterToggle, onColumnToggle, onSortToggle]);
-
+  /* WHY: Click-outside handling lives in ReportTableWidget (useClickOutside hook)
+     because it must guard the toolbar AND its sibling panels together — a ref
+     scoped to just this component would close panels on every in-panel click. */
   const isFiltered = totalRows !== undefined && filteredRows !== undefined && totalRows !== filteredRows;
 
   return (
-    <div ref={barRef} className="sticky top-0 z-10 bg-[var(--color-bg-card)]">
+    <div className="sticky top-0 z-10 bg-[var(--color-bg-card)]">
       <div className="flex items-center gap-2 px-[var(--spacing-3xl)] py-[var(--spacing-base)] border-b border-[var(--color-gold-subtle)]">
         {onSearch && <ExpandableSearch searchTerm={searchTerm} onSearch={onSearch} />}
 
