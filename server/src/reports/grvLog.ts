@@ -18,8 +18,8 @@ import { escapeODataString } from '../services/odataFilterBuilder';
 const columns: ColumnDefinition[] = [
   { key: 'date', label: 'Date', type: 'date' },
   { key: 'receivingTime', label: 'Receiving Time', type: 'string' },
-  { key: 'docNo', label: 'GRV #', type: 'string' },
-  { key: 'poNumber', label: 'PO #', type: 'string' },
+  { key: 'docNo', label: 'GRV #', type: 'string', copyable: true },
+  { key: 'poNumber', label: 'PO #', type: 'string', copyable: true },
   { key: 'vendor', label: 'Vendor', type: 'string' },
   { key: 'warehouse', label: 'Warehouse', type: 'string' },
   { key: 'status', label: 'Status', type: 'string' },

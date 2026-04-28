@@ -10,6 +10,10 @@ export interface ColumnDefinition {
   key: string;
   label: string;
   type: 'string' | 'currency' | 'number' | 'date' | 'percent';
+  // WHY: When true, the cell renders as a click-to-copy button (uses
+  // CopyableCell + widget-level toast). Server declares which columns
+  // are identifiers worth copying (e.g., GRV #, PO #, SKU).
+  copyable?: boolean;
 }
 
 export interface PaginationMeta {

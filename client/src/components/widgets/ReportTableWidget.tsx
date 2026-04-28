@@ -7,6 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useCallback, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
 import { useReportQuery } from '../../hooks/useReportQuery';
@@ -33,8 +34,10 @@ import ExtendExpiryModal from '../modals/ExtendExpiryModal';
 import BulkExtendModal from '../modals/BulkExtendModal';
 import ReportSubTabs from '../ReportSubTabs';
 import BBDExtendedView from '../BBDExtendedView';
+import CopyableCell from '../cells/CopyableCell';
 import { countActiveFilters } from '../../config/filterConstants';
 import { getDetailComponent } from '../../config/detailRegistry';
+import { formatCellValue } from '../../utils/formatters';
 
 export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const {
@@ -104,6 +107,32 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const sortedDisplayData = useMemo(() => sortedData(displayData), [sortedData, displayData]);
   const expandConfig = data?.meta?.expandConfig;
   const DetailComponent = expandConfig ? getDetailComponent(reportId) : null;
+
+  // WHY: Generic copy-renderer source — any column the server flagged
+  // copyable: true gets a CopyableCell. Empty/null values fall through
+  // to the default formatter (e.g., em-dash) so we don't render an
+  // affordance for a value that isn't there.
+  const copyRenderers = useMemo(() => {
+    const map: Record<string, (value: unknown) => ReactNode> = {};
+    for (const col of data?.columns ?? []) {
+      if (!col.copyable) continue;
+      map[col.key] = (value: unknown) => {
+        if (value == null || value === '') {
+          return formatCellValue(value, col.type).formatted;
+        }
+        return <CopyableCell value={String(value)} onCopy={handleCopy} />;
+      };
+    }
+    return map;
+  }, [data?.columns, handleCopy]);
+
+  // WHY: BBD-specific renderers (extend modal, custom expiry cell) take
+  // precedence over generic copyable renderers on key collision.
+  const mergedRenderers = useMemo(() => {
+    const bbd = activeSubTab === 'active' ? cellRenderers : undefined;
+    if (!bbd && Object.keys(copyRenderers).length === 0) return undefined;
+    return { ...copyRenderers, ...(bbd ?? {}) };
+  }, [copyRenderers, cellRenderers, activeSubTab]);
 
   const [expandedRows, setExpandedRows] = useState<Set<string>>(() => new Set());
   const toggleExpand = useCallback((rowKey: string) => {
@@ -234,7 +263,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
                 } : undefined}
                 expandedRows={expandedRows}
                 onToggleExpand={toggleExpand}
-                cellRenderers={activeSubTab === 'active' ? cellRenderers : undefined}
+                cellRenderers={mergedRenderers}
               />
               <Pagination
                 page={page}
