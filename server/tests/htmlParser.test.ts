@@ -15,11 +15,12 @@ Licence Plate : ABC-1234</p>
 Product Surface Temp. °F : 36</div>
 <p>Condition of Product (accept/reject) : accept<br>
 Condition of Truck (accept/reject) : accept</p>
+<p>Time of Receiving : 10:30 AM</p>
 <p>Comments : All good</p>
 `;
 
 describe('parseGrvRemarks', () => {
-  it('extracts all 7 fields from full HTML', () => {
+  it('extracts all 8 fields from full HTML', () => {
     const result = parseGrvRemarks(FULL_HTML);
     expect(result.driverId).toBe('John Smith');
     expect(result.licensePlate).toBe('ABC-1234');
@@ -27,6 +28,7 @@ describe('parseGrvRemarks', () => {
     expect(result.productTemp).toBe('36');
     expect(result.productCondition).toBe('accept');
     expect(result.truckCondition).toBe('accept');
+    expect(result.receivingTime).toBe('10:30 AM');
     expect(result.comments).toBe('All good');
   });
 
@@ -95,5 +97,23 @@ describe('parseGrvRemarks', () => {
   it('handles colons in values (e.g., time format)', () => {
     const html = '<p>Comments : Arrived at 10:30 AM</p>';
     expect(parseGrvRemarks(html).comments).toBe('Arrived at 10:30 AM');
+  });
+
+  it('extracts Time of Receiving (with colon in time value)', () => {
+    const html = '<p>Time of Receiving : 10:30 AM</p>';
+    expect(parseGrvRemarks(html).receivingTime).toBe('10:30 AM');
+  });
+
+  it('returns null for receivingTime when label is absent', () => {
+    const html = '<p>Driver ID : Jane Doe</p>';
+    expect(parseGrvRemarks(html).receivingTime).toBeNull();
+  });
+
+  it('extracts Time of Receiving with various spacing variants', () => {
+    // WHY: Priority users may type the label with inconsistent spacing.
+    // The startsWith() prefix matcher must handle all of these.
+    expect(parseGrvRemarks('<p>Time of Receiving:14:30</p>').receivingTime).toBe('14:30');
+    expect(parseGrvRemarks('<p>Time of Receiving  :  14:30</p>').receivingTime).toBe('14:30');
+    expect(parseGrvRemarks('<p>Time of Receiving : 14:30</p>').receivingTime).toBe('14:30');
   });
 });

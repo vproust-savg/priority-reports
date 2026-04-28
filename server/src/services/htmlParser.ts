@@ -16,6 +16,7 @@ export interface GrvRemarkFields {
   productCondition: string | null;
   truckCondition: string | null;
   comments: string | null;
+  receivingTime: string | null;
 }
 
 // WHY: Map from normalized key prefixes to output field names.
@@ -29,6 +30,7 @@ const FIELD_MAP: Array<{ prefix: string; field: keyof GrvRemarkFields }> = [
   { prefix: 'condition of product', field: 'productCondition' },
   { prefix: 'condition of truck', field: 'truckCondition' },
   { prefix: 'comments', field: 'comments' },
+  { prefix: 'time of receiving', field: 'receivingTime' },
 ];
 
 const EMPTY_FIELDS: GrvRemarkFields = {
@@ -39,6 +41,7 @@ const EMPTY_FIELDS: GrvRemarkFields = {
   productCondition: null,
   truckCondition: null,
   comments: null,
+  receivingTime: null,
 };
 
 function decodeEntities(text: string): string {

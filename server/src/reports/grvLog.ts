@@ -2,7 +2,7 @@
 // FILE: server/src/reports/grvLog.ts
 // PURPOSE: GRV Log report definition. Queries DOCUMENTS_P, then
 //          fetches DOCUMENTSTEXT_SUBFORM per row (two-step pattern).
-//          Parses HTML remarks into 7 structured inspection fields.
+//          Parses HTML remarks into 8 structured inspection fields.
 // USED BY: config/reportRegistry.ts (auto-registers on import)
 // EXPORTS: (none — self-registers into reportRegistry)
 // ═══════════════════════════════════════════════════════════════
@@ -17,7 +17,9 @@ import { escapeODataString } from '../services/odataFilterBuilder';
 
 const columns: ColumnDefinition[] = [
   { key: 'date', label: 'Date', type: 'date' },
+  { key: 'receivingTime', label: 'Receiving Time', type: 'string' },
   { key: 'docNo', label: 'GRV #', type: 'string' },
+  { key: 'poNumber', label: 'PO #', type: 'string' },
   { key: 'vendor', label: 'Vendor', type: 'string' },
   { key: 'warehouse', label: 'Warehouse', type: 'string' },
   { key: 'status', label: 'Status', type: 'string' },
@@ -34,7 +36,9 @@ const columns: ColumnDefinition[] = [
 
 const filterColumns: ColumnFilterMeta[] = [
   { key: 'date', label: 'Date', filterType: 'date', filterLocation: 'server', odataField: 'CURDATE' },
+  { key: 'receivingTime', label: 'Receiving Time', filterType: 'text', filterLocation: 'client' },
   { key: 'docNo', label: 'GRV #', filterType: 'text', filterLocation: 'server', odataField: 'DOCNO' },
+  { key: 'poNumber', label: 'PO #', filterType: 'text', filterLocation: 'server', odataField: 'ORDNAME' },
   // WHY: odataField must match transformRow output (vendor: raw.CDES) so that
   // client-side filtering in base dataset mode compares the same values.
   // SUPNAME is the vendor code; CDES is the display name shown in the table.
@@ -68,7 +72,8 @@ function buildQuery(filters: ReportFilters): ODataParams {
   return {
     // WHY: TYPE included because DOCUMENTS_P has composite key (DOCNO + TYPE),
     // needed to fetch sub-forms in the enrichRows step.
-    $select: 'DOCNO,TYPE,CURDATE,SUPNAME,CDES,STATDES,TOTPRICE,TOWARHSDES,OWNERLOGIN',
+    // ORDNAME = parent purchase order # (PO #) referenced by this GRV.
+    $select: 'DOCNO,TYPE,ORDNAME,CURDATE,SUPNAME,CDES,STATDES,TOTPRICE,TOWARHSDES,OWNERLOGIN',
     $filter: conditions.length > 0 ? conditions.join(' and ') : undefined,
     $orderby: 'CURDATE desc',
     $top: pageSize,
@@ -148,6 +153,7 @@ function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
   return {
     date: raw.CURDATE,
     docNo: raw.DOCNO,
+    poNumber: (raw.ORDNAME as string | null | undefined) ?? null,
     vendor: raw.CDES,
     warehouse: raw.TOWARHSDES,
     status: raw.STATDES,
@@ -169,7 +175,10 @@ reportRegistry.set('grv-log', {
   transformRow,
   enrichRows,
   // WHY: Maps GRV Log Excel template columns (A-M) to transformRow output fields.
-  // Columns B (Time) and F (Driver Name) are omitted — no data field exists.
+  // Columns B (Time) and F (Driver Name) are hardcoded in the template — left
+  // untouched so the existing print layout is unchanged.
+  // N and O are appended after the template's last column for poNumber and
+  // receivingTime — new fields go at the end so existing letters stay stable.
   exportConfig: {
     mapping: {
       'A': 'date',
@@ -183,6 +192,8 @@ reportRegistry.set('grv-log', {
       'K': 'truckCondition',
       'L': 'receivedBy',
       'M': 'comments',
+      'N': 'poNumber',
+      'O': 'receivingTime',
     },
     dataStartRow: 5,
   },
@@ -202,6 +213,8 @@ reportRegistry.set('grv-log', {
       truckCondition: 10,
       comments: 22,
       receivedBy: 12,
+      poNumber: 12,
+      receivingTime: 11,
     },
     fontSize: 8,
   },
