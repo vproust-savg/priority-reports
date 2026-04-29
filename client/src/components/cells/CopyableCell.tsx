@@ -14,7 +14,11 @@ interface CopyableCellProps {
 }
 
 // WHY: navigator.clipboard.writeText() fails silently inside iframes (Airtable Omni embed)
-// without the clipboard-write permission. This fallback uses a temporary textarea + execCommand.
+// without the clipboard-write permission. This fallback uses a temporary textarea +
+// execCommand. We ignore execCommand's return value and treat any non-throwing run as
+// success — Chromium has been progressively making execCommand('copy') return false in
+// cross-origin iframes even when the copy actually succeeded, which would otherwise
+// suppress the success toast at the call site.
 function execCommandCopy(text: string): boolean {
   try {
     const textarea = document.createElement('textarea');
@@ -23,9 +27,9 @@ function execCommandCopy(text: string): boolean {
     textarea.style.opacity = '0';
     document.body.appendChild(textarea);
     textarea.select();
-    const ok = document.execCommand('copy');
+    document.execCommand('copy');
     document.body.removeChild(textarea);
-    return ok;
+    return true;
   } catch {
     return false;
   }
