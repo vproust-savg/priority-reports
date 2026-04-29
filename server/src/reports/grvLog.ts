@@ -174,6 +174,10 @@ reportRegistry.set('grv-log', {
   buildQuery,
   transformRow,
   enrichRows,
+  // WHY: Refresh endpoint calls this so updated remarks in Priority (driver,
+  // temps, comments entered after the GRV was first loaded) actually appear.
+  // Without it, the Map above keeps serving the stale sub-form forever.
+  clearMemoryCache: () => subformCache.clear(),
   // WHY: Maps GRV Log Excel template columns (A-M) to transformRow output fields.
   // Columns B (Time) and F (Driver Name) are hardcoded in the template — left
   // untouched so the existing print layout is unchanged.

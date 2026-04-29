@@ -193,8 +193,11 @@ export function createQueryRouter(cache: CacheProvider): Router {
 
   // WHY: Refresh endpoint invalidates ALL cached queries for a report.
   // Uses prefix-based deletion so every filter combination is cleared.
+  // Also clears any per-report in-memory caches (e.g. grvLog's subformCache),
+  // otherwise stale sub-forms keep being served after Redis is wiped.
   router.post('/:reportId/refresh', async (req, res) => {
     const { reportId } = req.params;
+    getReport(reportId)?.clearMemoryCache?.();
     try {
       const deleted = await cache.invalidateByPrefix(`query:${reportId}:`);
       console.log(`[query] Refreshed cache for ${reportId}: ${deleted} keys deleted`);

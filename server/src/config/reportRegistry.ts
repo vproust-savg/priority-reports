@@ -83,6 +83,11 @@ export interface ReportConfig {
     keyField: string;
     rowKeyField: string;
   };
+  // WHY: Some reports keep per-document in-memory caches (e.g. grvLog's
+  // subformCache) that survive across requests. The refresh endpoint calls
+  // this hook so those caches are flushed alongside Redis. Without it,
+  // clicking Refresh re-fetches headers but reuses stale sub-forms.
+  clearMemoryCache?: () => void;
 }
 
 export const reportRegistry = new Map<string, ReportConfig>();
