@@ -29,7 +29,7 @@ const FULL_ROW = {
   TOWARHSDES: 'Main Warehouse',
   OWNERLOGIN: 'jsmith',
   DOCUMENTSTEXT_SUBFORM: {
-    TEXT: '<p>Driver ID : John Smith<br>Licence Plate : ABC-1234</p><div>Truck Temp. °F (dry if ambient) : 34<br>Product Surface Temp. °F : 36</div><p>Condition of Product (accept/reject) : accept<br>Condition of Truck (accept/reject) : accept</p><p>Time of Receiving : 10:30 AM</p><p>Comments : All good</p>',
+    TEXT: '<p>Driver ID : John Smith<br>License Plate : ABC-1234</p><div>Truck Temp. °F (dry if ambient) : 34<br>Product Surface Temp. °F : 36</div><p>Condition of Product (accept/reject) : accept<br>Condition of Truck (accept/reject) : accept</p><p>Time of Receiving : 10:30 AM</p><p>Comments : All good</p>',
   },
 };
 

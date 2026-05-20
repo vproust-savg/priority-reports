@@ -24,7 +24,7 @@ export interface GrvRemarkFields {
 // We match on the start of the key to handle minor label variations.
 const FIELD_MAP: Array<{ prefix: string; field: keyof GrvRemarkFields }> = [
   { prefix: 'driver id', field: 'driverId' },
-  { prefix: 'licence plate', field: 'licensePlate' },
+  { prefix: 'license plate', field: 'licensePlate' },
   { prefix: 'truck temp', field: 'truckTemp' },
   { prefix: 'product surface temp', field: 'productTemp' },
   { prefix: 'condition of product', field: 'productCondition' },

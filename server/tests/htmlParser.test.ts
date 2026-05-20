@@ -10,7 +10,7 @@ import { parseGrvRemarks } from '../src/services/htmlParser';
 const FULL_HTML = `
 <style>.ExternalClass{width:100%}</style>
 <p>Driver ID : John Smith<br>
-Licence Plate : ABC-1234</p>
+License Plate : ABC-1234</p>
 <div>Truck Temp. °F (dry if ambient) : 34<br>
 Product Surface Temp. °F : 36</div>
 <p>Condition of Product (accept/reject) : accept<br>
@@ -64,7 +64,7 @@ describe('parseGrvRemarks', () => {
 
   it('handles real UAT HTML structure', () => {
     // WHY: This matches the actual HTML from Priority UAT record GR26000488
-    const uatHtml = `<style>.ExternalClass {width:100%;}.ExternalClass,.ExternalClass p,.ExternalClass span,.ExternalClass font,.ExternalClass td {line-height: 100%;}</style><p>Driver ID : Test line 1<br>Licence Plate : Test line 2</p><div>Truck Temp. &deg;F (dry if ambient) : Test line 3<br>Product Surface Temp. &deg;F : Test line 4</div><p>Condition of Product (accept/reject) : Test line 5<br>Condition of Truck (accept/reject) : Test line 6</p><p>Comments : Test line 7</p>`;
+    const uatHtml = `<style>.ExternalClass {width:100%;}.ExternalClass,.ExternalClass p,.ExternalClass span,.ExternalClass font,.ExternalClass td {line-height: 100%;}</style><p>Driver ID : Test line 1<br>License Plate : Test line 2</p><div>Truck Temp. &deg;F (dry if ambient) : Test line 3<br>Product Surface Temp. &deg;F : Test line 4</div><p>Condition of Product (accept/reject) : Test line 5<br>Condition of Truck (accept/reject) : Test line 6</p><p>Comments : Test line 7</p>`;
     const result = parseGrvRemarks(uatHtml);
     expect(result.driverId).toBe('Test line 1');
     expect(result.licensePlate).toBe('Test line 2');
@@ -83,7 +83,7 @@ describe('parseGrvRemarks', () => {
 
   it('handles <br> tags with data attributes', () => {
     // WHY: Priority's <br> tags often have data-* attributes
-    const html = 'Driver ID : DRV-1<br data-abc="true">Licence Plate : XYZ-999';
+    const html = 'Driver ID : DRV-1<br data-abc="true">License Plate : XYZ-999';
     const result = parseGrvRemarks(html);
     expect(result.driverId).toBe('DRV-1');
     expect(result.licensePlate).toBe('XYZ-999');
