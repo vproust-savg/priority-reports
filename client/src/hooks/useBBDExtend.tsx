@@ -17,7 +17,7 @@ interface ExtendModalState {
   row?: Record<string, unknown>;
 }
 
-export function useBBDExtend(reportId: string, onCopy?: (value: string) => void) {
+export function useBBDExtend(reportId: string, onCopy?: (value: string, anchor: DOMRect) => void) {
   const [extendModal, setExtendModal] = useState<ExtendModalState | null>(null);
 
   const handleExtendClick = useCallback((row: Record<string, unknown>) => {

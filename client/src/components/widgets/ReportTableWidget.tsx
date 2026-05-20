@@ -77,9 +77,9 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
     reportId, debouncedGroup, visibleColumnKeys,
   );
 
-  const [copyToast, setCopyToast] = useState<string | null>(null);
-  const handleCopy = useCallback((value: string) => {
-    setCopyToast(`Copied "${value}"`);
+  const [copyToast, setCopyToast] = useState<{ message: string; anchor: DOMRect } | null>(null);
+  const handleCopy = useCallback((value: string, anchor: DOMRect) => {
+    setCopyToast({ message: `Copied "${value}"`, anchor });
   }, []);
 
   const [activeSubTab, setActiveSubTab] = useState<'active' | 'extended'>('active');
@@ -284,7 +284,12 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
       </AnimatePresence>
       <AnimatePresence>
         {copyToast && (
-          <Toast message={copyToast} variant="success" onDismiss={() => setCopyToast(null)} />
+          <Toast
+            message={copyToast.message}
+            anchor={copyToast.anchor}
+            variant="success"
+            onDismiss={() => setCopyToast(null)}
+          />
         )}
       </AnimatePresence>
 

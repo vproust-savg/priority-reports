@@ -10,7 +10,7 @@ import { Copy } from 'lucide-react';
 
 interface CopyableCellProps {
   value: string;
-  onCopy: (value: string) => void;
+  onCopy: (value: string, anchor: DOMRect) => void;
 }
 
 // WHY: navigator.clipboard.writeText() fails silently inside iframes (Airtable Omni embed)
@@ -52,8 +52,12 @@ export default function CopyableCell({ value, onCopy }: CopyableCellProps) {
     <button
       onClick={(e) => {
         e.stopPropagation();
+        // WHY: Capture the button's rect synchronously — by the time the
+        // copyToClipboard promise resolves, e.currentTarget has been reset
+        // by React and getBoundingClientRect() would throw.
+        const anchor = e.currentTarget.getBoundingClientRect();
         copyToClipboard(value).then((ok) => {
-          if (ok) onCopy(value);
+          if (ok) onCopy(value, anchor);
         });
       }}
       className="group/copy flex items-center gap-1.5 hover:text-[var(--color-gold-primary)] transition-colors"
