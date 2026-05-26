@@ -51,10 +51,14 @@ export function createQueryRouter(cache: CacheProvider): Router {
     const odataFilter = buildODataFilter(body.filterGroup, report.filterColumns);
 
     let cached: ApiResponse | null = null;
-    try {
-      cached = await cache.get<ApiResponse>(cacheKey);
-    } catch (err) {
-      console.warn(`[query] Cache read failed for ${cacheKey}, continuing as miss:`, err);
+    // WHY: Some reports (grv-log) require always-fresh Priority data. Skip the
+    // cache lookup entirely when the report opts out — staleness risk > latency.
+    if (!report.disableCache) {
+      try {
+        cached = await cache.get<ApiResponse>(cacheKey);
+      } catch (err) {
+        console.warn(`[query] Cache read failed for ${cacheKey}, continuing as miss:`, err);
+      }
     }
     if (cached) {
       cached.meta.cache = 'hit';
@@ -177,9 +181,12 @@ export function createQueryRouter(cache: CacheProvider): Router {
       warnings: warnings.length > 0 ? warnings : undefined,
     };
 
-    cache.set(cacheKey, response, cacheTtl).catch((err) => {
-      console.warn(`[query] Cache write failed for ${cacheKey}:`, err);
-    });
+    // WHY: Mirror the read-gate above so disableCache reports never populate Redis.
+    if (!report.disableCache) {
+      cache.set(cacheKey, response, cacheTtl).catch((err) => {
+        console.warn(`[query] Cache write failed for ${cacheKey}:`, err);
+      });
+    }
 
     logApiCall({
       level: 'info', event: 'query_fetch', reportId,
