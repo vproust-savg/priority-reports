@@ -6,6 +6,8 @@
 // EXPORTS: formatCurrency, formatNumber, formatDate, formatPercent, formatCellValue
 // ═══════════════════════════════════════════════════════════════
 
+import { formatPriorityCalendarDate } from '@shared/utils/timezone';
+
 const currencyFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',
@@ -13,12 +15,6 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
 });
 
 const numberFormatter = new Intl.NumberFormat('en-US');
-
-const dateFormatter = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-});
 
 export function formatCurrency(value: number): string {
   // WHY: Negative currency in parentheses is accounting standard
@@ -33,8 +29,11 @@ export function formatNumber(value: number): string {
   return numberFormatter.format(value);
 }
 
+// WHY: Priority CURDATE is a calendar day ('YYYY-MM-DDT00:00:00Z') not a
+// UTC instant. Parsing it through new Date() + browser-local Intl drops a
+// day for every user west of UTC. Delegate to the calendar-day helper.
 export function formatDate(dateStr: string): string {
-  return dateFormatter.format(new Date(dateStr));
+  return formatPriorityCalendarDate(dateStr);
 }
 
 export function formatPercent(value: number): string {
