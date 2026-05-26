@@ -11,6 +11,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   getMonday, toISODate, getCalendarWeeks,
 } from '../../utils/weekUtils';
+import { nowInLA } from '@shared/utils/timezone';
 
 interface WeekPickerDropdownProps {
   value: string;
@@ -32,7 +33,9 @@ export default function WeekPickerDropdown({
 }: WeekPickerDropdownProps) {
   const [hoveredMonday, setHoveredMonday] = useState<string | null>(null);
 
-  const today = new Date();
+  // WHY: nowInLA so "This week" / "Last week" highlights match the LA
+  // business calendar, not the browser's wall-clock day.
+  const today = nowInLA();
   const thisMonday = getMonday(today);
   const lastMonday = new Date(thisMonday);
   lastMonday.setDate(lastMonday.getDate() - 7);

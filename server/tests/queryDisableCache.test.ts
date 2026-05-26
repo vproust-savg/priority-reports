@@ -97,7 +97,10 @@ describe('POST /:reportId/query — disableCache gate', () => {
 
     expect(res.status).toBe(200);
     expect(cache.get).toHaveBeenCalledTimes(1);
-    await new Promise((r) => setImmediate(r));
+    // WHY: Match the disableCache test above — two microtask ticks drain the
+    // .catch() chain without depending on Node-specific setImmediate.
+    await Promise.resolve();
+    await Promise.resolve();
     expect(cache.set).toHaveBeenCalledTimes(1);
   });
 });

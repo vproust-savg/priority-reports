@@ -10,6 +10,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Calendar, ChevronDown } from 'lucide-react';
 import { FILTER_INPUT_CLASS } from '../../config/filterConstants';
 import { getSunday, toISODate, formatWeekRange } from '../../utils/weekUtils';
+import { nowInLA } from '@shared/utils/timezone';
 import WeekPickerDropdown from './WeekPickerDropdown';
 
 interface WeekPickerProps {
@@ -24,7 +25,9 @@ export default function WeekPicker({ value, valueTo, onChange }: WeekPickerProps
   // of the selected week. Defaults to the selected week's month or today.
   const [displayMonth, setDisplayMonth] = useState(() => {
     if (value) return new Date(value + 'T00:00:00');
-    return new Date();
+    // WHY: nowInLA so the calendar opens on the LA-current month, not the
+    // browser/UTC month near month boundaries.
+    return nowInLA();
   });
   const containerRef = useRef<HTMLDivElement>(null);
 

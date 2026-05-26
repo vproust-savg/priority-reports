@@ -83,10 +83,10 @@ export interface ReportConfig {
     keyField: string;
     rowKeyField: string;
   };
-  // WHY: Some reports keep per-document in-memory caches (e.g. grvLog's
-  // subformCache) that survive across requests. The refresh endpoint calls
-  // this hook so those caches are flushed alongside Redis. Without it,
-  // clicking Refresh re-fetches headers but reuses stale sub-forms.
+  // WHY: Hook for reports that maintain their own in-memory state alongside
+  // Redis. The refresh endpoint invokes this so reports can flush their
+  // private caches when the user clicks Refresh. Optional — most reports
+  // don't need it. (grv-log keeps it as a no-op after adopting disableCache.)
   clearMemoryCache?: () => void;
   // WHY: When true, the POST /:reportId/query route skips both the Redis
   // cache lookup/write AND any per-report in-memory caches. Use for reports

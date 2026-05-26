@@ -12,6 +12,7 @@ import { CSS } from '@dnd-kit/utilities';
 import FilterValueInput from './FilterValueInput';
 import { OPERATORS_BY_TYPE, FILTER_INPUT_CLASS } from '../../config/filterConstants';
 import { getMonday, getSunday, toISODate } from '../../utils/weekUtils';
+import { nowInLA } from '@shared/utils/timezone';
 import type { FilterCondition, ColumnFilterMeta, FiltersResponse } from '@shared/types';
 
 interface FilterConditionRowProps {
@@ -88,7 +89,9 @@ export default function FilterConditionRow({
             // WHY: Pre-populate isInWeek with current week so the user sees
             // results immediately. All other operators reset to blank.
             if (newOp === 'isInWeek') {
-              const monday = getMonday(new Date());
+              // WHY: nowInLA so the pre-populated week matches LA business
+              // calendar, not the browser/Railway wall-clock TZ.
+              const monday = getMonday(nowInLA());
               onChange({ ...condition, operator: newOp, value: toISODate(monday), valueTo: toISODate(getSunday(monday)) });
             } else {
               onChange({ ...condition, operator: newOp, value: '', valueTo: undefined });
