@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { nowInLA } from './timezone';
+import { nowInLA, formatPriorityCalendarDate } from './timezone';
 
 describe('nowInLA', () => {
   beforeAll(() => { vi.useFakeTimers(); });
@@ -36,5 +36,20 @@ describe('nowInLA', () => {
     expect(d.getDate()).toBe(23);
     expect(d.getDay()).toBe(6);
     expect(d.getHours()).toBe(0);
+  });
+});
+
+describe('formatPriorityCalendarDate', () => {
+  it('renders a Priority CURDATE as the literal calendar day', () => {
+    expect(formatPriorityCalendarDate('2026-05-22T00:00:00Z')).toBe('May 22, 2026');
+  });
+
+  it('handles single-digit months and days', () => {
+    expect(formatPriorityCalendarDate('2026-01-05T00:00:00Z')).toBe('Jan 5, 2026');
+  });
+
+  it('ignores the time portion entirely', () => {
+    // Same calendar day regardless of T-suffix.
+    expect(formatPriorityCalendarDate('2026-05-22T23:59:59Z')).toBe('May 22, 2026');
   });
 });

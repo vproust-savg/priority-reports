@@ -6,7 +6,7 @@
 // USED BY: client/src/config/filterConstants.ts,
 //          client/src/utils/formatters.ts,
 //          server/src/index.ts (cache warming)
-// EXPORTS: LA_TIMEZONE, nowInLA
+// EXPORTS: LA_TIMEZONE, nowInLA, formatPriorityCalendarDate
 // ═══════════════════════════════════════════════════════════════
 
 export const LA_TIMEZONE = 'America/Los_Angeles';
@@ -37,4 +37,21 @@ export function nowInLA(): Date {
   return new Date(
     `${get('year')}-${get('month')}-${get('day')}T${hour}:${get('minute')}:${get('second')}`,
   );
+}
+
+// WHY: Parses 'YYYY-MM-DD...' as a calendar date (ignores the UTC time),
+// so the rendered day never shifts based on the browser's timezone.
+// Priority stores CURDATE as 'YYYY-MM-DDT00:00:00Z' but the value is a
+// calendar day, not a UTC instant — formatting it through new Date(str)
+// + browser-local Intl drops a day everywhere west of UTC.
+const calendarDateFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
+
+export function formatPriorityCalendarDate(dateStr: string): string {
+  const [datePart] = dateStr.split('T');
+  const [y, m, d] = datePart.split('-').map(Number);
+  return calendarDateFormatter.format(new Date(y, m - 1, d));
 }
