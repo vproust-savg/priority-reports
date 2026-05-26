@@ -15,7 +15,18 @@ interface ReportQueryParams {
   pageSize: number;
 }
 
-export function useReportQuery(reportId: string, params: ReportQueryParams) {
+// WHY: When disableCache:true, the hook flips TanStack to "always stale,
+// always refetch on mount, no GC retention" so the user never sees stale
+// data after re-mount or identical re-renders. Used by grv-log.
+interface ReportQueryOptions {
+  disableCache?: boolean;
+}
+
+export function useReportQuery(
+  reportId: string,
+  params: ReportQueryParams,
+  options: ReportQueryOptions = {},
+) {
   return useQuery<ApiResponse>({
     queryKey: ['report', reportId, params],
     queryFn: async () => {
@@ -32,12 +43,14 @@ export function useReportQuery(reportId: string, params: ReportQueryParams) {
       if (!response.ok) throw new Error(`Report query failed: ${response.status}`);
       return response.json();
     },
-    // WHY: Match server cache TTL (15 min). Within this window,
-    // TanStack serves from its local cache — no network request at all.
-    staleTime: 15 * 60 * 1000,
+    // WHY: disableCache reports skip both stale-time caching AND retention
+    // across unmounts. Standard reports keep the 15-min staleTime to match
+    // server Redis TTL.
+    staleTime: options.disableCache ? 0 : 15 * 60 * 1000,
+    gcTime: options.disableCache ? 0 : undefined,
+    refetchOnMount: options.disableCache ? 'always' : true,
     // WHY: No keepPreviousData — show skeleton on every data change.
-    // Old data showing silently made the app feel broken. With 15-min
-    // cache, most loads are instant (0ms) so skeleton barely flashes.
+    // Old data showing silently made the app feel broken.
     refetchOnWindowFocus: false,
   });
 }
