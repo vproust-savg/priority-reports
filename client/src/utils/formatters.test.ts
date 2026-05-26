@@ -21,5 +21,6 @@ describe('formatDate', () => {
     const out = formatDate('2026-05-22T00:00:00Z');
     expect(out).toBe('CAL(2026-05-22T00:00:00Z)');
     expect(formatPriorityCalendarDate).toHaveBeenCalledWith('2026-05-22T00:00:00Z');
+    expect(formatPriorityCalendarDate).toHaveBeenCalledTimes(1);
   });
 });
