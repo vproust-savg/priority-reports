@@ -4,7 +4,7 @@
 //          This is the ONLY file you edit to rearrange the dashboard.
 //          Zod-validated — app crashes on startup if config is invalid.
 // USED BY: DepartmentLayout.tsx (for nav tabs), PageRenderer (for widget grid)
-// EXPORTS: pages
+// EXPORTS: pages, findWidgetByReportId
 // ═══════════════════════════════════════════════════════════════
 
 import { z } from 'zod';
@@ -65,3 +65,14 @@ export const pages = z.array(PageConfigSchema).parse([
     ],
   },
 ]);
+
+// WHY: ReportTableWidget needs to read per-widget overrides like disableCache.
+// A reportId appears in exactly one widget across all pages, so a flat lookup
+// is unambiguous.
+export function findWidgetByReportId(reportId: string): { disableCache?: boolean } | undefined {
+  for (const page of pages) {
+    const w = page.widgets.find((widget) => widget.reportId === reportId);
+    if (w) return w;
+  }
+  return undefined;
+}

@@ -36,6 +36,7 @@ import ReportSubTabs from '../ReportSubTabs';
 import BBDExtendedView from '../BBDExtendedView';
 import CopyableCell from '../cells/CopyableCell';
 import { countActiveFilters } from '../../config/filterConstants';
+import { findWidgetByReportId } from '../../config/pages';
 import { getDetailComponent } from '../../config/detailRegistry';
 import { formatCellValue } from '../../utils/formatters';
 
@@ -48,11 +49,14 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const filtersQuery = useFiltersQuery(reportId);
   const filterColumns = filtersQuery.data?.columns ?? [];
 
-  const query = useReportQuery(reportId, {
-    filterGroup: debouncedGroup,
-    page,
-    pageSize: 50,
-  });
+  // WHY: Per-widget disableCache opt-in (set on grv-log in pages.ts) flows
+  // through to the hook so TanStack treats every search as always-fresh.
+  const widgetConfig = findWidgetByReportId(reportId);
+  const query = useReportQuery(
+    reportId,
+    { filterGroup: debouncedGroup, page, pageSize: 50 },
+    { disableCache: widgetConfig?.disableCache },
+  );
 
   const {
     managedColumns, visibleColumns, hiddenCount,
