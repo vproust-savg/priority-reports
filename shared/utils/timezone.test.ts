@@ -52,4 +52,14 @@ describe('formatPriorityCalendarDate', () => {
     // Same calendar day regardless of T-suffix.
     expect(formatPriorityCalendarDate('2026-05-22T23:59:59Z')).toBe('May 22, 2026');
   });
+
+  it('handles year boundary crossings', () => {
+    expect(formatPriorityCalendarDate('2025-12-31T00:00:00Z')).toBe('Dec 31, 2025');
+    expect(formatPriorityCalendarDate('2026-01-01T00:00:00Z')).toBe('Jan 1, 2026');
+  });
+
+  it('returns malformed input unchanged instead of rendering "Invalid Date"', () => {
+    expect(formatPriorityCalendarDate('')).toBe('');
+    expect(formatPriorityCalendarDate('not-a-date')).toBe('not-a-date');
+  });
 });

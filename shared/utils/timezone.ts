@@ -50,8 +50,17 @@ const calendarDateFormatter = new Intl.DateTimeFormat('en-US', {
   year: 'numeric',
 });
 
+// WHY: Regex anchors the expected 'YYYY-MM-DD' prefix. Returning the raw
+// input on a mismatch (instead of silently rendering 'Invalid Date') keeps
+// any malformed Priority value debuggable from the dashboard rather than
+// obscured by a misleading formatter output.
+const CALENDAR_DATE_PREFIX = /^(\d{4})-(\d{2})-(\d{2})/;
+
 export function formatPriorityCalendarDate(dateStr: string): string {
-  const [datePart] = dateStr.split('T');
-  const [y, m, d] = datePart.split('-').map(Number);
+  const match = CALENDAR_DATE_PREFIX.exec(dateStr);
+  if (!match) return dateStr;
+  const y = Number(match[1]);
+  const m = Number(match[2]);
+  const d = Number(match[3]);
   return calendarDateFormatter.format(new Date(y, m - 1, d));
 }
