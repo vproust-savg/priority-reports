@@ -88,6 +88,11 @@ export interface ReportConfig {
   // this hook so those caches are flushed alongside Redis. Without it,
   // clicking Refresh re-fetches headers but reuses stale sub-forms.
   clearMemoryCache?: () => void;
+  // WHY: When true, the POST /:reportId/query route skips both the Redis
+  // cache lookup/write AND any per-report in-memory caches. Use for reports
+  // that must always reflect the latest Priority data (e.g., GRV log for
+  // receiving operations where stale data risks shipping the wrong goods).
+  disableCache?: boolean;
 }
 
 export const reportRegistry = new Map<string, ReportConfig>();
