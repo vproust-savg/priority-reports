@@ -81,64 +81,31 @@ function buildQuery(filters: ReportFilters): ODataParams {
   };
 }
 
-// WHY: Per-document sub-form cache. Sub-form data (driver ID, temps, comments)
-// doesn't change between filter changes — caching it means we only fetch
-// each document's remarks ONCE, then reuse across all filter combinations.
-// Cleared on server restart. Prevents re-enrichment when filters change.
-const subformCache = new Map<string, Record<string, unknown> | null>();
-const SUBFORM_CACHE_MAX = 5000;
-
 // WHY: Priority's $expand truncates responses on DOCUMENTS_P (CloudFront
 // drops connection mid-body). Two-step fetch: get rows, then fetch each
 // text sub-form individually. Batched in groups of 10 for rate limit safety.
+// WHY (no cache): grv-log opts into disableCache — receiving operations need
+// the latest remarks every time, even if it costs ~50 extra Priority calls
+// per page load.
 async function enrichRows(rows: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
   const BATCH_SIZE = 10;
   const BATCH_DELAY_MS = 200;
 
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batch = rows.slice(i, i + BATCH_SIZE);
+    if (i > 0) await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
 
-    // WHY: Split batch into cached (instant) and uncached (needs API call).
-    // After a few filter changes, most documents are cached — enrichment
-    // becomes near-instant instead of making hundreds of API calls.
-    const uncached: Record<string, unknown>[] = [];
-    for (const row of batch) {
-      const cacheKey = `${row.DOCNO}:${row.TYPE}`;
-      if (subformCache.has(cacheKey)) {
-        row.DOCUMENTSTEXT_SUBFORM = subformCache.get(cacheKey);
-      } else {
-        uncached.push(row);
-      }
-    }
-
-    if (uncached.length > 0) {
-      if (i > 0) await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
-      const results = await Promise.all(
-        uncached.map((row) =>
-          querySubform(
-            'DOCUMENTS_P',
-            { DOCNO: row.DOCNO as string, TYPE: row.TYPE as string },
-            'DOCUMENTSTEXT_SUBFORM',
-          ),
+    const results = await Promise.all(
+      batch.map((row) =>
+        querySubform(
+          'DOCUMENTS_P',
+          { DOCNO: row.DOCNO as string, TYPE: row.TYPE as string },
+          'DOCUMENTSTEXT_SUBFORM',
         ),
-      );
-      for (let j = 0; j < uncached.length; j++) {
-        const cacheKey = `${uncached[j].DOCNO}:${uncached[j].TYPE}`;
-        subformCache.set(cacheKey, results[j]);
-        uncached[j].DOCUMENTSTEXT_SUBFORM = results[j];
-      }
-
-      // WHY: FIFO eviction using Map insertion order. Delete oldest 20%
-      // to avoid evicting on every single insert after reaching the cap.
-      if (subformCache.size > SUBFORM_CACHE_MAX) {
-        const deleteCount = Math.floor(SUBFORM_CACHE_MAX * 0.2);
-        let count = 0;
-        for (const key of subformCache.keys()) {
-          if (count >= deleteCount) break;
-          subformCache.delete(key);
-          count++;
-        }
-      }
+      ),
+    );
+    for (let j = 0; j < batch.length; j++) {
+      batch[j].DOCUMENTSTEXT_SUBFORM = results[j];
     }
   }
 
@@ -169,15 +136,19 @@ reportRegistry.set('grv-log', {
   id: 'grv-log',
   name: 'GRV Log',
   entity: 'DOCUMENTS_P',
+  // WHY: Receiving operations need the latest GRV state and the latest remarks
+  // every search — stale data risks shipping the wrong goods. Bypasses Redis
+  // query cache AND the per-document remarks fetch is now always live.
+  disableCache: true,
   columns,
   filterColumns,
   buildQuery,
   transformRow,
   enrichRows,
-  // WHY: Refresh endpoint calls this so updated remarks in Priority (driver,
-  // temps, comments entered after the GRV was first loaded) actually appear.
-  // Without it, the Map above keeps serving the stale sub-form forever.
-  clearMemoryCache: () => subformCache.clear(),
+  // WHY: Kept as a no-op so the /refresh route's optional-chain call site stays
+  // valid. The remarks cache it used to clear was removed when grv-log adopted
+  // disableCache: true.
+  clearMemoryCache: () => {},
   // WHY: Maps GRV Log Excel template columns (A-M) to transformRow output fields.
   // Columns B (Time) and F (Driver Name) are hardcoded in the template — left
   // untouched so the existing print layout is unchanged.
