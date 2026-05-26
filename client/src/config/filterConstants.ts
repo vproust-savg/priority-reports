@@ -11,6 +11,7 @@
 
 import type { ColumnFilterType, FilterCondition, FilterGroup, FilterOperator } from '@shared/types';
 import { getMonday, getSunday, toISODate } from '../utils/weekUtils';
+import { nowInLA } from '@shared/utils/timezone';
 
 // --- Shared CSS classes ---
 
@@ -112,7 +113,9 @@ export function createEmptyGroup(): FilterGroup {
 // WHY: Default to "Date is in week [current week]" — a single condition
 // instead of two date-range conditions. Matches the most common use case.
 export function createDefaultFilterGroup(): FilterGroup {
-  const monday = getMonday(new Date());
+  // WHY: Use LA-now so the default "this week" reflects the Savory Gourmet
+  // business calendar, not the browser's or Railway's wall-clock TZ.
+  const monday = getMonday(nowInLA());
   const sunday = getSunday(monday);
 
   return {
