@@ -39,3 +39,11 @@ describe('pages config', () => {
     }
   });
 });
+
+describe('grv-log widget disableCache', () => {
+  it('is set to true on the grv-log widget', () => {
+    const receivingLog = pages.find((p) => p.id === 'receiving-log')!;
+    const grvLogWidget = receivingLog.widgets.find((w) => w.id === 'grv-log')!;
+    expect(grvLogWidget.disableCache).toBe(true);
+  });
+});

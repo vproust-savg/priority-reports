@@ -15,6 +15,10 @@ const WidgetConfigSchema = z.object({
   type: z.enum(['table']),  // WHY: Expand this enum as we add widget types
   title: z.string(),
   colSpan: z.number().min(1).max(12).default(12),
+  // WHY: When true, ReportTableWidget passes disableCache:true to
+  // useReportQuery, flipping TanStack to staleTime:0 + refetchOnMount:'always'.
+  // Pairs with the server-side ReportConfig.disableCache flag.
+  disableCache: z.boolean().optional(),
 });
 
 const PageConfigSchema = z.object({
@@ -41,6 +45,7 @@ export const pages = z.array(PageConfigSchema).parse([
         type: 'table',
         title: 'GRV Log — Goods Receiving Vouchers',
         colSpan: 12,
+        disableCache: true,
       },
     ],
   },
