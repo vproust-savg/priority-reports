@@ -20,6 +20,8 @@ import { createSubformRouter } from './routes/subform';
 import { createExtendRouter } from './routes/extend';
 import { logStartup } from './services/logger';
 import { getMonday, getSunday, toISODate } from '../../shared/utils/weekUtils';
+import { nowInLA } from '../../shared/utils/timezone';
+import { getReport } from './config/reportRegistry';
 
 const app = express();
 
@@ -56,8 +58,16 @@ export { app };
 
 // WHY: Pre-cache the default view (current week) so the first user
 // sees data instantly instead of waiting 3-5s on cold load.
-async function warmCache() {
-  const monday = getMonday(new Date());
+// EXPORTED so warmCache.test.ts can exercise the disableCache short-circuit.
+export async function warmCache(): Promise<void> {
+  // WHY: When the target report has disableCache:true, warming would just
+  // burn Priority API budget and never populate Redis. Short-circuit.
+  const target = getReport('grv-log');
+  if (!target || target.disableCache) return;
+
+  // WHY: nowInLA so the warmed week matches LA's business calendar even
+  // though Railway runs in UTC.
+  const monday = getMonday(nowInLA());
   const sunday = getSunday(monday);
 
   const body = {
