@@ -83,10 +83,15 @@ function buildQuery(filters: ReportFilters): ODataParams {
 
 // WHY: Priority's $expand truncates responses on DOCUMENTS_P (CloudFront
 // drops connection mid-body). Two-step fetch: get rows, then fetch each
-// text sub-form individually. Batched in groups of 10 for rate limit safety.
+// text sub-form individually.
 // WHY (no cache): grv-log opts into disableCache — receiving operations need
 // the latest remarks every time, even if it costs ~50 extra Priority calls
 // per page load.
+// WHY (batch shape): 10 parallel calls per batch with 200ms between batches.
+// Priority's shared limit is 100 calls/min. One full page (50 rows = 5 batches)
+// burns ~51 calls in ~1s — over half the per-minute budget. Do NOT lower the
+// 200ms delay or raise the batch size without first widening the budget;
+// concurrent dashboards + syncs already coexist under this limit.
 async function enrichRows(rows: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
   const BATCH_SIZE = 10;
   const BATCH_DELAY_MS = 200;

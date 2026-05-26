@@ -33,10 +33,14 @@ describe('grv-log report definition', () => {
     ];
 
     vi.mocked(querySubform).mockClear();
-    await report.enrichRows!([...rows]);
+    const firstCall = await report.enrichRows!([...rows]);
     await report.enrichRows!([...rows]);
 
     // WHY: 2 rows × 2 enrich calls = 4 Priority fetches if the cache is gone.
     expect(querySubform).toHaveBeenCalledTimes(4);
+    // WHY: Also verify the fetched payload actually lands on each row, so
+    // the test fails if enrichRows ever stops mutating in place.
+    expect(firstCall[0].DOCUMENTSTEXT_SUBFORM).toEqual({ TEXT: '<p>fake remarks</p>' });
+    expect(firstCall[1].DOCUMENTSTEXT_SUBFORM).toEqual({ TEXT: '<p>fake remarks</p>' });
   });
 });
