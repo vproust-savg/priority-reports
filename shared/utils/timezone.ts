@@ -6,7 +6,7 @@
 // USED BY: client/src/config/filterConstants.ts,
 //          client/src/utils/formatters.ts,
 //          server/src/index.ts (cache warming)
-// EXPORTS: LA_TIMEZONE, nowInLA, formatPriorityCalendarDate
+// EXPORTS: LA_TIMEZONE, nowInLA
 // ═══════════════════════════════════════════════════════════════
 
 export const LA_TIMEZONE = 'America/Los_Angeles';
