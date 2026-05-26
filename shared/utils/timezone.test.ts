@@ -28,4 +28,13 @@ describe('nowInLA', () => {
     expect(d.getDate()).toBe(23);
     expect(d.getDay()).toBe(6);         // Saturday
   });
+
+  it('handles the LA midnight boundary cleanly', () => {
+    // 2026-05-23T07:00:00Z is exactly 00:00 PDT on Saturday May 23 in LA.
+    vi.setSystemTime(new Date('2026-05-23T07:00:00Z'));
+    const d = nowInLA();
+    expect(d.getDate()).toBe(23);
+    expect(d.getDay()).toBe(6);
+    expect(d.getHours()).toBe(0);
+  });
 });

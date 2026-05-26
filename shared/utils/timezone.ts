@@ -26,9 +26,14 @@ export function nowInLA(): Date {
     hour12: false,
   }).formatToParts(new Date());
   const get = (t: string) => parts.find((p) => p.type === t)!.value;
-  // WHY: 'hour' can come back as '24' in en-US 24-hour formatting at midnight;
-  // normalize to '00' so the ISO string is parseable.
+  // WHY: Defensive against runtimes that use the h24 hour cycle (where
+  // midnight reads as '24' instead of '00'). en-US on Node ≥ 12 uses h23
+  // so this branch is currently inert — kept so a future cycle change
+  // doesn't silently produce an invalid ISO string.
   const hour = get('hour') === '24' ? '00' : get('hour');
+  // WHY: DST fall-back hour (01:xx PST on the first Sun of November) is
+  // ambiguous — two UTC instants map to the same LA wall clock. Intl
+  // resolves to the post-rollback reading, which we accept as canonical.
   return new Date(
     `${get('year')}-${get('month')}-${get('day')}T${hour}:${get('minute')}:${get('second')}`,
   );
