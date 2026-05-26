@@ -19,13 +19,21 @@ vi.mock('../src/services/priorityClient', () => ({
   querySubform: vi.fn(),
 }));
 
+// WHY: Returns the structural CacheProvider directly (no cast) so TypeScript
+// catches if the interface grows another method. The intersection type lets
+// tests read .mock.calls on get/set without re-asserting.
 function makeStubCache(): CacheProvider & { get: ReturnType<typeof vi.fn>; set: ReturnType<typeof vi.fn> } {
-  return {
+  const stub = {
     get: vi.fn().mockResolvedValue(null),
     set: vi.fn().mockResolvedValue(undefined),
+    invalidate: vi.fn().mockResolvedValue(undefined),
     invalidateByPrefix: vi.fn().mockResolvedValue(0),
     isConnected: vi.fn().mockResolvedValue(true),
-  } as unknown as CacheProvider & { get: ReturnType<typeof vi.fn>; set: ReturnType<typeof vi.fn> };
+  };
+  // Structural check — fails compilation if CacheProvider gains a method.
+  const _typecheck: CacheProvider = stub;
+  void _typecheck;
+  return stub;
 }
 
 function registerFakeReport(id: string, opts: Partial<ReportConfig> = {}): void {
@@ -71,8 +79,11 @@ describe('POST /:reportId/query — disableCache gate', () => {
 
     expect(res.status).toBe(200);
     expect(cache.get).not.toHaveBeenCalled();
-    // WHY: cache.set is called via .catch() (fire-and-forget); give it a tick.
-    await new Promise((r) => setImmediate(r));
+    // WHY: cache.set is fire-and-forget (`.catch()` on the promise). Two
+    // microtask ticks drain the .catch and any downstream then-chains
+    // without depending on Node-specific setImmediate.
+    await Promise.resolve();
+    await Promise.resolve();
     expect(cache.set).not.toHaveBeenCalled();
   });
 
