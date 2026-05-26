@@ -3,7 +3,7 @@
 // PURPOSE: Express entry point. Mounts all routes, configures CORS
 //          and JSON parsing. In production, serves the React client.
 // USED BY: npm run dev, npm start, tests (imports app)
-// EXPORTS: app
+// EXPORTS: app, warmCache
 // ═══════════════════════════════════════════════════════════════
 
 import express from 'express';
@@ -60,10 +60,21 @@ export { app };
 // sees data instantly instead of waiting 3-5s on cold load.
 // EXPORTED so warmCache.test.ts can exercise the disableCache short-circuit.
 export async function warmCache(): Promise<void> {
-  // WHY: When the target report has disableCache:true, warming would just
-  // burn Priority API budget and never populate Redis. Short-circuit.
+  // WHY: Only grv-log is warmed today (YAGNI). If a second cached report
+  // is added later, expand this to iterate reportRegistry instead of
+  // hardcoding 'grv-log' — otherwise warmup will silently skip it.
   const target = getReport('grv-log');
-  if (!target || target.disableCache) return;
+  if (!target) {
+    console.warn('[warmup] grv-log not found in registry — skipping');
+    return;
+  }
+  // WHY: When the target opts into disableCache, warming would just burn
+  // Priority API budget and never populate Redis. Log so Railway operators
+  // can tell the skip is intentional, not a silent crash before the line.
+  if (target.disableCache) {
+    console.log('[warmup] grv-log has disableCache:true — skipping');
+    return;
+  }
 
   // WHY: nowInLA so the warmed week matches LA's business calendar even
   // though Railway runs in UTC.

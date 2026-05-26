@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/tests/warmCache.test.ts
-// PURPOSE: Verify cache warming skips reports with disableCache:true
-//          and that, when warming proceeds, the date window is LA-local.
+// PURPOSE: Verify cache warming short-circuits when its target report has
+//          disableCache:true (the grv-log case post-Task-7).
 // USED BY: Vitest
 // ═══════════════════════════════════════════════════════════════
 
