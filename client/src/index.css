@@ -58,7 +58,18 @@
 
   /* ─── Font ─── */
   --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+
 }
+
+/* WHY: Tailwind v4.2 emits `.max-w-{name} { max-width: var(--spacing-{name}) }`
+   whenever --spacing-{name} is defined in @theme — overriding its own
+   --container-* defaults. Our custom --spacing-* is 2–24 px (for padding/gap),
+   which collapses modals and other sized containers to single-digit pixels.
+   Restore Tailwind v4 default container widths for the named-size max-w
+   utilities actually used in this codebase. */
+.max-w-sm  { max-width: 24rem; }
+.max-w-lg  { max-width: 32rem; }
+.max-w-3xl { max-width: 48rem; }
 
 /* ─── Global styles ─── */
 html, body, #root {
