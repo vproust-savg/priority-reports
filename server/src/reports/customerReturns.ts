@@ -15,6 +15,7 @@ import type { ODataParams } from '../services/priorityClient';
 import type { ReportFilters } from '../config/reportRegistry';
 import { reportRegistry } from '../config/reportRegistry';
 import { parseCustomerReturnsRemarks } from '../services/customerReturnsParser';
+import { querySubform } from '../services/priorityClient';
 
 const columns: ColumnDefinition[] = [
   { key: 'date', label: 'Date', type: 'date' },
@@ -61,6 +62,49 @@ function buildQuery(filters: ReportFilters): ODataParams {
   };
 }
 
+// WHY: DOCUMENTS_N's $expand is broken (mirrors DOCUMENTS_P's CloudFront
+// abort behavior). Two-step fetch per row: DOCUMENTSTEXT_SUBFORM for HTML
+// remarks AND EXTFILES_SUBFORM (metadata-only via $select=EXTFILEDES,
+// EXTFILENUM,SUFFIX,FILESIZE) for the attachments column. File bytes are
+// NOT fetched here — the AttachmentsCell triggers a separate request to
+// /api/v1/attachments/:entity/:docNo/:type/:extfilenum on click.
+// WHY (batch shape): 10 rows × 2 subforms = 20 parallel calls per batch,
+// 200ms gap. One full 50-row page = 5 batches × 20 = 100 calls in ~1s.
+// Priority's per-minute budget is shared at 100/min; do NOT lower the
+// gap or raise the batch size without coordinating with other dashboards.
+async function enrichRows(rows: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
+  const BATCH_SIZE = 10;
+  const BATCH_DELAY_MS = 200;
+
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    if (i > 0) await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
+
+    const calls: Promise<unknown>[] = [];
+    for (const row of batch) {
+      const key = { DOCNO: row.DOCNO as string, TYPE: row.TYPE as string };
+      calls.push(
+        querySubform('DOCUMENTS_N', key, 'DOCUMENTSTEXT_SUBFORM').then((res) => {
+          row.DOCUMENTSTEXT_SUBFORM = res;
+        }),
+      );
+      calls.push(
+        querySubform(
+          'DOCUMENTS_N',
+          key,
+          'EXTFILES_SUBFORM',
+          { select: 'EXTFILEDES,EXTFILENUM,SUFFIX,FILESIZE' },
+        ).then((res) => {
+          row.EXTFILES_SUBFORM = res;
+        }),
+      );
+    }
+    await Promise.all(calls);
+  }
+
+  return rows;
+}
+
 function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
   const textSub = raw.DOCUMENTSTEXT_SUBFORM as Record<string, unknown> | null;
   const htmlText = (textSub?.TEXT as string | null | undefined) ?? null;
@@ -102,6 +146,6 @@ reportRegistry.set('customer-returns', {
   filterColumns,
   buildQuery,
   transformRow,
-  enrichRows: async (rows) => rows,
+  enrichRows,
   clearMemoryCache: () => {},
 });

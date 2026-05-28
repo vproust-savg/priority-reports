@@ -19,6 +19,7 @@ import type { ApiResponse } from '@shared/types';
 // WHY: Import report definitions so they self-register into reportRegistry
 import '../reports/grvLog';
 import '../reports/bbdReport';
+import '../reports/customerReturns';
 
 const QueryParamsSchema = z.object({
   page: z.coerce.number().min(1).default(1),
