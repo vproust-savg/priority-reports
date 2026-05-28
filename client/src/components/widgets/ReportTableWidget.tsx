@@ -35,6 +35,8 @@ import BulkExtendModal from '../modals/BulkExtendModal';
 import ReportSubTabs from '../ReportSubTabs';
 import BBDExtendedView from '../BBDExtendedView';
 import CopyableCell from '../cells/CopyableCell';
+import { AttachmentsCell } from './cells/AttachmentsCell';
+import type { Attachment } from './cells/AttachmentsCell';
 import { countActiveFilters } from '../../config/filterConstants';
 import { findWidgetByReportId } from '../../config/pages';
 import { getDetailComponent } from '../../config/detailRegistry';
@@ -130,13 +132,29 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
     return map;
   }, [data?.columns, handleCopy]);
 
+  // WHY: AttachmentsCell renders the paperclip + popover for the
+  // 'attachments' column. Needs docNo and type from the row for the
+  // download URL (/api/v1/attachments/DOCUMENTS_N/:docNo/:type/:num).
+  const attachmentsRenderer = useMemo<Record<string, (value: unknown, row: Record<string, unknown>) => ReactNode>>(
+    () => ({
+      attachments: (value, row) => (
+        <AttachmentsCell
+          value={value as Attachment[] | null}
+          docNo={String(row.docNo ?? '')}
+          type={String(row.type ?? '')}
+        />
+      ),
+    }),
+    [],
+  );
+
   // WHY: BBD-specific renderers (extend modal, custom expiry cell) take
   // precedence over generic copyable renderers on key collision.
   const mergedRenderers = useMemo(() => {
     const bbd = activeSubTab === 'active' ? cellRenderers : undefined;
-    if (!bbd && Object.keys(copyRenderers).length === 0) return undefined;
-    return { ...copyRenderers, ...(bbd ?? {}) };
-  }, [copyRenderers, cellRenderers, activeSubTab]);
+    if (!bbd && Object.keys(copyRenderers).length === 0 && Object.keys(attachmentsRenderer).length === 0) return undefined;
+    return { ...copyRenderers, ...attachmentsRenderer, ...(bbd ?? {}) };
+  }, [copyRenderers, attachmentsRenderer, cellRenderers, activeSubTab]);
 
   const [expandedRows, setExpandedRows] = useState<Set<string>>(() => new Set());
   const toggleExpand = useCallback((rowKey: string) => {

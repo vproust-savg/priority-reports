@@ -158,6 +158,10 @@ export function createExportRouter(cache: CacheProvider): Router {
       if (filtered.length > 0) exportColumns = filtered;
     }
 
+    // WHY: 'attachments' is an array-of-objects rendered by AttachmentsCell.
+    // Serializing it to Excel would produce '[object Object]'. Always exclude it.
+    exportColumns = exportColumns.filter((c) => c.key !== 'attachments');
+
     // --- Generate Excel ---
     let excelBuffer: Buffer;
     try {
