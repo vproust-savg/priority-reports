@@ -50,6 +50,22 @@ export const pages = z.array(PageConfigSchema).parse([
     ],
   },
   {
+    id: 'customer-returns',
+    department: 'food-safety',
+    name: 'Customer Returns',
+    path: '/customer-returns',
+    widgets: [
+      {
+        id: 'customer-returns',
+        reportId: 'customer-returns',
+        type: 'table',
+        title: 'Customer Returns',
+        colSpan: 12,
+        disableCache: true,
+      },
+    ],
+  },
+  {
     id: 'bbd',
     department: 'purchasing',
     name: 'BBD — Best By Dates',
