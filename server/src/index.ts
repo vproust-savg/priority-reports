@@ -18,6 +18,7 @@ import { createFiltersRouter } from './routes/filters';
 import { createExportRouter } from './routes/export';
 import { createSubformRouter } from './routes/subform';
 import { createExtendRouter } from './routes/extend';
+import { createAttachmentsRouter } from './routes/attachments';
 import { logStartup } from './services/logger';
 import { getMonday, getSunday, toISODate } from '../../shared/utils/weekUtils';
 import { nowInLA } from '../../shared/utils/timezone';
@@ -41,6 +42,7 @@ app.use('/api/v1/reports', createFiltersRouter(cache));
 app.use('/api/v1/reports', createExportRouter(cache));
 app.use('/api/v1/reports', createSubformRouter());
 app.use('/api/v1/reports', createExtendRouter());
+app.use('/api/v1/attachments', createAttachmentsRouter());
 
 // WHY: In production, Express serves the built React app.
 // In development, Vite's dev server handles the frontend.
