@@ -110,12 +110,34 @@ export function createEmptyGroup(): FilterGroup {
   };
 }
 
-// WHY: Default to "Date is in week [current week]" — a single condition
-// instead of two date-range conditions. Matches the most common use case.
-export function createDefaultFilterGroup(): FilterGroup {
-  // WHY: Use LA-now so the default "this week" reflects the Savory Gourmet
-  // business calendar, not the browser's or Railway's wall-clock TZ.
-  const monday = getMonday(nowInLA());
+// WHY: Default to "Date is in week [current week]" for most reports.
+// customer-returns uses "current calendar month" instead — returns span
+// months and a full-month view is more useful than a single-week slice.
+export function createDefaultFilterGroup(reportId?: string): FilterGroup {
+  // WHY: Use LA-now so defaults reflect the Savory Gourmet business
+  // calendar, not the browser's or Railway's wall-clock TZ.
+  const today = nowInLA();
+
+  if (reportId === 'customer-returns') {
+    const fromStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+    const toStr = toISODate(today);
+    return {
+      id: 'root',
+      conjunction: 'and',
+      conditions: [
+        {
+          id: crypto.randomUUID(),
+          field: 'date',
+          operator: 'isBetween',
+          value: fromStr,
+          valueTo: toStr,
+        },
+      ],
+      groups: [],
+    };
+  }
+
+  const monday = getMonday(today);
   const sunday = getSunday(monday);
 
   return {

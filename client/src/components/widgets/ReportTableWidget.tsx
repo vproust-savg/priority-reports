@@ -46,7 +46,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const {
     filterGroup, debouncedGroup, page, setPage,
     isFilterOpen, setIsFilterOpen, handleFilterChange,
-  } = useFilterState();
+  } = useFilterState(reportId);
 
   const filtersQuery = useFiltersQuery(reportId);
   const filterColumns = filtersQuery.data?.columns ?? [];

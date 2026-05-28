@@ -11,8 +11,11 @@ import { useState, useEffect } from 'react';
 import type { FilterGroup } from '@shared/types';
 import { createDefaultFilterGroup } from '../config/filterConstants';
 
-export function useFilterState() {
-  const [filterGroup, setFilterGroup] = useState<FilterGroup>(createDefaultFilterGroup);
+// WHY: reportId is passed so createDefaultFilterGroup can return the
+// correct initial range per report. Default is undefined (week-based)
+// to keep all existing callers working without change.
+export function useFilterState(reportId?: string) {
+  const [filterGroup, setFilterGroup] = useState<FilterGroup>(() => createDefaultFilterGroup(reportId));
   const [debouncedGroup, setDebouncedGroup] = useState<FilterGroup>(filterGroup);
   const [page, setPage] = useState(1);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
