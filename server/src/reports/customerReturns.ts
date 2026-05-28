@@ -15,7 +15,8 @@ import type { ODataParams } from '../services/priorityClient';
 import type { ReportFilters } from '../config/reportRegistry';
 import { reportRegistry } from '../config/reportRegistry';
 import { parseCustomerReturnsRemarks } from '../services/customerReturnsParser';
-import { querySubform } from '../services/priorityClient';
+import { querySubform, queryPriority } from '../services/priorityClient';
+import type { FilterOption } from '@shared/types';
 
 const columns: ColumnDefinition[] = [
   { key: 'date', label: 'Date', type: 'date' },
@@ -137,6 +138,31 @@ function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
   };
 }
 
+// WHY: The Customer ID column is an enum filter — the dashboard needs a
+// dropdown of available customers. The shared filters route falls back to
+// a SUPNAME/CDES query (vendor-shaped) that 400s on DOCUMENTS_N, so we
+// provide a per-report fetchFilters that returns unique CUSTNAME/CDES
+// pairs from recent returns.
+async function fetchFilters(): Promise<Record<string, FilterOption[]>> {
+  const data = await queryPriority('DOCUMENTS_N', {
+    $select: 'CUSTNAME,CDES',
+    $orderby: 'CDES',
+    $top: 1000,
+  });
+
+  const seen = new Set<string>();
+  const customers: FilterOption[] = [];
+  for (const row of data.value) {
+    const code = row.CUSTNAME as string | null | undefined;
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    const desc = (row.CDES as string | null | undefined) ?? code;
+    customers.push({ value: code, label: `${desc} (${code})` });
+  }
+
+  return { customers };
+}
+
 reportRegistry.set('customer-returns', {
   id: 'customer-returns',
   name: 'Customer Returns',
@@ -147,5 +173,6 @@ reportRegistry.set('customer-returns', {
   buildQuery,
   transformRow,
   enrichRows,
+  fetchFilters,
   clearMemoryCache: () => {},
 });
