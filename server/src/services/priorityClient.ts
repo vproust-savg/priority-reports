@@ -103,10 +103,17 @@ export async function querySubform(
 
   try {
     const data = JSON.parse(response.body) as Record<string, unknown>;
-    // WHY: Single-entity sub-forms return fields directly (no "value" array).
-    // Multi-record sub-forms return { value: [...] }. Handle both.
+    // WHY: Two response shapes from Priority — preserve both, callers decide.
+    // - Single-entity sub-forms (e.g. DOCUMENTSTEXT_SUBFORM on DOCUMENTS_P/N)
+    //   return fields directly: { @odata.context, TEXT, APPEND, ... }.
+    // - Multi-record collection sub-forms (e.g. EXTFILES_SUBFORM on DOCUMENTS_N)
+    //   return { @odata.context, value: [...] }.
+    // We pass the collection shape through unchanged so callers can iterate
+    // value[]. Previously this branch returned only value[0], silently
+    // discarding additional records — the bug surfaced on Customer Returns'
+    // EXTFILES_SUBFORM where rows commonly have 2+ attachments.
     if ('value' in data && Array.isArray(data.value)) {
-      return (data.value as Record<string, unknown>[])[0] ?? null;
+      return { value: data.value };
     }
     // Strip OData metadata keys, return data fields only
     const record: Record<string, unknown> = {};
