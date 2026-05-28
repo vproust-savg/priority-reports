@@ -12,6 +12,50 @@
 
 ---
 
+## Task 0 Findings (executed 2026-05-27 — overrides original assumptions)
+
+The pre-flight Priority API checks (Task 0) discovered the EXTFILES schema differs from the plan's original assumptions. **All later tasks (especially 4, 5, 6, 8) must use the corrected field names below — not the original `FILENAME`/`EXTFILENAME` assumption.**
+
+**DOCUMENTS_N composite key:** `DOCNO` + `TYPE` ✓ confirmed.
+**Subforms present:** `DOCUMENTSTEXT_SUBFORM` (single-entity, HTML remarks) AND `EXTFILES_SUBFORM` (collection, attachments) ✓ confirmed.
+**TYPE filter:** Not needed — all sampled rows are `TYPE='N'`. Doc number prefix is `RT` (e.g., `RT26000014`). `IVNUM` is often null on returns; UI should render `null` as empty/em-dash.
+
+**EXTFILES_SUBFORM fields (CORRECTED):**
+
+| Field | Type | What it actually is |
+|---|---|---|
+| `EXTFILEDES` | string (32 char) | **Filename label** (often truncated by Priority — e.g. "Screen Shot 2026-05-13 at 12.47.") |
+| `EXTFILENUM` | integer | **Attachment number** — unique key within the document, used for direct integer-key subform access (Pattern B) |
+| `SUFFIX` | string (4 char) | File extension (e.g. `"png"`, `"pdf"`) |
+| `EXTFILENAME` | string (80 char per metadata, in practice unlimited) | **Base64 data URI of the file bytes** — e.g. `"data:image/png;base64,..."`. The metadata description says "File Path" but the actual content is the binary payload. |
+| `FILESIZE` | int (read-only) | Size in bytes |
+| `CURDATE` | datetime | Creation date |
+
+**Display filename = `EXTFILEDES + "." + SUFFIX`** — e.g., `"Photo of Bag" + "." + "png" = "Photo of Bag.png"`.
+
+**Direct integer-key access works (Pattern B):**
+
+```
+GET /DOCUMENTS_N(DOCNO='RT26000013',TYPE='N')/EXTFILES_SUBFORM(1)?$select=EXTFILENAME
+→ 200 with the single attachment's data URI
+```
+
+This is more efficient than `$filter=EXTFILEDES eq '...'` — use it in the attachment download route.
+
+### Concrete overrides per task
+
+- **Task 4 (transformRow):** The `attachments` array element shape is `{ num: number; filename: string; sizeBytes?: number }` — NOT `{ filename: string }`. Compute `filename = EXTFILEDES + '.' + SUFFIX`. Keep `num` (the integer `EXTFILENUM`) so the frontend can build the download URL.
+- **Task 5 (enrichRows):** The EXTFILES metadata fetch must use `$select=EXTFILEDES,EXTFILENUM,SUFFIX,FILESIZE` (NOT `$select=FILENAME`).
+- **Task 6 (attachments route):** URL becomes `/api/v1/attachments/:entity/:docNo/:type/:extfilenum`. The `:extfilenum` param is a positive integer (`/^\d+$/`), NOT a filename. The route fetches via integer-key subform path `DOCUMENTS_N(DOCNO='X',TYPE='Y')/EXTFILES_SUBFORM(N)?$select=EXTFILEDES,SUFFIX,EXTFILENAME` and derives `filename = EXTFILEDES + '.' + SUFFIX` for the Content-Disposition header. Decode the base64 from `EXTFILENAME` field.
+- **Task 8 (AttachmentsCell):** Props receive `value: Array<{ num: number; filename: string }> | null`. The download URL is `/api/v1/attachments/DOCUMENTS_N/${docNo}/${type}/${num}` (integer at the end). Display text is `filename`.
+- **Task 9 (widget integration):** The renderer passes `row.docNo` and `row.type` through to `AttachmentsCell` as before.
+
+### Sample data used for verification
+- DOCNO `RT26000013`, TYPE `N`, Customer `C7835` (Proper Hotel - DTLA), CURDATE 2026-05-19 — has 2 attachments (EXTFILENUM 1 "Photo of Bag.png", EXTFILENUM 2 "Screen Shot 2026-05-13 at 12.47.png").
+- Use this row for backend smoke tests in Task 11.
+
+---
+
 ## Pre-flight (NOT TDD-gated — investigation only, before any code)
 
 ### Task 0: Verify DOCUMENTS_N shape against Priority
