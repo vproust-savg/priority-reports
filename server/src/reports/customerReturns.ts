@@ -14,6 +14,7 @@ import type { ColumnDefinition, ColumnFilterMeta } from '@shared/types';
 import type { ODataParams } from '../services/priorityClient';
 import type { ReportFilters } from '../config/reportRegistry';
 import { reportRegistry } from '../config/reportRegistry';
+import { parseCustomerReturnsRemarks } from '../services/customerReturnsParser';
 
 const columns: ColumnDefinition[] = [
   { key: 'date', label: 'Date', type: 'date' },
@@ -60,10 +61,38 @@ function buildQuery(filters: ReportFilters): ODataParams {
   };
 }
 
-// WHY: transformRow + enrichRows arrive in Tasks 4 and 5.
-// Stub them here so tests in this task can register the report
-// and inspect columns/buildQuery. transformRow returns the raw row
-// shape; enrichRows is a no-op pass-through.
+function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
+  const textSub = raw.DOCUMENTSTEXT_SUBFORM as Record<string, unknown> | null;
+  const htmlText = (textSub?.TEXT as string | null | undefined) ?? null;
+  const remarks = parseCustomerReturnsRemarks(htmlText);
+
+  const filesSub = raw.EXTFILES_SUBFORM as Record<string, unknown> | null;
+  const filesArray = (filesSub?.value as Array<Record<string, unknown>> | undefined) ?? [];
+  const attachments = filesArray
+    .map((f) => {
+      const desRaw = f.EXTFILEDES;
+      if (typeof desRaw !== 'string' || desRaw.length === 0) return null;
+      const suffix = f.SUFFIX;
+      const filename = typeof suffix === 'string' && suffix.length > 0 ? `${desRaw}.${suffix}` : desRaw;
+      const sizeBytes = typeof f.FILESIZE === 'number' ? (f.FILESIZE as number) : null;
+      const num = typeof f.EXTFILENUM === 'number' ? (f.EXTFILENUM as number) : null;
+      if (num === null) return null;
+      return { num, filename, sizeBytes };
+    })
+    .filter((a): a is { num: number; filename: string; sizeBytes: number | null } => a !== null);
+
+  return {
+    date: raw.CURDATE,
+    docNo: raw.DOCNO,
+    type: raw.TYPE,
+    customerId: raw.CUSTNAME,
+    customerName: raw.CDES,
+    invoiceNum: raw.IVNUM ?? null,
+    ...remarks,
+    attachments,
+  };
+}
+
 reportRegistry.set('customer-returns', {
   id: 'customer-returns',
   name: 'Customer Returns',
@@ -72,7 +101,7 @@ reportRegistry.set('customer-returns', {
   columns,
   filterColumns,
   buildQuery,
-  transformRow: (raw) => raw,
+  transformRow,
   enrichRows: async (rows) => rows,
   clearMemoryCache: () => {},
 });
