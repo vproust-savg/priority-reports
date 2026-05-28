@@ -78,13 +78,20 @@ export async function querySubform(
   entity: string,
   keyParts: Record<string, string>,
   subformName: string,
+  options: { select?: string } = {},
 ): Promise<Record<string, unknown> | null> {
   const config = getPriorityConfig();
   const keyStr = Object.entries(keyParts)
     // WHY: OData single-quote escaping doubles the quote (same pattern as escapeODataString)
     .map(([k, v]) => `${k}='${v.replace(/'/g, "''")}'`)
     .join(',');
-  const url = `${config.baseUrl}${entity}(${keyStr})/${subformName}`;
+  let url = `${config.baseUrl}${entity}(${keyStr})/${subformName}`;
+  // WHY: Some sub-forms (EXTFILES_SUBFORM on DOCUMENTS_N) return heavy
+  // base64 binaries by default. The $select limits the payload to metadata
+  // when callers only need filenames + keys.
+  if (options.select) {
+    url += `?$select=${options.select}`;
+  }
 
   const response = await fetchWithRetry(url);
 
