@@ -105,4 +105,28 @@ describe('AttachmentsCell', () => {
     fireEvent.mouseDown(screen.getByTestId('outside'));
     expect(screen.queryByText('invoice.pdf')).toBeNull();
   });
+
+  // WHY: The popover must render via React portal into document.body so it
+  // escapes the table's overflow context. Inside the Airtable iframe, the
+  // table cell / row / widget card has overflow clipping that hid the
+  // previous position:absolute popover.
+  it('renders the popover via a portal outside the cell container', () => {
+    const { container } = render(
+      <AttachmentsCell value={ATTACHMENTS} docNo="RT1" type="N" />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /attachments/i }));
+    const popover = screen.getByRole('menu');
+    // The popover must NOT be a descendant of the rendered container
+    // (which is where the trigger button lives) — it must live in document.body.
+    expect(container.contains(popover)).toBe(false);
+    expect(document.body.contains(popover)).toBe(true);
+  });
+
+  it('positions the popover with position:fixed (escapes overflow contexts)', () => {
+    render(<AttachmentsCell value={ATTACHMENTS} docNo="RT1" type="N" />);
+    fireEvent.click(screen.getByRole('button', { name: /attachments/i }));
+    const popover = screen.getByRole('menu') as HTMLElement;
+    expect(popover.style.position).toBe('fixed');
+  });
+
 });
