@@ -53,6 +53,13 @@ export interface ReportConfig {
   // WHY: Priority's $expand truncates responses for some entities (DOCUMENTS_P).
   // Reports that need sub-form data use this to fetch it in a second step.
   enrichRows?: (rows: Record<string, unknown>[]) => Promise<Record<string, unknown>[]>;
+  // WHY: Expands one parent row into N rows — one per sub-form line item (e.g.,
+  // Customer Returns: one row per returned SKU). Runs AFTER enrichRows so any
+  // enriched fields are copied onto each exploded row, but is independent of
+  // enrichment success: line items come from the parent $expand, so they survive
+  // a remarks/attachments enrichment failure. Returns rows unchanged when a parent
+  // has no line items (still one row, with blank line fields).
+  explodeRows?: (rows: Record<string, unknown>[]) => Record<string, unknown>[];
   // WHY: Optional Excel export configuration. When present, the export
   // endpoint uses the Airtable template with this column mapping.
   // When absent, export falls back to a basic Excel with headers + data.

@@ -29,16 +29,24 @@ describe('Customer Returns buildQuery', () => {
     expect(report.buildQuery({}).$filter).toBeUndefined();
   });
 
-  it('pagination: $top and $skip respect page/pageSize', () => {
+  // WHY: clientSidePagination — buildQuery fetches the whole filtered window in
+  // one query ($top 5000, $skip 0) regardless of page/pageSize; the frontend
+  // paginates the exploded line-item rows.
+  it('fetches the whole window ($top 5000, $skip 0) regardless of page/pageSize', () => {
     const q = report.buildQuery({ page: 3, pageSize: 25 });
-    expect(q.$top).toBe(25);
-    expect(q.$skip).toBe(50);
+    expect(q.$top).toBe(5000);
+    expect(q.$skip).toBe(0);
   });
 
-  it('defaults to page=1, pageSize=50', () => {
+  it('expands all three subforms inline with nested $selects', () => {
     const q = report.buildQuery({});
-    expect(q.$top).toBe(50);
-    expect(q.$skip).toBe(0);
+    // Line items
+    expect(q.$expand).toContain('TRANSORDER_N_SUBFORM(');
+    expect(q.$expand).toContain('PARTNAME');
+    expect(q.$expand).toContain('Y_2301_0_ESH');
+    // Remarks + attachment metadata (single-query design — no enrichRows)
+    expect(q.$expand).toContain('DOCUMENTSTEXT_SUBFORM($select=TEXT)');
+    expect(q.$expand).toContain('EXTFILES_SUBFORM($select=EXTFILEDES,EXTFILENUM,SUFFIX,FILESIZE)');
   });
 
   it('$orderby is CURDATE desc', () => {
@@ -47,7 +55,7 @@ describe('Customer Returns buildQuery', () => {
 });
 
 describe('Customer Returns columns', () => {
-  it('has exactly 10 columns with expected keys in order', () => {
+  it('has 17 columns with document columns first, line-item columns appended', () => {
     expect(report.columns.map((c) => c.key)).toEqual([
       'date',
       'docNo',
@@ -59,6 +67,13 @@ describe('Customer Returns columns', () => {
       'returnDetails',
       'foodSafetyConcern',
       'attachments',
+      'sku',
+      'itemName',
+      'quantity',
+      'returnCode',
+      'returnReason',
+      'lotNumber',
+      'expDate',
     ]);
   });
 

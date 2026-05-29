@@ -54,9 +54,12 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   // WHY: Per-widget disableCache opt-in (set on grv-log in pages.ts) flows
   // through to the hook so TanStack treats every search as always-fresh.
   const widgetConfig = findWidgetByReportId(reportId);
+  // WHY: clientSidePagination reports return the whole result set in one query.
+  // Fetch page 1 once and paginate locally so page changes don't refetch.
+  const clientPaged = !!widgetConfig?.clientSidePagination;
   const query = useReportQuery(
     reportId,
-    { filterGroup: debouncedGroup, page, pageSize: 50 },
+    { filterGroup: debouncedGroup, page: clientPaged ? 1 : page, pageSize: 50 },
     { disableCache: widgetConfig?.disableCache },
   );
 
@@ -111,6 +114,12 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const data = query.data;
   const displayData = data?.data ?? [];
   const sortedDisplayData = useMemo(() => sortedData(displayData), [sortedData, displayData]);
+  // WHY: For clientSidePagination, slice the sorted full set to the current page
+  // (global sort, then page window). Standard reports already arrive paginated.
+  const pagedData = useMemo(
+    () => (clientPaged ? sortedDisplayData.slice((page - 1) * 50, page * 50) : sortedDisplayData),
+    [clientPaged, sortedDisplayData, page],
+  );
   const expandConfig = data?.meta?.expandConfig;
   const DetailComponent = expandConfig ? getDetailComponent(reportId) : null;
 
@@ -276,7 +285,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
             <>
               <ReportTable
                 columns={visibleColumns.length > 0 ? visibleColumns : data!.columns}
-                data={sortedDisplayData}
+                data={pagedData}
                 rowStyleField={data?.meta?.rowStyleField}
                 reportId={reportId}
                 expandConfig={expandConfig && DetailComponent ? {

@@ -130,6 +130,12 @@ export function createExportRouter(cache: CacheProvider): Router {
       }
     }
 
+    // WHY: Row explosion (one row per sub-form line item) — same step query.ts
+    // runs, so the export matches the table exactly. Independent of enrichRows.
+    if (report.explodeRows) {
+      enrichedRows = report.explodeRows(enrichedRows);
+    }
+
     // --- Transform + post-transform exclusion + client-side filter ---
     let transformedRows = enrichedRows.map(report.transformRow);
 

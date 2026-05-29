@@ -121,6 +121,13 @@ export function createQueryRouter(cache: CacheProvider): Router {
         warnings.push('Sub-form data unavailable — some columns may be blank');
       }
     }
+    // WHY: Row explosion (one row per sub-form line item) runs here, after the
+    // enrichRows try/catch. It uses the parent's $expand line items, so it still
+    // explodes even when enrichRows threw and rawRows fell back to un-enriched
+    // parent rows — line-item columns are never blanked by an enrichment failure.
+    if (report.explodeRows) {
+      rawRows = report.explodeRows(rawRows);
+    }
     let rows = rawRows.map(report.transformRow);
 
     // WHY: Post-transform row exclusion. BBD uses this to remove items

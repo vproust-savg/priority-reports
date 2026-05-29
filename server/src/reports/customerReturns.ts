@@ -1,12 +1,14 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/src/reports/customerReturns.ts
-// PURPOSE: Customer Returns report. Queries DOCUMENTS_N, fetches
-//          DOCUMENTSTEXT_SUBFORM (remarks) AND EXTFILES_SUBFORM
-//          (attachment metadata) per row. Parses HTML remarks into
-//          4 structured fields. Exposes attachments as a metadata
-//          list — file bytes are fetched on-demand via the
-//          /api/v1/attachments route.
-// USED BY: routes/reports.ts (side-effect import — added in Task 5)
+// PURPOSE: Customer Returns report. ONE query against DOCUMENTS_N that
+//          $expands all three subforms — TRANSORDER_N_SUBFORM (line
+//          items), DOCUMENTSTEXT_SUBFORM (HTML remarks) and
+//          EXTFILES_SUBFORM (attachment metadata). Explodes into one row
+//          per line item, parses remarks into 4 fields, exposes
+//          attachments as metadata (bytes fetched on-demand via
+//          /api/v1/attachments). No per-document enrichment — scales to
+//          any volume because it is a single API call.
+// USED BY: routes/reports.ts (side-effect import)
 // EXPORTS: (none — self-registers into reportRegistry)
 // ═══════════════════════════════════════════════════════════════
 
@@ -15,8 +17,24 @@ import type { ODataParams } from '../services/priorityClient';
 import type { ReportFilters } from '../config/reportRegistry';
 import { reportRegistry } from '../config/reportRegistry';
 import { parseCustomerReturnsRemarks } from '../services/customerReturnsParser';
-import { querySubform, queryPriority } from '../services/priorityClient';
+import { queryPriority } from '../services/priorityClient';
+import {
+  explodeReturnRows,
+  lineItemFields,
+  collectReturnFilterOptions,
+} from '../services/customerReturnsLineItems';
 import type { FilterOption } from '@shared/types';
+
+// WHY: All three subforms expand inline on the parent query. Nested $selects
+// keep each to the fields we display (line items would otherwise return 30+
+// fields). DOCUMENTSTEXT is the HTML remarks blob; EXTFILES is attachment
+// metadata only (bytes fetched on-demand). $expand needs the parent key
+// (DOCNO,TYPE) in the parent $select or Priority aborts the response stream.
+const SUBFORM_EXPAND = [
+  'TRANSORDER_N_SUBFORM($select=PARTNAME,PDES,TQUANT,TUNITNAME,RETREASONCODE,RETREASONDES,TOSERIALNAME,Y_2301_0_ESH)',
+  'DOCUMENTSTEXT_SUBFORM($select=TEXT)',
+  'EXTFILES_SUBFORM($select=EXTFILEDES,EXTFILENUM,SUFFIX,FILESIZE)',
+].join(',');
 
 const columns: ColumnDefinition[] = [
   { key: 'date', label: 'Date', type: 'date' },
@@ -29,6 +47,14 @@ const columns: ColumnDefinition[] = [
   { key: 'returnDetails', label: 'Return Details', type: 'string' },
   { key: 'foodSafetyConcern', label: 'Food Safety Concern', type: 'string' },
   { key: 'attachments', label: 'Attachments', type: 'string' },
+  // WHY: Line-item columns (one row per returned SKU after explodeRows).
+  { key: 'sku', label: 'SKU', type: 'string', copyable: true },
+  { key: 'itemName', label: 'Item Name', type: 'string' },
+  { key: 'quantity', label: 'Quantity', type: 'string' },
+  { key: 'returnCode', label: 'Return Code', type: 'string' },
+  { key: 'returnReason', label: 'Return Reason', type: 'string' },
+  { key: 'lotNumber', label: 'Lot Number', type: 'string', copyable: true },
+  { key: 'expDate', label: 'Exp. Date', type: 'date' },
 ];
 
 const filterColumns: ColumnFilterMeta[] = [
@@ -41,6 +67,15 @@ const filterColumns: ColumnFilterMeta[] = [
   { key: 'requestMethod', label: 'Request Method', filterType: 'text', filterLocation: 'client' },
   { key: 'returnDetails', label: 'Return Details', filterType: 'text', filterLocation: 'client' },
   { key: 'foodSafetyConcern', label: 'Food Safety Concern', filterType: 'text', filterLocation: 'client' },
+  // WHY: Line-item filters are client-located — these fields come from the
+  // exploded TRANSORDER_N_SUBFORM, not the parent OData query, so they're
+  // matched in-memory by applyServerClientFilters over the full fetched month.
+  { key: 'sku', label: 'SKU', filterType: 'text', filterLocation: 'client' },
+  { key: 'itemName', label: 'Item Name', filterType: 'text', filterLocation: 'client' },
+  { key: 'returnCode', label: 'Return Code', filterType: 'enum', filterLocation: 'client', enumKey: 'returnCodes' },
+  { key: 'returnReason', label: 'Return Reason', filterType: 'enum', filterLocation: 'client', enumKey: 'returnReasons' },
+  { key: 'lotNumber', label: 'Lot Number', filterType: 'text', filterLocation: 'client' },
+  { key: 'expDate', label: 'Exp. Date', filterType: 'date', filterLocation: 'client' },
 ];
 
 function buildQuery(filters: ReportFilters): ODataParams {
@@ -49,70 +84,43 @@ function buildQuery(filters: ReportFilters): ODataParams {
   if (filters.from) conditions.push(`CURDATE ge ${filters.from}T00:00:00Z`);
   if (filters.to) conditions.push(`CURDATE le ${filters.to}T23:59:59Z`);
 
-  const pageSize = filters.pageSize ?? 50;
-  const page = filters.page ?? 1;
-
   return {
     // WHY: TYPE in $select so we can fetch DOCUMENTSTEXT_SUBFORM and
     // EXTFILES_SUBFORM via the (DOCNO='...',TYPE='...') composite key.
+    // WHY: DOCNO,TYPE are the composite key — REQUIRED in $select for $expand
+    // to stream without aborting. CURDATE/CUSTNAME/CDES/IVNUM are display fields.
     $select: 'DOCNO,TYPE,CURDATE,CUSTNAME,CDES,IVNUM',
+    // WHY: One query pulls line items + remarks + attachment metadata inline.
+    // No per-document enrichment, so the cost is one API call at any volume.
+    $expand: SUBFORM_EXPAND,
     $filter: conditions.length > 0 ? conditions.join(' and ') : undefined,
     $orderby: 'CURDATE desc',
-    $top: pageSize,
-    $skip: (page - 1) * pageSize,
+    // WHY: clientSidePagination fetches the whole filtered window in one query;
+    // the frontend filters/sorts/paginates the exploded rows. $top 5000 covers
+    // ~20 months at the expected ~250 returns/month (well under MAXAPILINES).
+    // Very wide ranges beyond 5000 returns would truncate — acceptable for the
+    // month-default UI; revisit with cursor pagination if that need arises.
+    $top: 5000,
+    $skip: 0,
   };
 }
 
-// WHY: DOCUMENTS_N's $expand is broken (mirrors DOCUMENTS_P's CloudFront
-// abort behavior). Two-step fetch per row: DOCUMENTSTEXT_SUBFORM for HTML
-// remarks AND EXTFILES_SUBFORM (metadata-only via $select=EXTFILEDES,
-// EXTFILENUM,SUFFIX,FILESIZE) for the attachments column. File bytes are
-// NOT fetched here — the AttachmentsCell triggers a separate request to
-// /api/v1/attachments/:entity/:docNo/:type/:extfilenum on click.
-// WHY (batch shape): 10 rows × 2 subforms = 20 parallel calls per batch,
-// 200ms gap. One full 50-row page = 5 batches × 20 = 100 calls in ~1s.
-// Priority's per-minute budget is shared at 100/min; do NOT lower the
-// gap or raise the batch size without coordinating with other dashboards.
-async function enrichRows(rows: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
-  const BATCH_SIZE = 10;
-  const BATCH_DELAY_MS = 200;
-
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch = rows.slice(i, i + BATCH_SIZE);
-    if (i > 0) await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
-
-    const calls: Promise<unknown>[] = [];
-    for (const row of batch) {
-      const key = { DOCNO: row.DOCNO as string, TYPE: row.TYPE as string };
-      calls.push(
-        querySubform('DOCUMENTS_N', key, 'DOCUMENTSTEXT_SUBFORM').then((res) => {
-          row.DOCUMENTSTEXT_SUBFORM = res;
-        }),
-      );
-      calls.push(
-        querySubform(
-          'DOCUMENTS_N',
-          key,
-          'EXTFILES_SUBFORM',
-          { select: 'EXTFILEDES,EXTFILENUM,SUFFIX,FILESIZE' },
-        ).then((res) => {
-          row.EXTFILES_SUBFORM = res;
-        }),
-      );
-    }
-    await Promise.all(calls);
-  }
-
-  return rows;
-}
-
 function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
-  const textSub = raw.DOCUMENTSTEXT_SUBFORM as Record<string, unknown> | null;
+  // WHY: Via $expand, DOCUMENTSTEXT_SUBFORM comes back as a single object
+  // ({TEXT}); normalize the array form too in case Priority returns a collection.
+  const textRaw = raw.DOCUMENTSTEXT_SUBFORM;
+  const textSub = (Array.isArray(textRaw) ? textRaw[0] : textRaw) as Record<string, unknown> | null;
   const htmlText = (textSub?.TEXT as string | null | undefined) ?? null;
   const remarks = parseCustomerReturnsRemarks(htmlText);
 
-  const filesSub = raw.EXTFILES_SUBFORM as Record<string, unknown> | null;
-  const filesArray = (filesSub?.value as Array<Record<string, unknown>> | undefined) ?? [];
+  // WHY: Via $expand, EXTFILES_SUBFORM is a plain array (the legacy two-step
+  // fetch wrapped it as {value:[...]}); accept both shapes defensively.
+  const filesRaw = raw.EXTFILES_SUBFORM;
+  const filesArray = (
+    Array.isArray(filesRaw)
+      ? filesRaw
+      : ((filesRaw as Record<string, unknown> | null)?.value as Array<Record<string, unknown>> | undefined) ?? []
+  ) as Array<Record<string, unknown>>;
   const attachments = filesArray
     .map((f) => {
       const desRaw = f.EXTFILEDES;
@@ -135,6 +143,8 @@ function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
     invoiceNum: raw.IVNUM ?? null,
     ...remarks,
     attachments,
+    // WHY: One line item per exploded row (or all-null when the return has none).
+    ...lineItemFields(raw),
   };
 }
 
@@ -144,8 +154,18 @@ function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
 // provide a per-report fetchFilters that returns unique CUSTNAME/CDES
 // pairs from recent returns.
 async function fetchFilters(): Promise<Record<string, FilterOption[]>> {
+  // WHY: One query feeds three dropdowns — customers from the parent, return
+  // codes/reasons from the expanded line items. Option `value` must equal the
+  // row's stored value so the client `equals` filter matches (returnCode=code,
+  // returnReason=description). Derived from data, so only codes/reasons in use
+  // appear — complete at this entity's volume (~15 returns).
   const data = await queryPriority('DOCUMENTS_N', {
-    $select: 'CUSTNAME,CDES',
+    // WHY: The parent key (DOCNO,TYPE) MUST be in $select when $expand-ing
+    // TRANSORDER_N_SUBFORM — without it Priority aborts the response stream
+    // mid-body (HTTP/2 stream error). Confirmed live: key present → 200 OK;
+    // key absent → truncated/aborted.
+    $select: 'DOCNO,TYPE,CUSTNAME,CDES',
+    $expand: 'TRANSORDER_N_SUBFORM($select=RETREASONCODE,RETREASONDES)',
     $orderby: 'CDES',
     $top: 1000,
   });
@@ -160,7 +180,8 @@ async function fetchFilters(): Promise<Record<string, FilterOption[]>> {
     customers.push({ value: code, label: `${desc} (${code})` });
   }
 
-  return { customers };
+  const { returnCodes, returnReasons } = collectReturnFilterOptions(data.value);
+  return { customers, returnCodes, returnReasons };
 }
 
 reportRegistry.set('customer-returns', {
@@ -168,11 +189,18 @@ reportRegistry.set('customer-returns', {
   name: 'Customer Returns',
   entity: 'DOCUMENTS_N',
   disableCache: true,
+  // WHY: Returns are low-volume, so fetch the whole filtered month and let the
+  // frontend paginate/filter the exploded line-item rows. Required so SKU /
+  // return-code client filters match across all returns, not just one page.
+  clientSidePagination: true,
   columns,
   filterColumns,
   buildQuery,
   transformRow,
-  enrichRows,
+  // WHY: No enrichRows — line items, remarks and attachments all arrive via the
+  // single $expand in buildQuery, so there is no per-document fetch step.
+  // WHY: Explodes each return into one row per TRANSORDER_N_SUBFORM line item.
+  explodeRows: explodeReturnRows,
   fetchFilters,
   clearMemoryCache: () => {},
 });

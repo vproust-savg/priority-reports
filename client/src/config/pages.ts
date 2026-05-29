@@ -19,6 +19,10 @@ const WidgetConfigSchema = z.object({
   // useReportQuery, flipping TanStack to staleTime:0 + refetchOnMount:'always'.
   // Pairs with the server-side ReportConfig.disableCache flag.
   disableCache: z.boolean().optional(),
+  // WHY: Mirrors the server-side ReportConfig.clientSidePagination flag. When
+  // true the server returns the whole result set in one query, so the widget
+  // fetches page 1 once and paginates/slices locally (page changes don't refetch).
+  clientSidePagination: z.boolean().optional(),
 });
 
 const PageConfigSchema = z.object({
@@ -62,6 +66,9 @@ export const pages = z.array(PageConfigSchema).parse([
         title: 'Customer Returns',
         colSpan: 12,
         disableCache: true,
+        // WHY: Server returns the whole month exploded into one row per line
+        // item; the widget paginates these rows locally (50/page).
+        clientSidePagination: true,
       },
     ],
   },
@@ -85,7 +92,9 @@ export const pages = z.array(PageConfigSchema).parse([
 // WHY: ReportTableWidget needs to read per-widget overrides like disableCache.
 // A reportId appears in exactly one widget across all pages, so a flat lookup
 // is unambiguous.
-export function findWidgetByReportId(reportId: string): { disableCache?: boolean } | undefined {
+export function findWidgetByReportId(
+  reportId: string,
+): { disableCache?: boolean; clientSidePagination?: boolean } | undefined {
   for (const page of pages) {
     const w = page.widgets.find((widget) => widget.reportId === reportId);
     if (w) return w;
