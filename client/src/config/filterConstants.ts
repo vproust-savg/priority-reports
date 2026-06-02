@@ -140,18 +140,33 @@ export function createDefaultFilterGroup(reportId?: string): FilterGroup {
   const monday = getMonday(today);
   const sunday = getSunday(monday);
 
+  const conditions: FilterCondition[] = [
+    {
+      id: crypto.randomUUID(),
+      field: 'date',
+      operator: 'isInWeek',
+      value: toISODate(monday),
+      valueTo: toISODate(sunday),
+    },
+  ];
+
+  // WHY: Receiving Log hides canceled GRVs by default as a removable chip the
+  // user can edit (-> "is Canceled") or delete to reveal them. 'Canceled' is
+  // the exact STATDES value in Priority (verified 2026-06-01). Appended after
+  // the date condition so conditions[0] stays the date filter.
+  if (reportId === 'grv-log') {
+    conditions.push({
+      id: crypto.randomUUID(),
+      field: 'status',
+      operator: 'notEquals',
+      value: 'Canceled',
+    });
+  }
+
   return {
     id: 'root',
     conjunction: 'and',
-    conditions: [
-      {
-        id: crypto.randomUUID(),
-        field: 'date',
-        operator: 'isInWeek',
-        value: toISODate(monday),
-        valueTo: toISODate(sunday),
-      },
-    ],
+    conditions,
     groups: [],
   };
 }

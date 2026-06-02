@@ -47,14 +47,27 @@ describe('createDefaultFilterGroup', () => {
     expect(nowInLA).toHaveBeenCalled();
   });
 
-  it("grv-log gets the same default week range (unchanged by customer-returns branch)", () => {
+  it("grv-log keeps the week-range date default and hides Canceled GRVs", () => {
     vi.mocked(nowInLA).mockReturnValue(new Date(2026, 4, 15)); // May 15
 
     const group = createDefaultFilterGroup('grv-log');
-    const condition = group.conditions[0];
 
-    expect(condition.operator).toBe('isInWeek');
-    expect(condition.field).toBe('date');
+    // WHY: date stays first — other code reads conditions[0] as the date filter.
+    expect(group.conditions[0].field).toBe('date');
+    expect(group.conditions[0].operator).toBe('isInWeek');
+
+    // Canceled GRVs hidden by default, as a removable chip.
+    const statusCond = group.conditions.find((c) => c.field === 'status');
+    expect(statusCond).toBeDefined();
+    expect(statusCond!.operator).toBe('notEquals');
+    expect(statusCond!.value).toBe('Canceled');
+  });
+
+  it("does not add a status condition for non-grv-log reports", () => {
+    vi.mocked(nowInLA).mockReturnValue(new Date(2026, 4, 15)); // May 15
+
+    const group = createDefaultFilterGroup(); // generic default report
+    expect(group.conditions.some((c) => c.field === 'status')).toBe(false);
   });
 
   describe('customer-returns', () => {
