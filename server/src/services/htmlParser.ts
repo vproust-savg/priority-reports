@@ -25,12 +25,17 @@ export interface GrvRemarkFields {
 const FIELD_MAP: Array<{ prefix: string; field: keyof GrvRemarkFields }> = [
   { prefix: 'driver id', field: 'driverId' },
   { prefix: 'license plate', field: 'licensePlate' },
+  // WHY: Staff sometimes hand-type the British spelling "Licence Plate".
+  { prefix: 'licence plate', field: 'licensePlate' },
   { prefix: 'truck temp', field: 'truckTemp' },
   { prefix: 'product surface temp', field: 'productTemp' },
   { prefix: 'condition of product', field: 'productCondition' },
   { prefix: 'condition of truck', field: 'truckCondition' },
   { prefix: 'comments', field: 'comments' },
   { prefix: 'time of receiving', field: 'receivingTime' },
+  // WHY: Staff sometimes hand-type "Receiving Time" instead of the template's
+  // "Time of Receiving". startsWith won't cross-match the two phrasings.
+  { prefix: 'receiving time', field: 'receivingTime' },
 ];
 
 const EMPTY_FIELDS: GrvRemarkFields = {
