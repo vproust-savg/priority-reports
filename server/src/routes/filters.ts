@@ -81,9 +81,14 @@ export function createFiltersRouter(cache: CacheProvider): Router {
         .map((name) => ({ value: name, label: name }))
         .sort((a, b) => a.label.localeCompare(b.label));
 
+      // WHY: Values must match Priority's STATDES exactly. Verified against
+      // live DOCUMENTS_P on 2026-06-01: 'Received', 'In Progress', 'Canceled'
+      // (American single-L). The prior 'Cancelled' (double-L) matched 0 rows,
+      // and 'In Progress' was missing entirely.
       const statuses: FilterOption[] = [
         { value: 'Received', label: 'Received' },
-        { value: 'Cancelled', label: 'Cancelled' },
+        { value: 'In Progress', label: 'In Progress' },
+        { value: 'Canceled', label: 'Canceled' },
       ];
 
       filters = { vendors, statuses, warehouses: [], users: [] };
