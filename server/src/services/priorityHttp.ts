@@ -31,7 +31,10 @@ function httpsGet(url: string): Promise<HttpsResponse> {
         'Prefer': 'odata.maxpagesize=49900',
         'Authorization': `Basic ${auth}`,
       },
-      timeout: 30_000,
+      // WHY: BBD's $expand query has a ~20-24s time-to-first-byte (Priority
+      // computes the full expand before streaming). 120s keeps headroom while
+      // staying under Priority's 3-minute server-side cap.
+      timeout: 120_000,
     }, (res) => {
       const chunks: Buffer[] = [];
       res.on('data', (chunk: Buffer) => chunks.push(chunk));
