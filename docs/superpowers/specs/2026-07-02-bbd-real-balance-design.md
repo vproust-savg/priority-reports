@@ -81,6 +81,17 @@ hiding lots with zero bins or a ≤ 0 total.
 `$top` 2000 → 5000. The single fetch currently caps at exactly 2000 raw rows
 (observed), silently dropping the newest expiries in the 30-day window.
 MAXAPILINES is 50,000, so 5000 is safe; payload stays ~1–2 MB.
+Confirmed real: a `$top=5000` UAT fetch returned 2,038 matching rows —
+`$top=2000` was cutting ~38 lots.
+
+### 5. HTTP timeout raise (`priorityHttp.ts`)
+
+Benchmarked (UAT, 2026-07-02): the expanded query takes **19–24 s
+time-to-first-byte** (Priority computes the full expand before streaming).
+The GET socket timeout in `server/src/services/priorityHttp.ts` is 30 s —
+too close for safety; a slow day fails the report and triggers pointless
+retries. Raise the GET timeout `30_000` → `120_000` (still under Priority's
+3-minute server cap). PATCH timeout untouched.
 
 ## Error handling
 
@@ -101,6 +112,13 @@ already surfaces as a report error.
 - Post-deploy: fetch production BBD query, assert no row with balance ≤ 0 and
   row count dropped from the 645 baseline; spot-check one lot's table balance
   against its expanded bin rows.
+
+## Known limitation
+
+The Unit column still shows the parent `RAWSERIAL.UNITNAME` while bin
+`BALANCE` values are in each bin's own unit. In every sampled lot these
+match; if a lot ever stores bins in a different unit, the expanded detail
+panel (which shows per-bin units) is the source of truth.
 
 ## Out of scope
 

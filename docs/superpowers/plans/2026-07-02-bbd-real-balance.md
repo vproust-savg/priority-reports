@@ -13,7 +13,10 @@
 
 **Verified facts (don't re-derive):**
 - `$expand=RAWSERIALBAL_SUBFORM($select=...)` works on RAWSERIAL (tested live against UAT: 200 rows, 41 KB, 3.1 s).
+- Full-size benchmark (UAT, 2026-07-02): `$top=5000` + expand → 2,038 rows, ~505 KB, **19–24 s time-to-first-byte**. Priority computes the whole expand before streaming, so the 30 s socket timeout in `priorityHttp.ts` must be raised (Task 3).
+- UAT has 2,038 rows matching the BBD filter — today's `$top=2000` truncates ~38 lots. The `$top` bump is a real fix, not defensive.
 - `queryPriority`'s `ODataParams` already has an `$expand` field with correct raw-append URL handling (`server/src/services/priorityClient.ts:41-44`). No client changes needed.
+- The export route (`server/src/routes/export.ts:86-92`) passes `baseParams.$expand` through its own `PAGE_SIZE=5000` pagination loop — Excel exports pick up bin balances with zero changes.
 - The expanded-row UI (`client/src/components/details/BbdDetailPanel.tsx:63`) displays `sfRow.BALANCE` per bin — that's why we sum `BALANCE`, not `TBALANCE`.
 - Production baseline (2026-07-01): 645 report rows, none with balance < 1, many lots with empty sub-forms.
 - All bin dispositions count (Available, Damaged, Past BBD, Pending Disposal, …) — Victor's explicit decision.
@@ -182,7 +185,48 @@ git commit -m "feat(bbd): expand bin balances in main query, raise \$top to 5000
 
 ---
 
-### Task 3: `transformRow` — balance and value from bin sum
+### Task 3: Raise Priority GET timeout 30 s → 120 s
+
+**Why:** The expanded BBD query has a measured 19–24 s time-to-first-byte; the
+GET socket timeout is 30 s. Node's `timeout` option fires on socket idle, and
+Priority sends nothing until the response is fully computed — so a slow day
+kills the report and triggers retries that each burn another 30 s.
+
+**Files:**
+- Modify: `server/src/services/priorityHttp.ts:34` (the `httpsGet` timeout ONLY — leave the PATCH timeout at line ~68 untouched)
+
+- [ ] **Step 1: Edit the timeout**
+
+In `httpsGet`, change:
+
+```ts
+      timeout: 30_000,
+```
+
+to:
+
+```ts
+      // WHY: BBD's $expand query has a ~20-24s time-to-first-byte (Priority
+      // computes the full expand before streaming). 120s keeps headroom while
+      // staying under Priority's 3-minute server-side cap.
+      timeout: 120_000,
+```
+
+- [ ] **Step 2: Run the full server suite (no behavior change expected)**
+
+Run (from `server/`): `npm test -- --run`
+Expected: PASS.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add server/src/services/priorityHttp.ts
+git commit -m "fix(priority): raise GET timeout to 120s for slow \$expand queries"
+```
+
+---
+
+### Task 4: `transformRow` — balance and value from bin sum
 
 **Files:**
 - Modify: `server/src/reports/bbdReport.ts:138-190` (`transformRow`), intent block lines 1-9
@@ -320,7 +364,7 @@ git commit -m "feat(bbd): balance and value from summed bin balances"
 
 ---
 
-### Task 4: `filterRows` characterization test (no code change)
+### Task 5: `filterRows` characterization test (no code change)
 
 **Files:**
 - Test: `server/tests/bbdTransformRow.test.ts`
@@ -360,7 +404,7 @@ git commit -m "test(bbd): characterize filterRows exclusion of balance <= 0"
 
 ---
 
-### Task 5: Type checks + local UAT smoke test
+### Task 6: Type checks + local UAT smoke test
 
 **Files:** none modified (verification only)
 
@@ -399,7 +443,7 @@ Expected: `balance<=0 rows: 0` and the OK line. (UAT data, so the row count will
 
 ---
 
-### Task 6: Deploy + production verification
+### Task 7: Deploy + production verification
 
 **Files:** none modified
 
