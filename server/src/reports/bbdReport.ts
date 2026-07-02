@@ -62,15 +62,20 @@ function buildQuery(_filters: ReportFilters): ODataParams {
   const cutoffIso = cutoffDate.toISOString().split('T')[0] + 'T23:59:59Z';
 
   return {
-    // WHY: QUANT is the lot quantity on RAWSERIAL (TBALANCE lives on the sub-form only).
-    // Filtered in $filter to avoid fetching zero-quantity rows (reduces result set dramatically).
+    // WHY: QUANT is the original lot quantity on RAWSERIAL — it never
+    // decreases, so it can't detect consumed lots. Kept in $filter as a cheap
+    // server-side row reducer only.
     $select: 'PARTNAME,PARTDES,EXPIRYDATE,SUPDES,Y_9966_5_ESH,Y_9952_5_ESH,Y_2074_5_ESH,QUANT,UNITNAME,SERIALNAME,CURDATE,Y_8737_0_ESH',
+    // WHY: Real current stock lives in RAWSERIALBAL_SUBFORM bin rows.
+    // BALANCE (not TBALANCE) matches what BbdDetailPanel shows per bin, so
+    // the table total equals the sum of the visible expanded rows.
+    $expand: 'RAWSERIALBAL_SUBFORM($select=BALANCE)',
     $filter: `EXPIRYDATE le ${cutoffIso} and QUANT gt 0`,
     $orderby: 'EXPIRYDATE asc',
-    // WHY: Fetch all matching rows (no server pagination). Post-fetch filtering
-    // removes unflagged items, making OData pagination unreliable.
-    // Using a high $top. Cursor-based pagination handles MAXAPILINES cap if needed.
-    $top: 2000,
+    // WHY: Single fetch (post-fetch filtering makes OData pagination
+    // unreliable). 5000 clears the observed 2000-row truncation and stays
+    // well under MAXAPILINES (50,000) and the 3-minute request timeout.
+    $top: 5000,
     $skip: 0,
   };
 }

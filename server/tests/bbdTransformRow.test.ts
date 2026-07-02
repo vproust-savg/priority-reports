@@ -108,3 +108,17 @@ describe('sumBinBalances', () => {
     expect(sumBinBalances([{}, { BALANCE: 'abc' }, { BALANCE: 2 }])).toBe(2);
   });
 });
+
+describe('bbdReport buildQuery', () => {
+  const report = getReport('bbd')!;
+
+  it('expands RAWSERIALBAL_SUBFORM with nested $select on BALANCE', () => {
+    const params = report.buildQuery({});
+    expect(params.$expand).toBe('RAWSERIALBAL_SUBFORM($select=BALANCE)');
+  });
+
+  it('fetches up to 5000 rows to clear the 2000-row truncation', () => {
+    const params = report.buildQuery({});
+    expect(params.$top).toBe(5000);
+  });
+});
