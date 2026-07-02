@@ -149,6 +149,21 @@ describe('sumBinBalances', () => {
   });
 });
 
+describe('bbdReport filterRows', () => {
+  const report = getReport('bbd')!;
+
+  it('drops rows with balance <= 0, keeps positive-balance flagged rows', () => {
+    const rows = [
+      { balance: 5, status: 'expired', daysUntilExpiry: -1 },
+      { balance: 0, status: 'expired', daysUntilExpiry: -2 },
+      { balance: -3, status: 'expiring-perishable', daysUntilExpiry: 3 },
+    ];
+    const result = report.filterRows!(rows);
+    expect(result).toHaveLength(1);
+    expect(result[0].balance).toBe(5);
+  });
+});
+
 describe('bbdReport buildQuery', () => {
   const report = getReport('bbd')!;
 
