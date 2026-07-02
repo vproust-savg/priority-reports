@@ -26,13 +26,14 @@ describe('bbdReport transformRow', () => {
     expect(row.receivingDate).toBe('2026-02-05T00:00:00Z');
   });
 
-  it('computes value = QUANT * Y_8737_0_ESH', () => {
+  it('computes value = bin balance sum * Y_8737_0_ESH', () => {
     const row = report.transformRow({
       PARTNAME: 'P001', PARTDES: 'Widget', QUANT: 10, UNITNAME: 'ea',
       EXPIRYDATE: '2026-04-01T00:00:00Z', SUPDES: 'Acme',
       Y_9966_5_ESH: 'No', Y_9952_5_ESH: '', Y_2074_5_ESH: '',
       CURDATE: '2026-02-05T00:00:00Z', Y_8737_0_ESH: 33.97,
       SERIALNAME: '0000',
+      RAWSERIALBAL_SUBFORM: [{ BALANCE: 6 }, { BALANCE: 4 }],
     });
     expect(row.value).toBeCloseTo(339.7, 2);
   });
@@ -66,6 +67,7 @@ describe('bbdReport transformRow', () => {
       Y_9966_5_ESH: 'No', Y_9952_5_ESH: '', Y_2074_5_ESH: '',
       CURDATE: null, Y_8737_0_ESH: 0,
       SERIALNAME: '000',
+      RAWSERIALBAL_SUBFORM: [{ BALANCE: 84 }],
     });
     expect(row.value).toBe(0);
   });
@@ -77,9 +79,47 @@ describe('bbdReport transformRow', () => {
       Y_9966_5_ESH: 'No', Y_9952_5_ESH: '', Y_2074_5_ESH: '',
       CURDATE: null, Y_8737_0_ESH: null,
       SERIALNAME: '000',
+      RAWSERIALBAL_SUBFORM: [{ BALANCE: 10 }],
     });
     expect(row.value).toBe(0);
     expect(row.purchasePrice).toBe(0);
+  });
+
+  it('balance = sum of RAWSERIALBAL_SUBFORM bins, not QUANT', () => {
+    const row = report.transformRow({
+      PARTNAME: 'P001', PARTDES: 'Widget', QUANT: 100, UNITNAME: 'ea',
+      EXPIRYDATE: '2026-04-01T00:00:00Z', SUPDES: 'Acme',
+      Y_9966_5_ESH: 'No', Y_9952_5_ESH: '', Y_2074_5_ESH: '',
+      CURDATE: null, Y_8737_0_ESH: 10,
+      SERIALNAME: 'L1',
+      RAWSERIALBAL_SUBFORM: [{ BALANCE: 3 }, { BALANCE: 4 }],
+    });
+    expect(row.balance).toBe(7);
+  });
+
+  it('balance is 0 when the lot has no bin rows (fully consumed)', () => {
+    const row = report.transformRow({
+      PARTNAME: 'P001', PARTDES: 'Widget', QUANT: 100, UNITNAME: 'ea',
+      EXPIRYDATE: '2026-04-01T00:00:00Z', SUPDES: 'Acme',
+      Y_9966_5_ESH: 'No', Y_9952_5_ESH: '', Y_2074_5_ESH: '',
+      CURDATE: null, Y_8737_0_ESH: 10,
+      SERIALNAME: 'L2',
+      RAWSERIALBAL_SUBFORM: [],
+    });
+    expect(row.balance).toBe(0);
+    expect(row.value).toBe(0);
+  });
+
+  it('balance goes negative when bins net below zero', () => {
+    const row = report.transformRow({
+      PARTNAME: 'P001', PARTDES: 'Widget', QUANT: 100, UNITNAME: 'ea',
+      EXPIRYDATE: '2026-04-01T00:00:00Z', SUPDES: 'Acme',
+      Y_9966_5_ESH: 'No', Y_9952_5_ESH: '', Y_2074_5_ESH: '',
+      CURDATE: null, Y_8737_0_ESH: 10,
+      SERIALNAME: 'L3',
+      RAWSERIALBAL_SUBFORM: [{ BALANCE: 2 }, { BALANCE: -5 }],
+    });
+    expect(row.balance).toBe(-3);
   });
 });
 

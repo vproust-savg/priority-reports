@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/src/reports/bbdReport.ts
 // PURPOSE: BBD (Best By Dates) report. Queries RAWSERIAL for items
-//          nearing or past expiration. Two-step fetch for balance
-//          sub-form. Computes expiration status and filters to
-//          flagged items only. Provides dropdown filter values.
+//          nearing or past expiration, with bin balances inlined via
+//          $expand. Balance = sum of all bins; lots with no remaining
+//          stock are excluded. Provides dropdown filter values.
 // USED BY: config/reportRegistry.ts (auto-registers on import)
 // EXPORTS: (none — self-registers into reportRegistry)
 // ═══════════════════════════════════════════════════════════════
@@ -155,9 +155,10 @@ async function fetchExtensionData(): Promise<void> {
 // --- Row Transformer ---
 
 function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
-  // WHY: QUANT (lot quantity) is fetched directly from RAWSERIAL via $select
-  // (and filtered via $filter to only include > 0). No sub-form needed.
-  const balance = Number(raw.QUANT ?? 0);
+  // WHY: Real current stock = sum of expanded bin balances. QUANT (original
+  // lot quantity) never decreases, so it can't detect consumed lots.
+  // filterRows drops rows where this sum is <= 0.
+  const balance = sumBinBalances(raw.RAWSERIALBAL_SUBFORM);
 
   const expiryRaw = raw.EXPIRYDATE as string | null;
   const now = new Date();
@@ -196,7 +197,7 @@ function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
     serialName: raw.SERIALNAME ?? '',
     daysExtended: extensionMap.get((raw.SERIALNAME as string)?.trim()) ?? 0,
     purchasePrice: Number(raw.Y_8737_0_ESH ?? 0),
-    value: Number(raw.QUANT ?? 0) * Number(raw.Y_8737_0_ESH ?? 0),
+    value: balance * Number(raw.Y_8737_0_ESH ?? 0),
     receivingDate: raw.CURDATE,
     expiryDate: raw.EXPIRYDATE,
     daysUntilExpiry,
