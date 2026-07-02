@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/tests/bbdTransformRow.test.ts
-// PURPOSE: Tests for BBD report transformRow — new fields
-//          (receivingDate, value, serialName, purchasePrice).
+// PURPOSE: Tests for BBD report — transformRow fields, sumBinBalances,
+//          buildQuery shape, and filterRows exclusion.
 // USED BY: Vitest
 // EXPORTS: (none)
 // ═══════════════════════════════════════════════════════════════
@@ -9,8 +9,8 @@
 import { describe, it, expect } from 'vitest';
 import { getReport } from '../src/config/reportRegistry';
 
-// WHY: Import bbdReport for side-effect registration into reportRegistry.
-import '../src/reports/bbdReport';
+// WHY: Named import also side-effect-registers the report into reportRegistry.
+import { sumBinBalances } from '../src/reports/bbdReport';
 
 describe('bbdReport transformRow', () => {
   const report = getReport('bbd')!;
@@ -80,5 +80,31 @@ describe('bbdReport transformRow', () => {
     });
     expect(row.value).toBe(0);
     expect(row.purchasePrice).toBe(0);
+  });
+});
+
+describe('sumBinBalances', () => {
+  it('sums BALANCE across multiple bins', () => {
+    expect(sumBinBalances([{ BALANCE: 3 }, { BALANCE: 2 }])).toBe(5);
+  });
+
+  it('counts negative bins against the total', () => {
+    expect(sumBinBalances([{ BALANCE: 5 }, { BALANCE: -7 }])).toBe(-2);
+  });
+
+  it('returns 0 for an empty array', () => {
+    expect(sumBinBalances([])).toBe(0);
+  });
+
+  it('returns 0 when the sub-form is missing', () => {
+    expect(sumBinBalances(undefined)).toBe(0);
+  });
+
+  it('coerces numeric-string BALANCE values', () => {
+    expect(sumBinBalances([{ BALANCE: '4' }, { BALANCE: '1.5' }])).toBe(5.5);
+  });
+
+  it('treats missing or non-numeric BALANCE as 0', () => {
+    expect(sumBinBalances([{}, { BALANCE: 'abc' }, { BALANCE: 2 }])).toBe(2);
   });
 });

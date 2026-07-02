@@ -114,6 +114,20 @@ export function buildExtensionMap(records: ExpdSerialRecord[]): Map<string, numb
   return map;
 }
 
+// WHY: Pure function extracted for testability. Current physical stock is the
+// sum of BALANCE across ALL bin rows — every disposition counts (Available,
+// Damaged, Past BBD, Pending Disposal; Victor's decision 2026-07-02).
+// Empty/missing sub-form means the lot has no stock left → 0.
+// Number() guards numeric-string values (Priority may return either under
+// IEEE754Compatible).
+export function sumBinBalances(bins: unknown): number {
+  if (!Array.isArray(bins)) return 0;
+  return bins.reduce((sum: number, bin) => {
+    const n = Number((bin as Record<string, unknown>).BALANCE ?? 0);
+    return sum + (Number.isFinite(n) ? n : 0);
+  }, 0);
+}
+
 // WHY: Fetches extension history for all lots from EXPDSERIAL with $expand.
 // Uses raw URL concatenation for $expand (not searchParams.set) because
 // Priority's OData parser chokes on form-encoded nested syntax.
