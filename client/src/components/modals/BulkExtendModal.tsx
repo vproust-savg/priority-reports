@@ -1,19 +1,20 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: client/src/components/modals/BulkExtendModal.tsx
-// PURPOSE: Modal for extending multiple lots at once. Shows
-//          a selectable list of all BBD rows with shared days
-//          input and confirmation flow.
+// PURPOSE: Modal for extending multiple lots at once. Selectable
+//          list of all BBD rows with shared days input; submits in
+//          chunks via useBulkExtendRunner (progress/cancel/resume).
 // USED BY: ReportTableWidget (via useBBDExtend)
 // EXPORTS: BulkExtendModal
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useBulkExtendRunner, BULK_MAX_ITEMS } from '../../hooks/useBulkExtendRunner';
 import Modal from './Modal';
 import BulkExtendRowTable from './BulkExtendRowTable';
-import { useExtendExpiry } from '../../hooks/useExtendExpiry';
-
-type ModalState = 'idle' | 'confirming' | 'submitting' | 'done';
+import BulkExtendProgress from './BulkExtendProgress';
+import type { BulkExtendItem } from '../../hooks/useBulkExtendRunner';
+import type { RowData } from '../../hooks/useExtendExpiry';
 
 interface BulkExtendModalProps {
   isOpen: boolean;
@@ -22,32 +23,35 @@ interface BulkExtendModalProps {
   onSuccess: () => void;
 }
 
+// WHY: ~1.04 Priority calls per lot (50-lot chunks: 2 batched lookups +
+// 50 POSTs) against the 95-calls/min limiter shared with the whole org.
+function estimateMinutes(count: number): number {
+  return Math.max(1, Math.ceil((count * 1.04) / 95));
+}
+
 export default function BulkExtendModal({
   isOpen, onClose, rows, onSuccess,
 }: BulkExtendModalProps) {
   const [days, setDays] = useState(7);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
-  const [state, setState] = useState<ModalState>('idle');
-  const [resultSummary, setResultSummary] = useState('');
-  const [failedItems, setFailedItems] = useState<Array<{ serialName: string; error: string }>>([]);
-  const { extend, reset } = useExtendExpiry();
-
+  const [confirming, setConfirming] = useState(false);
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const queryClient = useQueryClient();
+  const runner = useBulkExtendRunner();
+  const { reset: resetRunner } = runner;
 
   // WHY: Reset state when modal opens.
   useEffect(() => {
     if (isOpen) {
       setDays(7);
       setSelected(new Set());
-      setState('idle');
-      setResultSummary('');
-      setFailedItems([]);
+      setConfirming(false);
       setSortKey(null);
       setSortDir('asc');
-      reset();
+      resetRunner();
     }
-  }, [isOpen, reset]);
+  }, [isOpen, resetRunner]);
 
   const handleHeaderClick = (key: string) => {
     if (sortKey === key) {
@@ -82,6 +86,7 @@ export default function BulkExtendModal({
   );
 
   const isAllSelected = selected.size === rows.length && rows.length > 0;
+  const overLimit = selected.size > BULK_MAX_ITEMS;
 
   const toggleSelectAll = () => {
     if (isAllSelected) {
@@ -99,81 +104,67 @@ export default function BulkExtendModal({
     });
   };
 
-  const handleSubmit = async () => {
-    setState('submitting');
-    try {
-      const items = Array.from(selected).map((serialName) => {
-        const row = rows.find((r) => r.serialName === serialName);
-        return {
-          serialName,
-          days,
-          rowData: row ? {
-            partNumber: row.partNumber as string,
-            partDescription: row.partDescription as string,
-            balance: row.balance as number,
-            unit: row.unit as string,
-            value: row.value as number,
-            purchasePrice: row.purchasePrice as number,
-            vendor: row.vendor as string,
-            perishable: row.perishable as string,
-            brand: row.brand as string,
-            family: row.family as string,
-            expiryDate: row.expiryDate as string,
-          } : undefined,
-        };
-      });
-      const response = await extend({ items });
-      const successCount = response.results.filter((r) => r.success).length;
-      const failed = response.results
-        .filter((r) => !r.success)
-        .map((r) => ({ serialName: r.serialName, error: r.error ?? 'Unknown error' }));
+  const buildItems = (): BulkExtendItem[] =>
+    Array.from(selected).map((serialName) => {
+      const row = rows.find((r) => r.serialName === serialName);
+      return {
+        serialName,
+        days,
+        rowData: row ? {
+          partNumber: row.partNumber as string,
+          partDescription: row.partDescription as string,
+          balance: row.balance as number,
+          unit: row.unit as string,
+          value: row.value as number,
+          purchasePrice: row.purchasePrice as number,
+          vendor: row.vendor as string,
+          perishable: row.perishable as string,
+          brand: row.brand as string,
+          family: row.family as string,
+          expiryDate: row.expiryDate as string,
+        } as RowData : undefined,
+      };
+    });
 
-      setFailedItems(failed);
-      if (failed.length === 0) {
-        setResultSummary(`Extended ${successCount}/${response.results.length} successfully`);
-      } else {
-        setResultSummary(`Extended ${successCount}/${response.results.length} — ${failed.length} failed`);
-      }
-      setState('done');
-    } catch (err) {
-      setResultSummary(err instanceof Error ? err.message : 'Network error');
-      setFailedItems([]);
-      setState('done');
+  // WHY: Invalidate exactly once after the run settles (done or paused) —
+  // per-chunk invalidation is off (invalidateOnSuccess:false in the runner).
+  const invalidateIfExtended = (settled: Array<{ success: boolean }>) => {
+    if (settled.some((r) => r.success)) {
+      queryClient.invalidateQueries({ queryKey: ['report', 'bbd'] });
     }
   };
 
-  const isSubmitting = state === 'submitting';
+  const handleRun = async () => {
+    setConfirming(false);
+    invalidateIfExtended(await runner.start(buildItems()));
+  };
+
+  const handleResume = async () => {
+    invalidateIfExtended(await runner.resume());
+  };
+
+  const runnerActive = runner.state !== 'idle';
+  const isRunning = runner.state === 'running';
 
   return (
     <Modal
       isOpen={isOpen}
-      onClose={state === 'done' ? () => { onSuccess(); } : onClose}
+      onClose={runnerActive ? () => { onSuccess(); } : onClose}
       title="Extend Expiration Dates"
       maxWidth="max-w-3xl"
-      preventClose={isSubmitting}
+      preventClose={isRunning}
     >
       <div className="px-6 py-4 space-y-4">
-        {state === 'done' ? (
-          <div className="space-y-3 py-2">
-            <p className="text-sm font-medium text-[var(--color-text-primary)]">{resultSummary}</p>
-            {failedItems.length > 0 && (
-              <div className="space-y-1">
-                {failedItems.map((item) => (
-                  <div key={item.serialName} className="text-xs text-[var(--color-red)] bg-[var(--color-red)]/5 px-3 py-1.5 rounded">
-                    <span className="font-medium">{item.serialName}:</span> {item.error}
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="flex justify-end pt-2">
-              <button
-                onClick={() => { onSuccess(); }}
-                className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-dark)] hover:bg-[var(--color-dark-hover)] rounded-lg transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
+        {runnerActive ? (
+          <BulkExtendProgress
+            state={runner.state as 'running' | 'paused' | 'done'}
+            progress={runner.progress}
+            runError={runner.runError}
+            results={runner.results}
+            onCancel={runner.cancel}
+            onResume={handleResume}
+            onClose={() => { onSuccess(); }}
+          />
         ) : (
           <>
             {/* Days input */}
@@ -186,8 +177,7 @@ export default function BulkExtendModal({
                 max={365}
                 value={days}
                 onChange={(e) => setDays(Math.max(1, Math.min(365, Number(e.target.value) || 1)))}
-                disabled={isSubmitting}
-                className="w-20 px-3 py-1.5 text-sm border border-[var(--color-gold-subtle)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-gold-primary)]/30 focus:border-[var(--color-gold-primary)] disabled:opacity-50"
+                className="w-20 px-3 py-1.5 text-sm border border-[var(--color-gold-subtle)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-gold-primary)]/30 focus:border-[var(--color-gold-primary)]"
               />
               <span className="text-sm text-[var(--color-text-secondary)]">days</span>
             </div>
@@ -198,7 +188,7 @@ export default function BulkExtendModal({
                 type="checkbox"
                 checked={isAllSelected}
                 onChange={toggleSelectAll}
-                disabled={isSubmitting || rows.length === 0}
+                disabled={rows.length === 0}
                 className="rounded border-[var(--color-gold-muted)]"
               />
               Select all ({rows.length} items)
@@ -212,13 +202,25 @@ export default function BulkExtendModal({
               sortDir={sortDir}
               onHeaderClick={handleHeaderClick}
               onToggleRow={toggleRow}
-              isSubmitting={isSubmitting}
+              isSubmitting={false}
             />
 
+            {/* Over-limit notice */}
+            {overLimit && (
+              <div className="px-3 py-2 text-sm text-[var(--color-red)] bg-[var(--color-red)]/5 border border-[var(--color-red)]/20 rounded-lg">
+                Selection exceeds {BULK_MAX_ITEMS.toLocaleString()} lots — run extends in batches of up to {BULK_MAX_ITEMS.toLocaleString()}.
+              </div>
+            )}
+
             {/* Confirmation */}
-            {state === 'confirming' && (
-              <div className="px-3 py-2 text-sm text-[var(--color-text-primary)] bg-[var(--color-blue)]/10 border border-[var(--color-blue)]/20 rounded-lg">
-                Extend <span className="font-semibold">{selected.size}</span> lots by <span className="font-semibold">{days}</span> days?
+            {confirming && !overLimit && (
+              <div className="px-3 py-2 text-sm text-[var(--color-text-primary)] bg-[var(--color-blue)]/10 border border-[var(--color-blue)]/20 rounded-lg space-y-1">
+                <div>
+                  Extend <span className="font-semibold">{selected.size}</span> lots by <span className="font-semibold">{days}</span> days?
+                </div>
+                <div className="text-xs text-[var(--color-text-secondary)]">
+                  ≈{estimateMinutes(selected.size)} min · uses {selected.size.toLocaleString()} of 10,000 monthly Priority writes · keep this tab open
+                </div>
               </div>
             )}
 
@@ -226,34 +228,31 @@ export default function BulkExtendModal({
             <div className="flex justify-end gap-2 pt-2 border-t border-[var(--color-gold-subtle)]">
               <button
                 onClick={onClose}
-                disabled={isSubmitting}
-                className="px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-gold-hover)] rounded-lg transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-gold-hover)] rounded-lg transition-colors"
               >
                 Cancel
               </button>
-              {state === 'confirming' ? (
+              {confirming ? (
                 <>
                   <button
-                    onClick={() => setState('idle')}
+                    onClick={() => setConfirming(false)}
                     className="px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-gold-hover)] rounded-lg transition-colors"
                   >
                     Back
                   </button>
                   <button
-                    onClick={handleSubmit}
-                    className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-dark)] hover:bg-[var(--color-dark-hover)] rounded-lg transition-colors flex items-center gap-2"
+                    onClick={handleRun}
+                    className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-dark)] hover:bg-[var(--color-dark-hover)] rounded-lg transition-colors"
                   >
-                    {isSubmitting && <Loader2 size={14} className="animate-spin" />}
                     Confirm
                   </button>
                 </>
               ) : (
                 <button
-                  onClick={() => setState('confirming')}
-                  disabled={selected.size === 0 || isSubmitting}
-                  className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-dark)] hover:bg-[var(--color-dark-hover)] rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                  onClick={() => setConfirming(true)}
+                  disabled={selected.size === 0 || overLimit}
+                  className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-dark)] hover:bg-[var(--color-dark-hover)] rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {isSubmitting && <Loader2 size={14} className="animate-spin" />}
                   Extend {selected.size} items
                 </button>
               )}

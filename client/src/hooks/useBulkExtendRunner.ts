@@ -61,7 +61,9 @@ export function useBulkExtendRunner() {
     setProgress((prev) => ({ ...prev, processed: resultsRef.current.size }));
   }, []);
 
-  const runPending = useCallback(async () => {
+  // WHY: Returns the accumulated results so callers can invalidate the
+  // report cache exactly once after the run settles (done OR paused).
+  const runPending = useCallback(async (): Promise<ExtendResult[]> => {
     // WHY: Resume must never re-extend a succeeded lot (each run would add
     // another +N days in Priority). Failed items DO retry.
     const pending = itemsRef.current.filter(
@@ -79,7 +81,7 @@ export function useBulkExtendRunner() {
     for (let c = 0; c < chunks.length; c++) {
       if (cancelRef.current) {
         setState('paused');
-        return;
+        return Array.from(resultsRef.current.values());
       }
 
       const startedAt = Date.now();
@@ -101,12 +103,13 @@ export function useBulkExtendRunner() {
       } catch (err) {
         setRunError(err instanceof Error ? err.message : 'Network error');
         setState('paused');
-        return;
+        return Array.from(resultsRef.current.values());
       }
     }
 
     setProgress({ processed: resultsRef.current.size, total, etaSeconds: null });
     setState('done');
+    return Array.from(resultsRef.current.values());
   }, [extend, syncResults]);
 
   const start = useCallback((items: BulkExtendItem[]) => {
