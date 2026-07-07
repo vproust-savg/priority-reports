@@ -1,12 +1,12 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/src/services/airtableShortDated.ts
 // PURPOSE: Airtable CRUD for the Short-Dated Items base. Handles
-//          extension snapshots, balance refresh from Priority,
-//          and batch writes. Fire-and-forget on write failures.
-// USED BY: routes/extend.ts
-// EXPORTS: snapshotExtendedItem, fetchExtendedItems,
-//          refreshBalancesFromPriority, batchUpdateAirtableBalances,
-//          mergeBalances
+//          reads, balance refresh from Priority, and batch balance
+//          writes. Snapshot writes live in airtableSnapshots.ts.
+// USED BY: routes/extend.ts, services/airtableSnapshots.ts
+// EXPORTS: fetchExtendedItems, refreshBalancesFromPriority,
+//          batchUpdateAirtableBalances, mergeBalances,
+//          F, AIRTABLE_URL, airtableHeaders, RowData
 // ═══════════════════════════════════════════════════════════════
 
 import { env } from '../config/environment';
@@ -17,9 +17,9 @@ import { fetchWithRetry } from './priorityHttp';
 // WHY: Field IDs are permanent. Field names can change.
 const BASE_ID = 'appEIH4f5K3vrKBuy';
 const TABLE_ID = 'tblR550VQRqNgNMNE';
-const AIRTABLE_URL = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}`;
+export const AIRTABLE_URL = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}`;
 
-const F = {
+export const F = {
   lotNumber: 'fldkTERhjx4Nq2Xdj',
   partNumber: 'fldoXQnAMpUjSu2Bx',
   partDescription: 'fldd0k61OHJWMGjzi',
@@ -104,7 +104,7 @@ export function mergeBalances(
 
 // --- Helpers ---
 
-function airtableHeaders(): Record<string, string> {
+export function airtableHeaders(): Record<string, string> {
   return {
     Authorization: `Bearer ${env.AIRTABLE_TOKEN}`,
     'Content-Type': 'application/json',
@@ -112,100 +112,6 @@ function airtableHeaders(): Record<string, string> {
 }
 
 // --- I/O Functions ---
-
-export async function snapshotExtendedItem(
-  lotNumber: string,
-  rowData: RowData | undefined,
-  newExpiryDate: string,
-  days: number,
-): Promise<void> {
-  if (!env.AIRTABLE_TOKEN) {
-    console.warn(`[bbd-extended] AIRTABLE_TOKEN not set — skipping snapshot for ${lotNumber}`);
-    return;
-  }
-
-  // WHY: Search by lot number using filterByFormula with field ID.
-  // encodeURIComponent required — same pattern as templateService.ts line 40.
-  const filterFormula = encodeURIComponent(`{${F.lotNumber}}="${lotNumber}"`);
-  // WHY: returnFieldsByFieldId=true so response keys match our F.* constants.
-  const searchUrl = `${AIRTABLE_URL}?filterByFormula=${filterFormula}&returnFieldsByFieldId=true`;
-  const searchRes = await fetch(searchUrl, { headers: airtableHeaders() });
-
-  if (!searchRes.ok) {
-    console.warn(`[bbd-extended] Airtable search failed for ${lotNumber}: ${searchRes.status}`);
-    return;
-  }
-
-  const searchData = await searchRes.json() as { records: Array<{ id: string; fields: Record<string, unknown> }> };
-  const existing = searchData.records[0];
-  const extensionDate = new Date().toISOString();
-  // WHY: Airtable date fields accept YYYY-MM-DD only (no time component).
-  const newExpiryDateOnly = newExpiryDate.split('T')[0];
-  const originalExpiryDateOnly = rowData?.expiryDate?.split('T')[0] ?? '';
-
-  if (existing) {
-    // WHY: PATCH — update existing record. Do NOT overwrite originalExpiryDate.
-    const existingDays = (existing.fields[F.daysExtended] as number) ?? 0;
-    const patchBody = {
-      records: [{
-        id: existing.id,
-        fields: {
-          [F.newExpiryDate]: newExpiryDateOnly,
-          [F.daysExtended]: existingDays + days,
-          [F.extensionDate]: extensionDate,
-          ...(rowData ? {
-            [F.balance]: rowData.balance,
-            [F.value]: rowData.value,
-            [F.purchasePrice]: rowData.purchasePrice,
-          } : {}),
-        },
-      }],
-      typecast: true,
-    };
-    const patchRes = await fetch(AIRTABLE_URL, {
-      method: 'PATCH',
-      headers: airtableHeaders(),
-      body: JSON.stringify(patchBody),
-    });
-    if (!patchRes.ok) {
-      console.warn(`[bbd-extended] Airtable PATCH failed for ${lotNumber}: ${patchRes.status}`);
-    }
-  } else {
-    // WHY: POST — new record. Set originalExpiryDate only on first insert.
-    const postBody = {
-      records: [{
-        fields: {
-          [F.lotNumber]: lotNumber,
-          [F.originalExpiryDate]: originalExpiryDateOnly,
-          [F.newExpiryDate]: newExpiryDateOnly,
-          [F.daysExtended]: days,
-          [F.extensionDate]: extensionDate,
-          ...(rowData ? {
-            [F.partNumber]: rowData.partNumber,
-            [F.partDescription]: rowData.partDescription,
-            [F.balance]: rowData.balance,
-            [F.unit]: rowData.unit,
-            [F.value]: rowData.value,
-            [F.purchasePrice]: rowData.purchasePrice,
-            [F.vendor]: rowData.vendor,
-            [F.perishable]: rowData.perishable,
-            [F.brand]: rowData.brand,
-            [F.family]: rowData.family,
-          } : {}),
-        },
-      }],
-      typecast: true,
-    };
-    const postRes = await fetch(AIRTABLE_URL, {
-      method: 'POST',
-      headers: airtableHeaders(),
-      body: JSON.stringify(postBody),
-    });
-    if (!postRes.ok) {
-      console.warn(`[bbd-extended] Airtable POST failed for ${lotNumber}: ${postRes.status}`);
-    }
-  }
-}
 
 export async function fetchExtendedItems(): Promise<ExtendedItemRow[]> {
   if (!env.AIRTABLE_TOKEN) {

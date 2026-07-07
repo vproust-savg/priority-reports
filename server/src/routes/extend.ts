@@ -11,8 +11,8 @@ import { z } from 'zod';
 import { getPriorityConfig } from '../config/priority';
 import { fetchWithRetry, postWithRetry, extractErrorMessage } from '../services/priorityHttp';
 import type { ColumnDefinition } from '../../../shared/types/api';
+import { snapshotExtendedItem } from '../services/airtableSnapshots';
 import {
-  snapshotExtendedItem,
   fetchExtendedItems,
   refreshBalancesFromPriority,
   mergeBalances,

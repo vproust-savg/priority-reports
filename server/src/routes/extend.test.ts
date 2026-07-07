@@ -28,16 +28,20 @@ vi.mock('../services/priorityHttp', () => ({
 }));
 
 vi.mock('../services/airtableShortDated', () => ({
-  snapshotExtendedItem: vi.fn().mockResolvedValue(undefined),
   fetchExtendedItems: vi.fn().mockResolvedValue([]),
   refreshBalancesFromPriority: vi.fn().mockResolvedValue(new Map()),
   mergeBalances: vi.fn().mockReturnValue({ mergedRows: [], changedRecords: [] }),
   batchUpdateAirtableBalances: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../services/airtableSnapshots', () => ({
+  snapshotExtendedItem: vi.fn().mockResolvedValue(undefined),
+  snapshotExtendedItemsBatch: vi.fn().mockResolvedValue(undefined),
+}));
+
 const { fetchWithRetry, postWithRetry } = await import('../services/priorityHttp');
+const { snapshotExtendedItem } = await import('../services/airtableSnapshots');
 const {
-  snapshotExtendedItem,
   fetchExtendedItems,
   refreshBalancesFromPriority,
   mergeBalances,

@@ -9,12 +9,10 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import {
   mergeBalances,
-  snapshotExtendedItem,
   fetchExtendedItems,
   refreshBalancesFromPriority,
   batchUpdateAirtableBalances,
 } from './airtableShortDated';
-import type { RowData } from './airtableShortDated';
 
 // WHY: Mock environment and Priority modules at module boundary.
 vi.mock('../config/environment', () => ({
@@ -116,127 +114,8 @@ describe('mergeBalances', () => {
   });
 });
 
-// --- snapshotExtendedItem ---
-
-describe('snapshotExtendedItem', () => {
-  let mockFetch: ReturnType<typeof vi.fn>;
-
-  const sampleRowData: RowData = {
-    partNumber: 'RM001',
-    partDescription: 'Sugar',
-    balance: 50,
-    unit: 'KG',
-    value: 125,
-    purchasePrice: 2.5,
-    vendor: 'Acme',
-    perishable: 'Yes',
-    brand: 'BrandX',
-    family: 'Sweeteners',
-    expiryDate: '2026-04-01T00:00:00Z',
-  };
-
-  beforeEach(() => {
-    mockFetch = vi.fn();
-    vi.stubGlobal('fetch', mockFetch);
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('writes new Airtable record when lot not yet snapshotted', async () => {
-    mockFetch
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ records: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({}) });
-
-    await snapshotExtendedItem('LOT001', sampleRowData, '2026-04-08T00:00:00Z', 7);
-
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-    const postCall = mockFetch.mock.calls[1];
-    expect(postCall[1].method).toBe('POST');
-    const body = JSON.parse(postCall[1].body);
-    expect(body.records[0].fields).toBeDefined();
-  });
-
-  it('upserts existing record when lot already exists', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          records: [{ id: 'recXYZ', fields: { fldPWiPg4gTuEpb7S: 3 } }],
-        }),
-      })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({}) });
-
-    await snapshotExtendedItem('LOT001', sampleRowData, '2026-04-08T00:00:00Z', 7);
-
-    const patchCall = mockFetch.mock.calls[1];
-    expect(patchCall[1].method).toBe('PATCH');
-    const body = JSON.parse(patchCall[1].body);
-    expect(body.records[0].id).toBe('recXYZ');
-  });
-
-  it('does not overwrite originalExpiryDate on second call', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          records: [{ id: 'recXYZ', fields: { fldPWiPg4gTuEpb7S: 3 } }],
-        }),
-      })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({}) });
-
-    await snapshotExtendedItem('LOT001', sampleRowData, '2026-04-08T00:00:00Z', 7);
-
-    const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-    const fieldKeys = Object.keys(body.records[0].fields);
-    // WHY: originalExpiryDate field ID should NOT be in PATCH payload
-    expect(fieldKeys).not.toContain('fldyuY9YkSEbWTPtB');
-  });
-
-  it('stores all rowData fields on POST', async () => {
-    mockFetch
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ records: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({}) });
-
-    await snapshotExtendedItem('LOT001', sampleRowData, '2026-04-08T00:00:00Z', 7);
-
-    const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-    const fields = body.records[0].fields;
-    expect(fields).toHaveProperty('fldoXQnAMpUjSu2Bx', 'RM001'); // partNumber
-    expect(fields).toHaveProperty('fldi6NqDttCM94WzZ', 'Acme'); // vendor
-  });
-
-  it('does not throw when Airtable unavailable — calls console.warn with lot number', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 503 });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    await snapshotExtendedItem('LOT001', sampleRowData, '2026-04-08T00:00:00Z', 7);
-
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('LOT001'));
-  });
-
-  it('handles undefined rowData — does not crash on property access', async () => {
-    mockFetch
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ records: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({}) });
-
-    await expect(
-      snapshotExtendedItem('LOT001', undefined, '2026-04-08T00:00:00Z', 7),
-    ).resolves.not.toThrow();
-  });
-
-  it('includes typecast: true in POST/PATCH body', async () => {
-    mockFetch
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ records: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({}) });
-
-    await snapshotExtendedItem('LOT001', sampleRowData, '2026-04-08T00:00:00Z', 7);
-
-    const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-    expect(body.typecast).toBe(true);
-  });
-});
+// WHY: snapshotExtendedItem tests moved to tests/airtableSnapshotBatch.test.ts
+// alongside the batch implementation (services/airtableSnapshots.ts).
 
 // --- refreshBalancesFromPriority ---
 
