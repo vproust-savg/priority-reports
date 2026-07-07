@@ -10,6 +10,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import { createExtendRouter } from './extend';
+import type { CacheProvider } from '../services/cache';
 
 // WHY: Mock all external dependencies at module boundary.
 vi.mock('../config/priority', () => ({
@@ -40,7 +41,7 @@ vi.mock('../services/airtableSnapshots', () => ({
 }));
 
 const { fetchWithRetry, postWithRetry } = await import('../services/priorityHttp');
-const { snapshotExtendedItem } = await import('../services/airtableSnapshots');
+const { snapshotExtendedItemsBatch } = await import('../services/airtableSnapshots');
 const {
   fetchExtendedItems,
   refreshBalancesFromPriority,
@@ -50,17 +51,34 @@ const {
 
 const mockFetchWithRetry = vi.mocked(fetchWithRetry);
 const mockPostWithRetry = vi.mocked(postWithRetry);
-const mockSnapshotExtendedItem = vi.mocked(snapshotExtendedItem);
+const mockSnapshotBatch = vi.mocked(snapshotExtendedItemsBatch);
 const mockFetchExtendedItems = vi.mocked(fetchExtendedItems);
 const mockRefreshBalances = vi.mocked(refreshBalancesFromPriority);
 const mockMergeBalances = vi.mocked(mergeBalances);
 const mockBatchUpdate = vi.mocked(batchUpdateAirtableBalances);
 
-function createApp() {
+function createMockCache(): CacheProvider {
+  return {
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue(undefined),
+    invalidate: vi.fn().mockResolvedValue(undefined),
+    invalidateByPrefix: vi.fn().mockResolvedValue(0),
+    isConnected: vi.fn().mockResolvedValue(true),
+  };
+}
+
+function createApp(cache: CacheProvider = createMockCache()) {
   const app = express();
   app.use(express.json());
-  app.use('/api/v1/reports', createExtendRouter());
+  app.use('/api/v1/reports', createExtendRouter(cache));
   return app;
+}
+
+// WHY: Lookup responses are OData $filter results — {value:[…]} arrays.
+function lookupBody(serials: Array<{ name: string; expiry?: string }>): string {
+  return JSON.stringify({
+    value: serials.map((s) => ({ SERIALNAME: s.name, EXPIRYDATE: s.expiry ?? '2026-04-01T00:00:00Z' })),
+  });
 }
 
 afterEach(() => {
@@ -73,7 +91,7 @@ describe('ExtendRequestSchema', () => {
   const app = createApp();
 
   it('accepts valid request with rowData', async () => {
-    mockFetchWithRetry.mockResolvedValue({ status: 200, body: JSON.stringify({ EXPIRYDATE: '2026-04-01T00:00:00Z' }) });
+    mockFetchWithRetry.mockResolvedValue({ status: 200, body: lookupBody([{ name: 'LOT001' }]) });
     mockPostWithRetry.mockResolvedValue({ status: 200, body: '{}' });
 
     const res = await request(app).post('/api/v1/reports/bbd/extend').send({
@@ -88,7 +106,7 @@ describe('ExtendRequestSchema', () => {
   });
 
   it('accepts valid request without rowData', async () => {
-    mockFetchWithRetry.mockResolvedValue({ status: 200, body: JSON.stringify({ EXPIRYDATE: '2026-04-01T00:00:00Z' }) });
+    mockFetchWithRetry.mockResolvedValue({ status: 200, body: lookupBody([{ name: 'LOT001' }]) });
     mockPostWithRetry.mockResolvedValue({ status: 200, body: '{}' });
 
     const res = await request(app).post('/api/v1/reports/bbd/extend').send({
@@ -133,7 +151,7 @@ describe('ExtendRequestSchema', () => {
   });
 
   it('accepts rowData with null vendor — normalized to empty string', async () => {
-    mockFetchWithRetry.mockResolvedValue({ status: 200, body: JSON.stringify({ EXPIRYDATE: '2026-04-01T00:00:00Z' }) });
+    mockFetchWithRetry.mockResolvedValue({ status: 200, body: lookupBody([{ name: 'LOT001' }]) });
     mockPostWithRetry.mockResolvedValue({ status: 200, body: '{}' });
 
     const res = await request(app).post('/api/v1/reports/bbd/extend').send({
@@ -149,7 +167,7 @@ describe('ExtendRequestSchema', () => {
   });
 
   it('accepts serialName containing a dot', async () => {
-    mockFetchWithRetry.mockResolvedValue({ status: 200, body: JSON.stringify({ EXPIRYDATE: '2026-04-01T00:00:00Z' }) });
+    mockFetchWithRetry.mockResolvedValue({ status: 200, body: lookupBody([{ name: '2518-41.24' }]) });
     mockPostWithRetry.mockResolvedValue({ status: 200, body: '{}' });
 
     const res = await request(app).post('/api/v1/reports/bbd/extend').send({
@@ -169,13 +187,13 @@ describe('POST /bbd/extend — rowData', () => {
     vi.clearAllMocks();
     mockFetchWithRetry.mockResolvedValue({
       status: 200,
-      body: JSON.stringify({ EXPIRYDATE: '2026-04-01T00:00:00Z' }),
+      body: lookupBody([{ name: 'LOT001' }]),
     });
     mockPostWithRetry.mockResolvedValue({ status: 200, body: '{}' });
-    mockSnapshotExtendedItem.mockResolvedValue(undefined);
+    mockSnapshotBatch.mockResolvedValue(undefined);
   });
 
-  it('passes rowData to snapshotExtendedItem after successful extension', async () => {
+  it('passes rowData to the snapshot batch after successful extension', async () => {
     await request(app).post('/api/v1/reports/bbd/extend').send({
       items: [{ serialName: 'LOT001', days: 7, rowData: {
         partNumber: 'RM001', partDescription: 'Sugar', balance: 50,
@@ -186,12 +204,14 @@ describe('POST /bbd/extend — rowData', () => {
 
     // WHY: Fire-and-forget — give a tick for the promise to be called
     await new Promise((r) => setTimeout(r, 10));
-    expect(mockSnapshotExtendedItem).toHaveBeenCalledWith(
-      'LOT001',
-      expect.objectContaining({ partNumber: 'RM001' }),
-      expect.any(String),
-      7,
-    );
+    expect(mockSnapshotBatch).toHaveBeenCalledWith([
+      expect.objectContaining({
+        serialName: 'LOT001',
+        rowData: expect.objectContaining({ partNumber: 'RM001' }),
+        newExpiryDate: expect.any(String),
+        days: 7,
+      }),
+    ]);
   });
 
   it('still succeeds when rowData omitted — backward compatible', async () => {
@@ -203,17 +223,19 @@ describe('POST /bbd/extend — rowData', () => {
     expect(res.body.results[0].success).toBe(true);
   });
 
-  it('does not call snapshotExtendedItem when rowData omitted', async () => {
+  it('does not snapshot when rowData omitted', async () => {
     await request(app).post('/api/v1/reports/bbd/extend').send({
       items: [{ serialName: 'LOT001', days: 7 }],
     });
 
     await new Promise((r) => setTimeout(r, 10));
-    expect(mockSnapshotExtendedItem).not.toHaveBeenCalled();
+    expect(mockSnapshotBatch).not.toHaveBeenCalled();
   });
 
-  it('does not call snapshotExtendedItem for failed items', async () => {
-    mockFetchWithRetry.mockResolvedValue({ status: 404, body: 'Not Found' });
+  it('does not snapshot failed items', async () => {
+    // WHY: Batched $filter lookups return 200 with an empty value array
+    // for missing serials (not a 404 like the old single-entity GET).
+    mockFetchWithRetry.mockResolvedValue({ status: 200, body: lookupBody([]) });
 
     await request(app).post('/api/v1/reports/bbd/extend').send({
       items: [{ serialName: 'BADLOT', days: 7, rowData: {
@@ -224,7 +246,7 @@ describe('POST /bbd/extend — rowData', () => {
     });
 
     await new Promise((r) => setTimeout(r, 10));
-    expect(mockSnapshotExtendedItem).not.toHaveBeenCalled();
+    expect(mockSnapshotBatch).not.toHaveBeenCalled();
   });
 
   it('response shape unchanged — rowData not in results', async () => {
@@ -251,12 +273,123 @@ describe('POST /bbd/extend — rowData', () => {
     });
 
     await new Promise((r) => setTimeout(r, 10));
-    expect(mockSnapshotExtendedItem).toHaveBeenCalledWith(
-      'LOT001',
-      expect.objectContaining({ vendor: '' }),
-      expect.any(String),
-      7,
-    );
+    expect(mockSnapshotBatch).toHaveBeenCalledWith([
+      expect.objectContaining({
+        serialName: 'LOT001',
+        rowData: expect.objectContaining({ vendor: '' }),
+      }),
+    ]);
+  });
+});
+
+// --- POST /bbd/extend — batched lookups & cache invalidation ---
+
+describe('POST /bbd/extend — batched lookups & cache', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPostWithRetry.mockResolvedValue({ status: 200, body: '{}' });
+    mockSnapshotBatch.mockResolvedValue(undefined);
+  });
+
+  it('batches EXPDSERIAL lookups — one GET per 30 serials', async () => {
+    const app = createApp();
+    const serials = Array.from({ length: 70 }, (_, i) => `LOT${String(i).padStart(3, '0')}`);
+    mockFetchWithRetry.mockResolvedValue({
+      status: 200,
+      body: lookupBody(serials.map((name) => ({ name }))),
+    });
+
+    const res = await request(app).post('/api/v1/reports/bbd/extend').send({
+      items: serials.map((serialName) => ({ serialName, days: 7 })),
+    });
+
+    expect(res.status).toBe(200);
+    // WHY: ceil(70/30) = 3 lookup calls instead of 70 single-entity GETs.
+    expect(mockFetchWithRetry).toHaveBeenCalledTimes(3);
+    for (const call of mockFetchWithRetry.mock.calls) {
+      expect(call[0]).toContain('EXPDSERIAL?$select=SERIALNAME,EXPIRYDATE');
+    }
+    expect(mockPostWithRetry).toHaveBeenCalledTimes(70);
+    expect(res.body.results).toHaveLength(70);
+    expect(res.body.results.every((r: { success: boolean }) => r.success)).toBe(true);
+  });
+
+  it('reports lot-not-found for serials missing from the lookup, preserving order', async () => {
+    const app = createApp();
+    mockFetchWithRetry.mockResolvedValue({
+      status: 200,
+      body: lookupBody([{ name: 'LOTA' }, { name: 'LOTB' }]),
+    });
+
+    const res = await request(app).post('/api/v1/reports/bbd/extend').send({
+      items: [
+        { serialName: 'LOTA', days: 7 },
+        { serialName: 'MISSING', days: 7 },
+        { serialName: 'LOTB', days: 7 },
+      ],
+    });
+
+    expect(res.body.results.map((r: { serialName: string }) => r.serialName))
+      .toEqual(['LOTA', 'MISSING', 'LOTB']);
+    expect(res.body.results[0].success).toBe(true);
+    expect(res.body.results[1].success).toBe(false);
+    expect(res.body.results[1].error).toBe('Lot not found in expiration tracking system');
+    expect(res.body.results[2].success).toBe(true);
+    expect(mockPostWithRetry).toHaveBeenCalledTimes(2);
+  });
+
+  it('matches lookup rows whose SERIALNAME carries padding whitespace', async () => {
+    const app = createApp();
+    mockFetchWithRetry.mockResolvedValue({
+      status: 200,
+      body: lookupBody([{ name: '  LOT001  ' }]),
+    });
+
+    const res = await request(app).post('/api/v1/reports/bbd/extend').send({
+      items: [{ serialName: 'LOT001', days: 7 }],
+    });
+
+    expect(res.body.results[0].success).toBe(true);
+  });
+
+  it('reports lookup failure (not lot-not-found) when a lookup chunk errors', async () => {
+    const app = createApp();
+    mockFetchWithRetry.mockResolvedValue({ status: 500, body: 'Server Error' });
+
+    const res = await request(app).post('/api/v1/reports/bbd/extend').send({
+      items: [{ serialName: 'LOT001', days: 7 }],
+    });
+
+    expect(res.body.results[0].success).toBe(false);
+    expect(res.body.results[0].error).toContain('Lookup failed');
+    expect(mockPostWithRetry).not.toHaveBeenCalled();
+  });
+
+  it('invalidates the BBD report cache once after a successful extend', async () => {
+    const cache = createMockCache();
+    const app = createApp(cache);
+    mockFetchWithRetry.mockResolvedValue({ status: 200, body: lookupBody([{ name: 'LOT001' }]) });
+
+    await request(app).post('/api/v1/reports/bbd/extend').send({
+      items: [{ serialName: 'LOT001', days: 7 }],
+    });
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(cache.invalidateByPrefix).toHaveBeenCalledTimes(1);
+    expect(cache.invalidateByPrefix).toHaveBeenCalledWith('query:bbd:');
+  });
+
+  it('does not invalidate the cache when every item fails', async () => {
+    const cache = createMockCache();
+    const app = createApp(cache);
+    mockFetchWithRetry.mockResolvedValue({ status: 200, body: lookupBody([]) });
+
+    await request(app).post('/api/v1/reports/bbd/extend').send({
+      items: [{ serialName: 'LOT001', days: 7 }],
+    });
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(cache.invalidateByPrefix).not.toHaveBeenCalled();
   });
 });
 

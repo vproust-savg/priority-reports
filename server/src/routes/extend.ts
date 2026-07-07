@@ -11,7 +11,9 @@ import { z } from 'zod';
 import { getPriorityConfig } from '../config/priority';
 import { fetchWithRetry, postWithRetry, extractErrorMessage } from '../services/priorityHttp';
 import type { ColumnDefinition } from '../../../shared/types/api';
-import { snapshotExtendedItem } from '../services/airtableSnapshots';
+import type { CacheProvider } from '../services/cache';
+import { snapshotExtendedItemsBatch } from '../services/airtableSnapshots';
+import type { SnapshotItem } from '../services/airtableSnapshots';
 import {
   fetchExtendedItems,
   refreshBalancesFromPriority,
@@ -65,37 +67,71 @@ function addDaysToDate(isoDate: string, days: number): string {
   return date.toISOString().split('.')[0] + 'Z';
 }
 
+const LOOKUP_CHUNK_SIZE = 30;
+
+interface LookupEntry {
+  expiry?: string;
+  error?: string;
+}
+
+// WHY: One OR-filter GET per 30 serials instead of one GET per lot — GETs are
+// free against Priority's 10K/month write quota, and this cuts calls from 2N
+// to N + ceil(N/30) against the org-shared 100-calls/min budget. Same chunk
+// size as refreshBalancesFromPriority (keeps URLs under CloudFront limits).
+async function batchLookupExpiryDates(
+  serialNames: string[], baseUrl: string,
+): Promise<Map<string, LookupEntry>> {
+  const map = new Map<string, LookupEntry>();
+  for (let i = 0; i < serialNames.length; i += LOOKUP_CHUNK_SIZE) {
+    const chunk = serialNames.slice(i, i + LOOKUP_CHUNK_SIZE);
+    const filter = chunk.map((sn) => `SERIALNAME eq '${sn.replace(/'/g, "''")}'`).join(' or ');
+    const url = `${baseUrl}EXPDSERIAL?$select=SERIALNAME,EXPIRYDATE&$filter=${encodeURIComponent(filter)}&$top=1000`;
+
+    const response = await fetchWithRetry(url);
+    if (response.status < 200 || response.status >= 300) {
+      // WHY: A failed chunk must NOT read as "lot not found" — mark its serials
+      // as lookup errors so the user sees a retryable failure, not a wrong 404.
+      const msg = extractErrorMessage(response.body);
+      chunk.forEach((sn) => map.set(sn.trim(), { error: msg }));
+      continue;
+    }
+
+    const parsed = JSON.parse(response.body);
+    for (const rec of (parsed.value ?? []) as Array<Record<string, unknown>>) {
+      // WHY: trim — EXPDSERIAL serials can carry whitespace (see buildExtensionMap).
+      const sn = (rec.SERIALNAME as string | undefined)?.trim();
+      if (sn) map.set(sn, { expiry: rec.EXPIRYDATE as string | undefined });
+    }
+  }
+  return map;
+}
+
 async function processExtendItem(
   serialName: string, days: number, baseUrl: string,
+  lookup: Map<string, LookupEntry>,
 ): Promise<ExtendResult> {
-  // Step 1: Look up current expiry date from EXPDSERIAL
-  const escapedName = serialName.replace(/'/g, "''");
-  const lookupUrl = `${baseUrl}EXPDSERIAL(SERIALNAME='${escapedName}')?$select=SERIALNAME,EXPIRYDATE`;
+  const entry = lookup.get(serialName.trim());
 
-  const lookupResponse = await fetchWithRetry(lookupUrl);
-
-  if (lookupResponse.status === 404) {
+  // WHY: The batched $filter lookup returns no row for unknown serials
+  // (unlike the old single-entity GET which returned 404).
+  if (!entry) {
     return { serialName, success: false, error: 'Lot not found in expiration tracking system' };
   }
 
-  if (lookupResponse.status < 200 || lookupResponse.status >= 300) {
-    const msg = extractErrorMessage(lookupResponse.body);
-    return { serialName, success: false, error: `Lookup failed: ${msg}` };
+  if (entry.error) {
+    return { serialName, success: false, error: `Lookup failed: ${entry.error}` };
   }
 
-  const lookupData = JSON.parse(lookupResponse.body);
-  const currentExpiryDate = lookupData.EXPIRYDATE as string;
-
+  const currentExpiryDate = entry.expiry;
   if (!currentExpiryDate) {
     return { serialName, success: false, error: 'No expiry date found on EXPDSERIAL record' };
   }
 
-  // Step 2: Calculate new expiry date
   const newExpiryDate = addDaysToDate(currentExpiryDate, days);
 
-  // Step 3: POST new extension record via subform navigation
   // WHY: Direct PATCH on EXPDSERIAL fails with "insufficient form privileges".
   // Priority requires navigating to the subform collection and POSTing there.
+  const escapedName = serialName.replace(/'/g, "''");
   const postUrl = `${baseUrl}EXPDSERIAL(SERIALNAME='${escapedName}')/EXPDEXT_SUBFORM`;
   const postBody = {
     RENEWDATE: currentExpiryDate,
@@ -126,7 +162,7 @@ const EXTENDED_COLUMNS: ColumnDefinition[] = [
   { key: 'extensionDate', label: 'Extended On', type: 'date' },
 ];
 
-export function createExtendRouter(): Router {
+export function createExtendRouter(cache: CacheProvider): Router {
   const router = Router();
 
   router.post('/bbd/extend', async (req, res) => {
@@ -139,9 +175,12 @@ export function createExtendRouter(): Router {
     const { items } = parsed.data;
     const config = getPriorityConfig();
 
+    const uniqueSerials = Array.from(new Set(items.map((i) => i.serialName.trim())));
+    const lookup = await batchLookupExpiryDates(uniqueSerials, config.baseUrl);
+
     const results: ExtendResult[] = [];
     for (const item of items) {
-      const result = await processExtendItem(item.serialName, item.days, config.baseUrl);
+      const result = await processExtendItem(item.serialName, item.days, config.baseUrl, lookup);
       results.push(result);
     }
 
@@ -150,12 +189,25 @@ export function createExtendRouter(): Router {
 
     // WHY: Fire-and-forget — snapshot to Airtable after successful Priority extend.
     // Do not await — Airtable failure must not block the response.
-    for (const [i, result] of results.entries()) {
-      if (result.success && result.newExpiryDate && items[i].rowData) {
-        snapshotExtendedItem(
-          result.serialName, items[i].rowData!, result.newExpiryDate, items[i].days,
-        ).catch((err) => console.warn(`[bbd-extend] Airtable snapshot failed for ${result.serialName}:`, err));
-      }
+    const snapshots: SnapshotItem[] = results
+      .map((result, i) => ({ result, item: items[i] }))
+      .filter(({ result, item }) => result.success && result.newExpiryDate && item.rowData)
+      .map(({ result, item }) => ({
+        serialName: result.serialName,
+        rowData: item.rowData,
+        newExpiryDate: result.newExpiryDate!,
+        days: item.days,
+      }));
+    if (snapshots.length > 0) {
+      snapshotExtendedItemsBatch(snapshots).catch((err) =>
+        console.warn('[bbd-extend] Airtable snapshot batch failed:', err));
+    }
+
+    // WHY: Redis holds pre-extension report rows for up to 15 min — bust the
+    // prefix (same op as POST /:reportId/refresh) so refetches are live.
+    if (successCount > 0) {
+      cache.invalidateByPrefix('query:bbd:').catch((err) =>
+        console.warn('[bbd-extend] Cache invalidation failed:', err));
     }
 
     res.json({ results });

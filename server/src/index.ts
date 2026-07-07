@@ -41,7 +41,7 @@ app.use('/api/v1/reports', createReportsRouter(cache));
 app.use('/api/v1/reports', createFiltersRouter(cache));
 app.use('/api/v1/reports', createExportRouter(cache));
 app.use('/api/v1/reports', createSubformRouter());
-app.use('/api/v1/reports', createExtendRouter());
+app.use('/api/v1/reports', createExtendRouter(cache));
 app.use('/api/v1/attachments', createAttachmentsRouter());
 
 // WHY: In production, Express serves the built React app.
