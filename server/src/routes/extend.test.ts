@@ -127,6 +127,33 @@ describe('ExtendRequestSchema', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('accepts rowData with null vendor — normalized to empty string', async () => {
+    mockFetchWithRetry.mockResolvedValue({ status: 200, body: JSON.stringify({ EXPIRYDATE: '2026-04-01T00:00:00Z' }) });
+    mockPostWithRetry.mockResolvedValue({ status: 200, body: '{}' });
+
+    const res = await request(app).post('/api/v1/reports/bbd/extend').send({
+      items: [{ serialName: 'LOT001', days: 7, rowData: {
+        partNumber: 'RM001', partDescription: 'Sugar', balance: 50,
+        unit: 'KG', value: 125, purchasePrice: 2.5, vendor: null,
+        perishable: 'Yes', brand: 'BrandX', family: 'Sweet', expiryDate: '2026-04-01',
+      } }],
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[0].success).toBe(true);
+  });
+
+  it('accepts serialName containing a dot', async () => {
+    mockFetchWithRetry.mockResolvedValue({ status: 200, body: JSON.stringify({ EXPIRYDATE: '2026-04-01T00:00:00Z' }) });
+    mockPostWithRetry.mockResolvedValue({ status: 200, body: '{}' });
+
+    const res = await request(app).post('/api/v1/reports/bbd/extend').send({
+      items: [{ serialName: '2518-41.24', days: 7 }],
+    });
+
+    expect(res.status).toBe(200);
+  });
 });
 
 // --- POST /bbd/extend — rowData ---
@@ -208,6 +235,24 @@ describe('POST /bbd/extend — rowData', () => {
     expect(res.body.results[0]).not.toHaveProperty('rowData');
     expect(res.body.results[0]).toHaveProperty('serialName');
     expect(res.body.results[0]).toHaveProperty('success');
+  });
+
+  it('normalizes null vendor to empty string in the Airtable snapshot', async () => {
+    await request(app).post('/api/v1/reports/bbd/extend').send({
+      items: [{ serialName: 'LOT001', days: 7, rowData: {
+        partNumber: 'RM001', partDescription: 'Sugar', balance: 50,
+        unit: 'KG', value: 125, purchasePrice: 2.5, vendor: null,
+        perishable: 'Yes', brand: 'BrandX', family: 'Sweet', expiryDate: '2026-04-01',
+      } }],
+    });
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(mockSnapshotExtendedItem).toHaveBeenCalledWith(
+      'LOT001',
+      expect.objectContaining({ vendor: '' }),
+      expect.any(String),
+      7,
+    );
   });
 });
 

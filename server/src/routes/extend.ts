@@ -19,23 +19,33 @@ import {
   batchUpdateAirtableBalances,
 } from '../services/airtableShortDated';
 
+// WHY: rowData mirrors report rows, where Priority-sourced fields can be
+// null (SUPDES → vendor is null on most live lots, verified 2026-07-07)
+// and NaN numbers arrive as null after JSON serialization. It is a display
+// snapshot for Airtable, not a business invariant — normalize, don't 400.
+const nullableString = z.string().nullish().transform((v) => v ?? '');
+const nullableNumber = z.number().nullish().transform((v) => v ?? 0);
+
 const RowDataSchema = z.object({
-  partNumber: z.string(),
-  partDescription: z.string(),
-  balance: z.number(),
-  unit: z.string(),
-  value: z.number(),
-  purchasePrice: z.number(),
-  vendor: z.string(),
-  perishable: z.string(),
-  brand: z.string(),
-  family: z.string(),
-  expiryDate: z.string(),
+  partNumber: nullableString,
+  partDescription: nullableString,
+  balance: nullableNumber,
+  unit: nullableString,
+  value: nullableNumber,
+  purchasePrice: nullableNumber,
+  vendor: nullableString,
+  perishable: nullableString,
+  brand: nullableString,
+  family: nullableString,
+  expiryDate: nullableString,
 }).optional();
 
 const ExtendRequestSchema = z.object({
   items: z.array(z.object({
-    serialName: z.string().regex(/^[a-zA-Z0-9_\- ]+$/),
+    // WHY: Charset allowlist is the OData injection guard. '.' added because
+    // real lot numbers contain it (e.g. 2518-41.24, 3 live lots 2026-07-07);
+    // it is inert inside a quoted literal. Single quotes are escaped at use.
+    serialName: z.string().regex(/^[a-zA-Z0-9_\-. ]+$/),
     days: z.number().int().min(1).max(365),
     rowData: RowDataSchema,
   })).min(1).max(100),
