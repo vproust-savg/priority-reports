@@ -202,7 +202,7 @@ function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
     expiryDate: raw.EXPIRYDATE,
     daysUntilExpiry,
     status: status ?? '',
-    vendor: raw.SUPDES,
+    vendor: raw.SUPDES ?? '',
     perishable: (raw.Y_9966_5_ESH as string)?.toUpperCase() === 'YES' ? 'Yes' : 'No',
     brand: raw.Y_9952_5_ESH ?? '',
     family: familyDesc,

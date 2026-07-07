@@ -121,6 +121,17 @@ describe('bbdReport transformRow', () => {
     });
     expect(row.balance).toBe(-3);
   });
+
+  it('defaults vendor to empty string when SUPDES is null', () => {
+    const row = report.transformRow({
+      PARTNAME: 'P001', PARTDES: 'Widget', QUANT: 10, UNITNAME: 'ea',
+      EXPIRYDATE: '2026-04-01T00:00:00Z', SUPDES: null,
+      Y_9966_5_ESH: 'No', Y_9952_5_ESH: '', Y_2074_5_ESH: '',
+      CURDATE: null, Y_8737_0_ESH: 10,
+      SERIALNAME: 'L4',
+    });
+    expect(row.vendor).toBe('');
+  });
 });
 
 describe('sumBinBalances', () => {
