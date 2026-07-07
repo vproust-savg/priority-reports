@@ -1,7 +1,7 @@
 # BBD Extend — Fix "Invalid request" Validation Failure (Design)
 
 **Date:** 2026-07-07
-**Status:** Approved by Victor (pending spec review)
+**Status:** Implemented (2026-07-07) — deployed and verified live; Victor extended 3/3 lots successfully
 
 ## Problem
 
