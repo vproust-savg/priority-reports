@@ -38,7 +38,10 @@ export interface ExtendResponse {
   results: ExtendResult[];
 }
 
-export function useExtendExpiry() {
+// WHY: Bulk runs pass invalidateOnSuccess:false — 20 chunk mutations would
+// otherwise trigger 20 mid-run refetches; the bulk modal invalidates once at end.
+export function useExtendExpiry(options: { invalidateOnSuccess?: boolean } = {}) {
+  const { invalidateOnSuccess = true } = options;
   const queryClient = useQueryClient();
 
   const mutation = useMutation<ExtendResponse, Error, ExtendRequest>({
@@ -64,7 +67,9 @@ export function useExtendExpiry() {
     onSuccess: () => {
       // WHY: Prefix-based invalidation refreshes all BBD query variants
       // (any filter/pagination combo). Same pattern as handleRefresh.
-      queryClient.invalidateQueries({ queryKey: ['report', 'bbd'] });
+      if (invalidateOnSuccess) {
+        queryClient.invalidateQueries({ queryKey: ['report', 'bbd'] });
+      }
     },
   });
 
