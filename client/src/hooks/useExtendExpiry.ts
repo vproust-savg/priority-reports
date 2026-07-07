@@ -50,7 +50,14 @@ export function useExtendExpiry() {
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error ?? `Request failed: ${res.status}`);
+        // WHY: Validation 400s carry field-level Zod issues in `details`.
+        // Surface the first one so the modal says WHICH field failed and why
+        // (a bare "Invalid request" hid the vendor:null root cause for months).
+        const issue = Array.isArray(errorData.details) ? errorData.details[0] : undefined;
+        const detail = issue?.message
+          ? ` — ${Array.isArray(issue.path) && issue.path.length > 0 ? issue.path.join('.') + ': ' : ''}${issue.message}`
+          : '';
+        throw new Error((errorData.error ?? `Request failed: ${res.status}`) + detail);
       }
       return res.json();
     },
