@@ -15,4 +15,6 @@ export const ExportRequestSchema = z.object({
   // the export only includes these columns in the specified order.
   // Only applies to fallback Excel mode (not template mode).
   visibleColumnKeys: z.array(z.string()).min(1).optional(),
+  // WHY: GRV UAT/Live toggle — same contract as QueryRequestSchema.
+  environment: z.enum(['production', 'uat']).optional(),
 });

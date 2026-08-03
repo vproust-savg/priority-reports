@@ -38,4 +38,8 @@ export const QueryRequestSchema = z.object({
   filterGroup: FilterGroupSchema,
   page: z.number().min(1).default(1),
   pageSize: z.number().min(1).max(1000).default(50),
+  // WHY: GRV UAT/Live toggle. Optional — absent means no override (boot
+  // env). Fixed enum: never interpolated into URLs, no injection surface.
+  // Only honored when the report sets allowEnvOverride (grv-log).
+  environment: z.enum(['production', 'uat']).optional(),
 });

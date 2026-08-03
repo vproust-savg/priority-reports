@@ -175,3 +175,19 @@ describe('FilterGroupSchema', () => {
     }
   });
 });
+
+describe('QueryRequestSchema environment field', () => {
+  it('accepts production and uat', () => {
+    expect(QueryRequestSchema.parse({ ...validRequest(), environment: 'production' }).environment).toBe('production');
+    expect(QueryRequestSchema.parse({ ...validRequest(), environment: 'uat' }).environment).toBe('uat');
+  });
+
+  it('is optional (absent = no override)', () => {
+    expect(QueryRequestSchema.parse(validRequest()).environment).toBeUndefined();
+  });
+
+  it('rejects other values', () => {
+    expect(() => QueryRequestSchema.parse({ ...validRequest(), environment: 'staging' })).toThrow();
+    expect(() => QueryRequestSchema.parse({ ...validRequest(), environment: '' })).toThrow();
+  });
+});

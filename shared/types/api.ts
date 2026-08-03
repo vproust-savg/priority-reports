@@ -6,6 +6,8 @@
 // EXPORTS: ColumnDefinition, PaginationMeta, ResponseMeta, ApiResponse, HealthResponse
 // ═══════════════════════════════════════════════════════════════
 
+import type { PriorityEnvironment } from './filters';
+
 export interface ColumnDefinition {
   key: string;
   label: string;
@@ -30,6 +32,10 @@ export interface ResponseMeta {
   cache: 'hit' | 'miss';
   executionTimeMs: number;
   source: 'priority-odata' | 'mock';
+  // WHY: Which Priority environment served this response (GRV UAT/Live
+  // toggle). Lets probes and the UI verify provenance instead of
+  // inferring it from data shape. Absent on routes that don't resolve it.
+  priorityEnv?: PriorityEnvironment;
   // WHY: When present, ReportTable reads this field from each row to apply
   // per-row CSS classes (e.g., red for expired, orange for expiring-perishable).
   rowStyleField?: string;

@@ -80,6 +80,8 @@ export interface QueryRequest {
   filterGroup: FilterGroup;
   page: number;
   pageSize: number;
+  // WHY: GRV UAT/Live toggle — see PriorityEnvironment below.
+  environment?: PriorityEnvironment;
 }
 
 // WHY: The GRV widget can point one request at Priority UAT or Live
