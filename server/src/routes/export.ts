@@ -9,6 +9,7 @@
 
 import { Router } from 'express';
 import { env } from '../config/environment';
+import { runWithPriorityEnv } from '../config/priorityEnvContext';
 import type { CacheProvider } from '../services/cache';
 import { buildExportCacheKey } from '../services/cache';
 import { getReport } from '../config/reportRegistry';
@@ -52,6 +53,12 @@ export function createExportRouter(cache: CacheProvider): Router {
       return;
     }
 
+    // WHY: Same override contract as query.ts (env-toggle spec §2–§3).
+    // The export must follow the toggle so the Excel matches the table
+    // on screen.
+    const requestedEnv = report.allowEnvOverride ? body.environment : undefined;
+    const resolvedEnv = requestedEnv ?? env.PRIORITY_ENV;
+
     const baseParams = report.buildQuery({ page: 1, pageSize: PAGE_SIZE });
     const odataFilter = buildODataFilter(body.filterGroup, report.filterColumns);
 
@@ -70,7 +77,7 @@ export function createExportRouter(cache: CacheProvider): Router {
       while (true) {
         // WHY: Check cache before hitting Priority API. Repeated exports
         // with the same filters are instant (cached 15 min).
-        const cacheKey = buildExportCacheKey(reportId, body.filterGroup, page, baseParams.$filter, env.PRIORITY_ENV);
+        const cacheKey = buildExportCacheKey(reportId, body.filterGroup, page, baseParams.$filter, resolvedEnv);
         let pageRows: Record<string, unknown>[] | null = null;
 
         try {
@@ -84,14 +91,14 @@ export function createExportRouter(cache: CacheProvider): Router {
           allRawRows.push(...pageRows);
           lastPageSize = pageRows.length;
         } else {
-          const response = await queryPriority(report.entity, {
+          const response = await runWithPriorityEnv(requestedEnv, () => queryPriority(report.entity, {
             $select: baseParams.$select,
             $expand: baseParams.$expand,
             $orderby: baseParams.$orderby,
             $filter: combinedFilter,
             $top: PAGE_SIZE,
             $skip: page * PAGE_SIZE,
-          });
+          }));
 
           allRawRows.push(...response.value);
           lastPageSize = response.value.length;
@@ -122,7 +129,7 @@ export function createExportRouter(cache: CacheProvider): Router {
     let enrichedRows = allRawRows;
     if (report.enrichRows) {
       try {
-        enrichedRows = await report.enrichRows(allRawRows);
+        enrichedRows = await runWithPriorityEnv(requestedEnv, () => report.enrichRows!(allRawRows));
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         console.error(`[export] Sub-form enrichment failed for ${reportId}: ${message}`);
@@ -221,7 +228,7 @@ export function createExportRouter(cache: CacheProvider): Router {
       level: 'info', event: 'export', reportId,
       durationMs: Date.now() - startTime, cacheHit: cacheHits > 0,
       rowCount: filteredRows.length, statusCode: 200,
-      odataFilter: odataFilter ?? 'none',
+      odataFilter: odataFilter ?? 'none', environment: resolvedEnv,
     });
   });
 

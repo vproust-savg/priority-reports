@@ -8,6 +8,9 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { Router } from 'express';
+import { z } from 'zod';
+import { env } from '../config/environment';
+import { runWithPriorityEnv } from '../config/priorityEnvContext';
 import type { CacheProvider } from '../services/cache';
 import { queryPriority } from '../services/priorityClient';
 import { getReport } from '../config/reportRegistry';
@@ -31,7 +34,20 @@ export function createFiltersRouter(cache: CacheProvider): Router {
       return;
     }
 
-    const cacheKey = `filters:${reportId}`;
+    // WHY: GET route — the env override arrives as a query parameter.
+    // Same contract as the query/export body field (env-toggle spec §4).
+    const envParse = z.enum(['production', 'uat']).optional()
+      .safeParse(req.query.environment);
+    if (!envParse.success) {
+      res.status(400).json({ error: 'Invalid environment parameter' });
+      return;
+    }
+    const requestedEnv = report.allowEnvOverride ? envParse.data : undefined;
+    const resolvedEnv = requestedEnv ?? env.PRIORITY_ENV;
+
+    // WHY: Env in the key — UAT vendor options must never be served to a
+    // Live session (and vice versa). Old un-scoped keys age out via TTL.
+    const cacheKey = `filters:${reportId}:${resolvedEnv}`;
     let cached: FiltersResponse | null = null;
     try {
       cached = await cache.get<FiltersResponse>(cacheKey);
@@ -48,7 +64,7 @@ export function createFiltersRouter(cache: CacheProvider): Router {
     if (report.fetchFilters) {
       // WHY: Report defines its own filter fetching logic (BBD, future reports).
       try {
-        filters = await report.fetchFilters();
+        filters = await runWithPriorityEnv(requestedEnv, () => report.fetchFilters!());
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         console.error(`[filters] fetchFilters failed for ${reportId}: ${message}`);
@@ -60,11 +76,11 @@ export function createFiltersRouter(cache: CacheProvider): Router {
       // is migrated to fetchFilters() in a future cleanup.
       let vendorData;
       try {
-        vendorData = await queryPriority(report.entity, {
+        vendorData = await runWithPriorityEnv(requestedEnv, () => queryPriority(report.entity, {
           $select: 'SUPNAME,CDES',
           $orderby: 'CDES',
           $top: 1000,
-        });
+        }));
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         console.error(`[filters] Priority fetch failed: ${message}`);
