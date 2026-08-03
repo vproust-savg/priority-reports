@@ -7,7 +7,7 @@
 //          ReportTableWidget.tsx, routes/filters.ts
 // EXPORTS: FilterOperator, FilterCondition, FilterGroup,
 //          ColumnFilterType, ColumnFilterMeta, FilterOption,
-//          FiltersResponse, QueryRequest
+//          FiltersResponse, QueryRequest, PriorityEnvironment
 // ═══════════════════════════════════════════════════════════════
 
 // --- Operators ---
@@ -81,3 +81,9 @@ export interface QueryRequest {
   page: number;
   pageSize: number;
 }
+
+// WHY: The GRV widget can point one request at Priority UAT or Live
+// (production). Shared because the client sends it and the server
+// validates/resolves it. 'production' matches the PRIORITY_ENV enum;
+// the client renders it as the "Live" label.
+export type PriorityEnvironment = 'production' | 'uat';
