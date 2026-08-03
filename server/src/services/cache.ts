@@ -4,7 +4,7 @@
 //          The interface is the contract — swap implementations
 //          without touching any business code.
 // USED BY: routes/reports.ts, routes/filters.ts, routes/query.ts
-// EXPORTS: CacheProvider, buildCacheKey, buildQueryCacheKey, buildExportCacheKey, createCacheProvider
+// EXPORTS: CacheProvider, buildQueryCacheKey, buildExportCacheKey, createCacheProvider
 // ═══════════════════════════════════════════════════════════════
 
 import { Redis } from '@upstash/redis';
@@ -17,14 +17,6 @@ export interface CacheProvider {
   invalidate(key: string): Promise<void>;
   invalidateByPrefix(prefix: string): Promise<number>;
   isConnected(): Promise<boolean>;
-}
-
-// WHY: Cache keys must include ALL query params, not just reportId.
-export function buildCacheKey(
-  reportId: string,
-  params: { page?: number; pageSize?: number; from?: string; to?: string; vendor?: string; status?: string }
-): string {
-  return `report:${reportId}:p${params.page ?? 1}:s${params.pageSize ?? 50}:${params.from ?? ''}:${params.to ?? ''}:v${params.vendor ?? ''}:st${params.status ?? ''}`;
 }
 
 // WHY: Strip condition/group `id` fields before hashing. These are random
