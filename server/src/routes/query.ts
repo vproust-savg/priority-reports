@@ -13,7 +13,7 @@ import type { CacheProvider } from '../services/cache';
 import { buildQueryCacheKey } from '../services/cache';
 import { getReport } from '../config/reportRegistry';
 import { queryPriority } from '../services/priorityClient';
-import { buildODataFilter } from '../services/odataFilterBuilder';
+import { buildODataFilter, combineFilters } from '../services/odataFilterBuilder';
 import { applyServerClientFilters } from '../services/serverClientFilter';
 import { logApiCall } from '../services/logger';
 import { QueryRequestSchema } from './querySchemas';
@@ -78,7 +78,7 @@ export function createQueryRouter(cache: CacheProvider): Router {
 
     // WHY: Merge the report's base $filter (e.g., BBD's EXPIRYDATE cutoff) with
     // UI-generated OData filter. Both are ANDed when present.
-    const combinedFilter = [baseParams.$filter, odataFilter].filter(Boolean).join(' and ') || undefined;
+    const combinedFilter = combineFilters(baseParams.$filter, odataFilter);
 
     // WHY: clientSidePagination reports (like BBD) use the report's own $top/$skip
     // because post-fetch filtering (filterRows) makes OData pagination unreliable.

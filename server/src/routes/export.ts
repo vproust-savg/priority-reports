@@ -12,7 +12,7 @@ import type { CacheProvider } from '../services/cache';
 import { buildExportCacheKey } from '../services/cache';
 import { getReport } from '../config/reportRegistry';
 import { queryPriority } from '../services/priorityClient';
-import { buildODataFilter } from '../services/odataFilterBuilder';
+import { buildODataFilter, combineFilters } from '../services/odataFilterBuilder';
 import { applyServerClientFilters } from '../services/serverClientFilter';
 import { getTemplate } from '../services/templateService';
 import { generateTemplateExcel, generateFallbackExcel } from '../services/excelExporter';
@@ -56,7 +56,7 @@ export function createExportRouter(cache: CacheProvider): Router {
 
     // WHY: Merge the report's base $filter (e.g., BBD's EXPIRYDATE cutoff) with
     // UI-generated OData filter. Both are ANDed when present. Same pattern as query.ts.
-    const combinedFilter = [baseParams.$filter, odataFilter].filter(Boolean).join(' and ') || undefined;
+    const combinedFilter = combineFilters(baseParams.$filter, odataFilter);
 
     // --- Cache-first paginated fetch ---
     const allRawRows: Record<string, unknown>[] = [];
