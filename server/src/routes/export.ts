@@ -8,6 +8,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { Router } from 'express';
+import { env } from '../config/environment';
 import type { CacheProvider } from '../services/cache';
 import { buildExportCacheKey } from '../services/cache';
 import { getReport } from '../config/reportRegistry';
@@ -69,7 +70,7 @@ export function createExportRouter(cache: CacheProvider): Router {
       while (true) {
         // WHY: Check cache before hitting Priority API. Repeated exports
         // with the same filters are instant (cached 15 min).
-        const cacheKey = buildExportCacheKey(reportId, body.filterGroup, page, baseParams.$filter);
+        const cacheKey = buildExportCacheKey(reportId, body.filterGroup, page, baseParams.$filter, env.PRIORITY_ENV);
         let pageRows: Record<string, unknown>[] | null = null;
 
         try {

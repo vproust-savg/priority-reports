@@ -9,7 +9,7 @@
 
 import { Redis } from '@upstash/redis';
 import { env } from '../config/environment';
-import type { QueryRequest, FilterGroup } from '@shared/types';
+import type { QueryRequest, FilterGroup, PriorityEnvironment } from '@shared/types';
 
 export interface CacheProvider {
   get<T>(key: string): Promise<T | null>;
@@ -41,23 +41,34 @@ function stripIds(group: FilterGroup): unknown {
   };
 }
 
-export function buildQueryCacheKey(reportId: string, body: QueryRequest): string {
+// WHY: resolvedEnv (requested ?? boot PRIORITY_ENV) in the key material —
+// UAT and Live cache entries can never collide (spec §5). Uses the
+// RESOLVED env, not the raw request field, so local dev (boot uat) keys
+// truthfully. Old un-scoped keys age out via TTL (same self-versioning
+// pattern as the V8491 base-filter change).
+export function buildQueryCacheKey(
+  reportId: string,
+  body: QueryRequest,
+  resolvedEnv: PriorityEnvironment,
+): string {
   const filterHash = JSON.stringify(stripIds(body.filterGroup));
-  return `query:${reportId}:p${body.page}:s${body.pageSize}:${filterHash}`;
+  return `query:${reportId}:env${resolvedEnv}:p${body.page}:s${body.pageSize}:${filterHash}`;
 }
 
 // WHY: baseFilter in the key material self-versions the export cache —
 // pages cached before a report's base $filter changed (e.g. the V8491
 // exclusion, 2026-08-03) can never be served afterward. Old keys age out
 // via the 15-minute TTL; no manual invalidation step to forget.
+// envN segment: see buildQueryCacheKey.
 export function buildExportCacheKey(
   reportId: string,
   filterGroup: FilterGroup,
   page: number,
-  baseFilter?: string,
+  baseFilter: string | undefined,
+  resolvedEnv: PriorityEnvironment,
 ): string {
   const filterHash = JSON.stringify(stripIds(filterGroup));
-  return `export:${reportId}:p${page}:s5000:bf${baseFilter ?? ''}:${filterHash}`;
+  return `export:${reportId}:env${resolvedEnv}:p${page}:s5000:bf${baseFilter ?? ''}:${filterHash}`;
 }
 
 class UpstashCacheProvider implements CacheProvider {

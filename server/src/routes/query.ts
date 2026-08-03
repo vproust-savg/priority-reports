@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { Router } from 'express';
+import { env } from '../config/environment';
 import type { CacheProvider } from '../services/cache';
 import { buildQueryCacheKey } from '../services/cache';
 import { getReport } from '../config/reportRegistry';
@@ -45,7 +46,7 @@ export function createQueryRouter(cache: CacheProvider): Router {
       return;
     }
 
-    const cacheKey = buildQueryCacheKey(reportId, body);
+    const cacheKey = buildQueryCacheKey(reportId, body, env.PRIORITY_ENV);
     const cacheTtl = 900; // 15 minutes
 
     const odataFilter = buildODataFilter(body.filterGroup, report.filterColumns);

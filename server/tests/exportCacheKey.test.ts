@@ -2,7 +2,8 @@
 // FILE: server/tests/exportCacheKey.test.ts
 // PURPOSE: Tests export cache key versioning — a changed base
 //          $filter must never serve pages cached under the old one
-//          (rollout safety for the V8491 exclusion, 2026-08-03).
+//          (rollout safety for the V8491 exclusion, 2026-08-03),
+//          and keys are environment-scoped (UAT/Live toggle).
 // USED BY: Vitest
 // ═══════════════════════════════════════════════════════════════
 
@@ -14,14 +15,22 @@ const group: FilterGroup = { id: 'root', conjunction: 'and', conditions: [], gro
 
 describe('buildExportCacheKey base-filter versioning', () => {
   it('produces different keys when the base filter differs', () => {
-    const before = buildExportCacheKey('grv-log', group, 0);
-    const after = buildExportCacheKey('grv-log', group, 0, "SUPNAME ne 'V8491'");
+    const before = buildExportCacheKey('grv-log', group, 0, undefined, 'production');
+    const after = buildExportCacheKey('grv-log', group, 0, "SUPNAME ne 'V8491'", 'production');
     expect(after).not.toBe(before);
   });
 
   it('is stable for identical base filters', () => {
-    expect(buildExportCacheKey('grv-log', group, 0, "SUPNAME ne 'V8491'")).toBe(
-      buildExportCacheKey('grv-log', group, 0, "SUPNAME ne 'V8491'"),
+    expect(buildExportCacheKey('grv-log', group, 0, "SUPNAME ne 'V8491'", 'production')).toBe(
+      buildExportCacheKey('grv-log', group, 0, "SUPNAME ne 'V8491'", 'production'),
     );
+  });
+});
+
+describe('buildExportCacheKey environment scoping', () => {
+  it('same request, different env → different keys', () => {
+    const live = buildExportCacheKey('grv-log', group, 0, "SUPNAME ne 'V8491'", 'production');
+    const uat = buildExportCacheKey('grv-log', group, 0, "SUPNAME ne 'V8491'", 'uat');
+    expect(live).not.toBe(uat);
   });
 });
