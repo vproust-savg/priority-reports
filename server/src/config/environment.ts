@@ -3,7 +3,7 @@
 // PURPOSE: Centralized environment configuration. Read .env once,
 //          export typed config object. All other files import from here.
 // USED BY: index.ts, cache.ts, routes, priority.ts
-// EXPORTS: env
+// EXPORTS: env, assertExplicitPriorityEnvInProduction
 // ═══════════════════════════════════════════════════════════════
 
 import { z } from 'zod';
@@ -41,3 +41,24 @@ const EnvSchema = z.object({
 // WHY: Crash on startup if env vars are wrong. This prevents
 // Claude Code from ever deploying with missing credentials.
 export const env = EnvSchema.parse(process.env);
+
+// WHY: The schema default above is 'uat' (right for local dev). In a
+// production deploy an unset PRIORITY_ENV would therefore silently serve
+// UAT data as "Live" and point BBD writes at UAT — with valid credentials,
+// so nothing would error (Codex finding 2, env-toggle spec §8). Fail the
+// boot instead; Railway's healthcheck keeps the previous deploy serving.
+// Exported as a pure function so tests cover the matrix without module
+// reload games (dotenv would repopulate process.env from ../.env).
+export function assertExplicitPriorityEnvInProduction(
+  nodeEnv: string,
+  rawPriorityEnv: string | undefined,
+): void {
+  if (nodeEnv === 'production' && !rawPriorityEnv) {
+    throw new Error(
+      'PRIORITY_ENV must be set explicitly in production (uat | production). ' +
+      'Refusing to boot with the implicit uat default.'
+    );
+  }
+}
+
+assertExplicitPriorityEnvInProduction(env.NODE_ENV, process.env.PRIORITY_ENV);

@@ -15,6 +15,9 @@ export function logApiCall(entry: {
   rowCount?: number;
   statusCode: number;
   odataFilter?: string;
+  // WHY: Which Priority environment served this request (GRV UAT/Live
+  // toggle). Absent for routes that never resolve an environment.
+  environment?: string;
 }): void {
   // WHY: Structured JSON logs so Railway captures them as searchable fields.
   console.log(JSON.stringify({ ...entry, timestamp: new Date().toISOString() }));
