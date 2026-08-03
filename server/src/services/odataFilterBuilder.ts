@@ -4,7 +4,7 @@
 //          Only translates server-side columns with OData-compatible
 //          operators. Client-side conditions are silently skipped.
 // USED BY: routes/query.ts, routes/export.ts, reports/grvLog.ts
-// EXPORTS: buildODataFilter, escapeODataString
+// EXPORTS: buildODataFilter, escapeODataString, combineFilters
 // ═══════════════════════════════════════════════════════════════
 
 import type { FilterGroup, FilterCondition, ColumnFilterMeta } from '@shared/types';
@@ -131,4 +131,15 @@ export function buildODataFilter(
 ): string | undefined {
   const colMap = new Map(filterColumns.map((c) => [c.key, c]));
   return buildGroup(filterGroup, colMap);
+}
+
+// WHY: OData 'and' binds tighter than 'or'. Merging a base filter with a
+// top-level OR group without parentheses leaks rows: base and A or B
+// == (base and A) or B — any row matching B bypasses the base filter.
+// Wrap every part so the base filter constrains the whole expression.
+export function combineFilters(...parts: (string | undefined)[]): string | undefined {
+  const present = parts.filter((p): p is string => Boolean(p));
+  if (present.length === 0) return undefined;
+  if (present.length === 1) return present[0];
+  return present.map((p) => `(${p})`).join(' and ');
 }
