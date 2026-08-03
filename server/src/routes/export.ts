@@ -69,7 +69,7 @@ export function createExportRouter(cache: CacheProvider): Router {
       while (true) {
         // WHY: Check cache before hitting Priority API. Repeated exports
         // with the same filters are instant (cached 15 min).
-        const cacheKey = buildExportCacheKey(reportId, body.filterGroup, page);
+        const cacheKey = buildExportCacheKey(reportId, body.filterGroup, page, baseParams.$filter);
         let pageRows: Record<string, unknown>[] | null = null;
 
         try {

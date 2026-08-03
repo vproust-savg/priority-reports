@@ -46,9 +46,18 @@ export function buildQueryCacheKey(reportId: string, body: QueryRequest): string
   return `query:${reportId}:p${body.page}:s${body.pageSize}:${filterHash}`;
 }
 
-export function buildExportCacheKey(reportId: string, filterGroup: FilterGroup, page: number): string {
+// WHY: baseFilter in the key material self-versions the export cache —
+// pages cached before a report's base $filter changed (e.g. the V8491
+// exclusion, 2026-08-03) can never be served afterward. Old keys age out
+// via the 15-minute TTL; no manual invalidation step to forget.
+export function buildExportCacheKey(
+  reportId: string,
+  filterGroup: FilterGroup,
+  page: number,
+  baseFilter?: string,
+): string {
   const filterHash = JSON.stringify(stripIds(filterGroup));
-  return `export:${reportId}:p${page}:s5000:${filterHash}`;
+  return `export:${reportId}:p${page}:s5000:bf${baseFilter ?? ''}:${filterHash}`;
 }
 
 class UpstashCacheProvider implements CacheProvider {
