@@ -1,7 +1,10 @@
 # GRV Log — UAT/Live Environment Toggle (Design)
 
 **Date:** 2026-08-03
-**Status:** Approved (design) — pending Codex adversarial review, then implementation.
+**Status:** v2 — Codex adversarial review findings addressed (legacy route
+retirement, boot-env hardening + provenance, authorization posture
+documented, request cancellation). Pending Victor's review, then
+implementation.
 
 ## Problem
 
@@ -26,11 +29,21 @@ one request. All credential sets already exist as Railway variables.
 5. No cross-environment cache contamination: Redis entries for filters,
    export pages, and query responses are keyed by the resolved
    environment.
-6. Fail toward Live: any Priority call outside the override scope uses
-   the boot default (`PRIORITY_ENV`, production on Railway). Test data
-   must never be able to leak into a Live view.
+6. Fail toward the boot environment — and make the boot environment
+   trustworthy: any Priority call outside the override scope uses
+   `PRIORITY_ENV`, and **production deployments must set `PRIORITY_ENV`
+   explicitly or the server refuses to boot** (Codex finding 2 — the
+   schema default is `uat`, so an unset Railway variable would otherwise
+   silently serve UAT as "Live" and point BBD writes at UAT). With the
+   boot guard, a missed wrap can only ever produce Live data on Railway.
 7. Credentials never leave the server; the environment field is a fixed
    Zod enum, never interpolated into URLs.
+8. No environment-blind GRV path remains mounted: the legacy
+   `GET /api/v1/reports/:reportId` route (superseded by `POST /query`,
+   zero remaining callers) is retired (Codex finding 1).
+9. A GRV fetch abandoned by the client (toggle switch, unmount, reload)
+   stops consuming Priority rate budget within one enrichment batch
+   (Codex finding 4).
 
 ## Design
 
@@ -157,16 +170,108 @@ default.)
   = amber pill (amber-600+, iframe-visible) + adjacent badge
   "UAT — test data". Rendered in the widget toolbar.
 
-### 7. Explicitly out of scope
+### 7. Legacy route retirement — `routes/reports.ts` (Codex finding 1)
+
+`GET /api/v1/reports/:reportId` predates `POST /query` (Spec 02). It
+still serves any registered report — including grv-log — through the
+env-blind `buildCacheKey` (300s TTL) and ignores `disableCache`.
+Verified 2026-08-03: **zero callers** — every client hook uses
+`/query`, `/filters`, `/export`, `/subform`, `/refresh`, `/extend`,
+`/extended`; the only references to the bare GET are in the archived
+Spec-02a plan document.
+
+Action: delete the `router.get('/:reportId', …)` handler. Keep
+`GET /list` and the side-effect report imports — reports.ts is the only
+module that imports `customerReturns` for registration, and that import
+must survive. `buildCacheKey` loses its last caller and is removed with
+its `report:` key family (age out via TTL).
+
+### 8. Boot-environment hardening + provenance (Codex finding 2)
+
+`environment.ts` gains a post-parse guard:
+
+```ts
+// WHY: The schema default is 'uat' (local dev). In production an unset
+// PRIORITY_ENV would silently serve UAT data as "Live" and point BBD
+// writes at UAT — with valid credentials, so nothing would error.
+// Fail the boot instead; Railway's healthcheck keeps the old deploy.
+if (env.NODE_ENV === 'production' && !process.env.PRIORITY_ENV) {
+  throw new Error('PRIORITY_ENV must be set explicitly in production');
+}
+```
+
+Codex also recommended hard-pinning mutation paths to production. That
+is deliberately **not** adopted: local development intentionally runs
+BBD extend against UAT (`PRIORITY_ENV=uat` in `.env`). Write-path safety
+comes from two facts instead: writes are never request-overridable (no
+wrap), and the boot environment is explicit-or-crash in production.
+
+Provenance (adopted from the same finding): `ApiResponse.meta` gains
+optional `priorityEnv: PriorityEnvironment` (additive envelope change —
+consumers reviewed, none break), set by query.ts from `resolvedEnv`; the
+query-route `logApiCall` entries gain an `environment` field. Post-deploy
+probes and the UI can then verify the served environment directly
+instead of inferring it from data shape.
+
+### 9. Request cancellation — budget protection (Codex finding 4)
+
+A GRV page load costs ~51 Priority calls against the shared 95/min
+budget. The Live-default toggle makes double-loads routine: open (Live,
+51 calls) → switch to UAT (51 more) in the same minute, while the
+abandoned Live enrichment keeps running server-side. Fix both ends,
+narrowly:
+
+- **Client:** `useReportQuery`'s `queryFn` consumes TanStack's
+  `AbortSignal` (`queryFn: ({ signal }) => fetch(url, { …, signal })`)
+  so a queryKey change or unmount aborts the HTTP request.
+  `useFiltersQuery` gets the same one-line treatment.
+- **Server (`query.ts`):** an `AbortController` aborts on `req.on('close')`.
+  Its signal is passed to enrichment: `ReportConfig.enrichRows` gains an
+  optional second parameter `signal?: AbortSignal` (backward compatible —
+  existing implementations that ignore it still type-check). grvLog's
+  `enrichRows` checks `signal?.aborted` between batches and throws an
+  abort error; query.ts recognizes it, skips the cache write, and ends
+  without a response body (the socket is already gone).
+- **Effect:** an abandoned Live load stops within one batch (≤10
+  in-flight sub-form calls) instead of running all ~50.
+
+This is a narrow slice of the broader retry-storm hardening
+(server-side dedupe of identical in-flight queries, client retry caps),
+which remains out of scope — tracked separately (chip task_4b5a62f6).
+
+### 10. Explicitly out of scope
 
 - Persisting the toggle (localStorage/URL) — rejected for safety.
 - Env toggle on other reports/pages — flag exists, nothing else opts in.
 - Per-environment rate-limit budgets — UAT and Live share the same
   Priority host (only the company code differs), so the single shared
-  95/min limiter is correct. A UAT burst competes with Live for budget
-  exactly as a second Live user does today; acceptable.
+  95/min limiter is correct. With §9's cancellation, a Live→UAT switch
+  costs one batch of waste, not a full duplicate run.
 - Health-endpoint credential presence reporting — the post-deploy UAT
   probe verifies credentials *work*, which is stronger.
+- Authentication/authorization for the dashboard — see "Security &
+  authorization posture" below; building an auth layer is its own
+  project if wanted.
+- Full retry-storm hardening (in-flight query dedupe, client retry
+  caps) — chip task_4b5a62f6; §9 implements only the cancellation slice
+  this feature itself makes routine.
+
+## Security & authorization posture (Codex finding 3 — accepted risk)
+
+Codex correctly notes the override has no authorization boundary. The
+dashboard has **no authentication at all today, by design**: it is a
+public-but-unlinked Railway URL consumed inside the Airtable Omni iframe,
+and any caller who reaches it already has unrestricted read access to
+all Live reports (GRV, BBD, Customer Returns) and their exports. The
+toggle adds read access to UAT GRV data — the same company's ERP data,
+same sensitivity class — for that same caller set, and adds **no** write
+surface (extend is never overridable). Treating a Zod enum as an access
+control is not the claim; the claim is that UAT read access does not
+change the existing exposure class.
+
+**Accepted as residual risk — explicitly flagged for Victor at the spec
+review gate.** If the dashboard ever needs an auth boundary (e.g. the
+URL leaks beyond the intended audience), that is a standalone spec.
 
 ## Error handling & edge cases
 
@@ -196,7 +301,17 @@ default.)
    query, export, and filters keys.
 5. **Client:** pages schema accepts `envToggle`; EnvToggle switch flips
    state, renders the UAT badge, propagates env into query params
-   (queryKey) and resets page to 1.
+   (queryKey) and resets page to 1; `useReportQuery` passes TanStack's
+   `AbortSignal` into `fetch`.
+6. **Legacy route retired:** `GET /api/v1/reports/grv-log` → 404;
+   `customer-returns` remains registered (its registration import lives
+   in reports.ts) and still answers `POST /query`.
+7. **Boot guard:** `NODE_ENV=production` without explicit `PRIORITY_ENV`
+   → environment module throws; with `PRIORITY_ENV=production` → boots.
+8. **Cancellation:** with a mocked `querySubform` counting calls,
+   aborting after the first enrichment batch stops further batches
+   (≤ one batch of calls after abort); aborted requests never write to
+   cache. `meta.priorityEnv` equals the resolved environment.
 
 ## Verification & Deploy
 
@@ -205,16 +320,17 @@ default.)
 2. Push to `main` → Railway auto-deploy; detect via read-only
    discriminating probe.
 3. Post-deploy probes (production URL):
-   - default query (no `environment`) → Live data, matches the ~37-row
-     baseline week from 2026-08-03;
-   - `environment:'uat'` query → 200 with UAT DOCNOs (also proves the
-     Railway `PRIORITY_UAT_*` variables are real);
+   - default query (no `environment`) → `meta.priorityEnv:'production'`,
+     Live data matches the ~37-row baseline week from 2026-08-03;
+   - `environment:'uat'` query → 200 with `meta.priorityEnv:'uat'` (also
+     proves the Railway `PRIORITY_UAT_*` variables are real);
    - filters with `?environment=uat` → 200, vendor list differs from
      Live (or at minimum env-scoped cache entries observed);
    - export with `environment:'uat'` → file downloads, spot-check rows
      are UAT;
-   - `environment:'uat'` on `bbd` query → identical Live behavior
-     (override ignored).
+   - `environment:'uat'` on `bbd` query → `meta.priorityEnv:'production'`
+     (override ignored);
+   - `GET /api/v1/reports/grv-log` → 404 (legacy route retired).
 4. Victor: visual check of the toggle + badge in the Airtable embed
    (Reports > Food Safety).
 5. Rollback: the field is optional end-to-end — reverting the client
@@ -236,3 +352,15 @@ default.)
   to one ~30-line module, wrap points visible at call sites, and the
   fallback direction (boot default = Live) makes the worst failure
   "production data shown while toggled to UAT", never the reverse.
+- Codex adversarial review (2026-08-03): needs-attention — legacy
+  `GET /:reportId` route bypasses ALS + env-scoped caching (high);
+  `PRIORITY_ENV` schema default `uat` falsifies "fail toward Live"
+  (high); no authorization boundary on the override (high); Live→UAT
+  switch can double the Priority budget cost with no cancellation
+  (medium). v2 resolutions: legacy route retired (§7, zero callers
+  verified); production boot requires explicit `PRIORITY_ENV` +
+  `meta.priorityEnv` provenance (§8); auth documented as accepted risk,
+  Victor to confirm (posture section); AbortSignal cancellation end to
+  end (§9). Codex's "hard-pin mutation paths to production" rejected —
+  local dev deliberately writes to UAT; boot guard + never-overridable
+  writes cover the risk.
