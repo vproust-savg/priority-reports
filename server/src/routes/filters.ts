@@ -15,7 +15,8 @@ import type { FiltersResponse, FilterOption } from '@shared/types';
 
 // WHY: Ensure report definitions are registered even if filters.ts
 // loads before reports.ts. Node module cache prevents double-registration.
-import '../reports/grvLog';
+// (grvLog import is named — still triggers the same registration side effect.)
+import { EXCLUDED_VENDOR_SUPNAME } from '../reports/grvLog';
 import '../reports/bbdReport';
 
 export function createFiltersRouter(cache: CacheProvider): Router {
@@ -73,6 +74,9 @@ export function createFiltersRouter(cache: CacheProvider): Router {
 
       const vendorSet = new Set<string>();
       for (const row of vendorData.value) {
+        // WHY: Excluded vendor must not be offered as a filter option — its
+        // rows are already hidden by grv-log's base $filter (V8491 exclusion).
+        if (row.SUPNAME === EXCLUDED_VENDOR_SUPNAME) continue;
         const name = row.CDES as string;
         if (name) vendorSet.add(name);
       }
