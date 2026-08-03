@@ -52,7 +52,13 @@ export interface ReportConfig {
   transformRow: (raw: Record<string, unknown>) => Record<string, unknown>;
   // WHY: Priority's $expand truncates responses for some entities (DOCUMENTS_P).
   // Reports that need sub-form data use this to fetch it in a second step.
-  enrichRows?: (rows: Record<string, unknown>[]) => Promise<Record<string, unknown>[]>;
+  // The optional signal lets query.ts stop enrichment between batches when
+  // the client disconnected (env toggle switch, unmount) — implementations
+  // that ignore it still type-check.
+  enrichRows?: (
+    rows: Record<string, unknown>[],
+    signal?: AbortSignal,
+  ) => Promise<Record<string, unknown>[]>;
   // WHY: Expands one parent row into N rows — one per sub-form line item (e.g.,
   // Customer Returns: one row per returned SKU). Runs AFTER enrichRows so any
   // enriched fields are copied onto each exploded row, but is independent of
@@ -100,6 +106,11 @@ export interface ReportConfig {
   // that must always reflect the latest Priority data (e.g., GRV log for
   // receiving operations where stale data risks shipping the wrong goods).
   disableCache?: boolean;
+  // WHY: When true, query/filters/export honor the request's `environment`
+  // field (UAT/Live toggle) for THIS report only. Everything else ignores
+  // the field, and write routes never read it — so only grv-log reads can
+  // be pointed at UAT. Single opt-in point, greppable.
+  allowEnvOverride?: boolean;
 }
 
 export const reportRegistry = new Map<string, ReportConfig>();

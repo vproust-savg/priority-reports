@@ -70,3 +70,46 @@ describe('grv-log buildQuery vendor exclusion', () => {
     expect(params.$skip).toBe(100);
   });
 });
+
+describe('grv-log env override opt-in', () => {
+  it('sets allowEnvOverride: true (only report that honors the toggle)', () => {
+    expect(reportRegistry.get('grv-log')!.allowEnvOverride).toBe(true);
+  });
+});
+
+describe('grv-log enrichRows abort', () => {
+  it('stops issuing sub-form batches once the signal aborts', async () => {
+    const report = reportRegistry.get('grv-log')!;
+    const rows = Array.from({ length: 20 }, (_, i) => ({
+      DOCNO: `D${i}`, TYPE: 'P',
+    })) as Record<string, unknown>[];
+
+    const controller = new AbortController();
+    vi.mocked(querySubform).mockClear();
+    vi.mocked(querySubform).mockImplementation(async () => {
+      controller.abort(); // fires during batch 1
+      return { TEXT: '<p>x</p>' };
+    });
+
+    const result = await report.enrichRows!(rows, controller.signal);
+
+    // Batch 1 (10 parallel calls) was already launched; batch 2 must not start.
+    expect(vi.mocked(querySubform).mock.calls.length).toBe(10);
+    expect(result).toHaveLength(20); // partially-enriched rows still returned
+
+    vi.mocked(querySubform).mockReset();
+    vi.mocked(querySubform).mockResolvedValue({ TEXT: '<p>fake remarks</p>' });
+  });
+
+  it('runs all batches when no signal is given', async () => {
+    const report = reportRegistry.get('grv-log')!;
+    const rows = Array.from({ length: 20 }, (_, i) => ({
+      DOCNO: `D${i}`, TYPE: 'P',
+    })) as Record<string, unknown>[];
+    vi.mocked(querySubform).mockClear();
+    vi.mocked(querySubform).mockResolvedValue({ TEXT: '<p>fake remarks</p>' });
+
+    await report.enrichRows!(rows);
+    expect(vi.mocked(querySubform).mock.calls.length).toBe(20);
+  });
+});

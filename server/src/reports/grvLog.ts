@@ -100,11 +100,19 @@ function buildQuery(filters: ReportFilters): ODataParams {
 // burns ~51 calls in ~1s — over half the per-minute budget. Do NOT lower the
 // 200ms delay or raise the batch size without first widening the budget;
 // concurrent dashboards + syncs already coexist under this limit.
-async function enrichRows(rows: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
+async function enrichRows(
+  rows: Record<string, unknown>[],
+  signal?: AbortSignal,
+): Promise<Record<string, unknown>[]> {
   const BATCH_SIZE = 10;
   const BATCH_DELAY_MS = 200;
 
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    // WHY: Client gone (env toggle switch, unmount, reload) — stop burning
+    // the shared 95/min Priority budget. Partially-enriched rows are safe:
+    // query.ts discards aborted responses and never caches them.
+    if (signal?.aborted) return rows;
+
     const batch = rows.slice(i, i + BATCH_SIZE);
     if (i > 0) await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
 
@@ -153,6 +161,9 @@ reportRegistry.set('grv-log', {
   // every search — stale data risks shipping the wrong goods. Bypasses Redis
   // query cache AND the per-document remarks fetch is now always live.
   disableCache: true,
+  // WHY: Only report with the UAT/Live toggle — some GRV data exists only
+  // in Priority UAT and cannot be migrated (Victor, 2026-08-03).
+  allowEnvOverride: true,
   columns,
   filterColumns,
   buildQuery,
