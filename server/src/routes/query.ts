@@ -3,13 +3,15 @@
 // PURPOSE: POST /api/v1/reports/:reportId/query endpoint.
 //          Single-phase: OData filter → Priority fetch → enrich →
 //          post-enrichment filter (client-only columns) → cache.
-//          POST /:reportId/refresh invalidates all cached queries.
+//          Honors the GRV UAT/Live env override (allowEnvOverride
+//          reports only) and aborts enrichment on client disconnect.
+//          (/:reportId/refresh moved to queryRefresh.ts, 2026-08-03.)
 // USED BY: index.ts (mounted at /api/v1/reports)
 // EXPORTS: createQueryRouter
 // ═══════════════════════════════════════════════════════════════
 
 import { Router } from 'express';
-import { env } from '../config/environment';
+import { runWithPriorityEnv } from '../config/priorityEnvContext';
 import type { CacheProvider } from '../services/cache';
 import { buildQueryCacheKey } from '../services/cache';
 import { getReport } from '../config/reportRegistry';
@@ -18,7 +20,10 @@ import { buildODataFilter, combineFilters } from '../services/odataFilterBuilder
 import { applyServerClientFilters } from '../services/serverClientFilter';
 import { logApiCall } from '../services/logger';
 import { QueryRequestSchema } from './querySchemas';
-import { CLIENT_FILTER_MAX_FETCH, hasClientOnlyConditions } from './queryHelpers';
+import {
+  CLIENT_FILTER_MAX_FETCH, hasClientOnlyConditions,
+  resolveEnvOverride, createClientDisconnectAbort,
+} from './queryHelpers';
 import type { ApiResponse } from '@shared/types';
 
 // WHY: Import report definitions so they self-register into reportRegistry
@@ -46,7 +51,10 @@ export function createQueryRouter(cache: CacheProvider): Router {
       return;
     }
 
-    const cacheKey = buildQueryCacheKey(reportId, body, env.PRIORITY_ENV);
+    const { requestedEnv, resolvedEnv } = resolveEnvOverride(report, body.environment);
+    const abortController = createClientDisconnectAbort(res);
+
+    const cacheKey = buildQueryCacheKey(reportId, body, resolvedEnv);
     const cacheTtl = 900; // 15 minutes
 
     const odataFilter = buildODataFilter(body.filterGroup, report.filterColumns);
@@ -64,11 +72,12 @@ export function createQueryRouter(cache: CacheProvider): Router {
     if (cached) {
       cached.meta.cache = 'hit';
       cached.meta.executionTimeMs = Date.now() - startTime;
+      cached.meta.priorityEnv = resolvedEnv;
       logApiCall({
         level: 'info', event: 'query_fetch', reportId,
         durationMs: Date.now() - startTime, cacheHit: true,
         rowCount: cached.data.length, statusCode: 200,
-        odataFilter: odataFilter ?? 'none',
+        odataFilter: odataFilter ?? 'none', environment: resolvedEnv,
       });
       res.json(cached);
       return;
@@ -96,14 +105,14 @@ export function createQueryRouter(cache: CacheProvider): Router {
 
     let priorityData;
     try {
-      priorityData = await queryPriority(report.entity, {
+      priorityData = await runWithPriorityEnv(requestedEnv, () => queryPriority(report.entity, {
         $select: baseParams.$select,
         $expand: baseParams.$expand,
         $orderby: baseParams.$orderby,
         $filter: combinedFilter,
         $top: fetchTop,
         $skip: fetchSkip,
-      });
+      }));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       console.error(`[query] Priority fetch failed for ${reportId}: ${message}`);
@@ -115,12 +124,27 @@ export function createQueryRouter(cache: CacheProvider): Router {
     const warnings: string[] = [];
     if (report.enrichRows) {
       try {
-        rawRows = await report.enrichRows(rawRows);
+        rawRows = await runWithPriorityEnv(requestedEnv, () =>
+          report.enrichRows!(rawRows, abortController.signal));
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         console.error(`[query] Sub-form enrichment failed for ${reportId}: ${message}`);
         warnings.push('Sub-form data unavailable — some columns may be blank');
       }
+    }
+
+    // WHY: Client disconnected mid-enrichment. The response is
+    // undeliverable — skip transform/cache/send so partial rows are
+    // never cached and no more work runs. 499 = client closed request
+    // (log-only status, nothing is sent).
+    if (abortController.signal.aborted) {
+      logApiCall({
+        level: 'info', event: 'query_aborted', reportId,
+        durationMs: Date.now() - startTime, cacheHit: false,
+        statusCode: 499, environment: resolvedEnv,
+      });
+      res.end();
+      return;
     }
     // WHY: Row explosion (one row per sub-form line item) runs here, after the
     // enrichRows try/catch. It uses the parent's $expand line items, so it still
@@ -170,6 +194,7 @@ export function createQueryRouter(cache: CacheProvider): Router {
         cache: 'miss',
         executionTimeMs: Date.now() - startTime,
         source: 'priority-odata',
+        priorityEnv: resolvedEnv,
         rowStyleField: report.rowStyleField,
         // WHY: When the report has expandConfig, pass rowKeyField to the frontend
         // so it knows which row field to use as the expand key. subformName and
@@ -200,28 +225,10 @@ export function createQueryRouter(cache: CacheProvider): Router {
       level: 'info', event: 'query_fetch', reportId,
       durationMs: Date.now() - startTime, cacheHit: false,
       rowCount: rows.length, statusCode: 200,
-      odataFilter: odataFilter ?? 'none',
+      odataFilter: odataFilter ?? 'none', environment: resolvedEnv,
     });
 
     res.json(response);
-  });
-
-  // WHY: Refresh endpoint invalidates ALL cached queries for a report.
-  // Uses prefix-based deletion so every filter combination is cleared.
-  // Also invokes the report's optional clearMemoryCache hook for any
-  // per-report in-memory state that needs flushing alongside Redis.
-  router.post('/:reportId/refresh', async (req, res) => {
-    const { reportId } = req.params;
-    getReport(reportId)?.clearMemoryCache?.();
-    try {
-      const deleted = await cache.invalidateByPrefix(`query:${reportId}:`);
-      console.log(`[query] Refreshed cache for ${reportId}: ${deleted} keys deleted`);
-      res.json({ message: `Cache refreshed for ${reportId}`, keysDeleted: deleted });
-    } catch (err) {
-      console.warn(`[query] Cache refresh failed for ${reportId}:`, err);
-      // WHY: Still return success — the client will refetch regardless
-      res.json({ message: `Cache refresh attempted for ${reportId}` });
-    }
   });
 
   return router;

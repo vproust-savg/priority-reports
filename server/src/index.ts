@@ -13,6 +13,7 @@ import { env } from './config/environment';
 import { createCacheProvider } from './services/cache';
 import { createHealthRouter } from './routes/health';
 import { createQueryRouter } from './routes/query';
+import { createQueryRefreshRouter } from './routes/queryRefresh';
 import { createReportsRouter } from './routes/reports';
 import { createFiltersRouter } from './routes/filters';
 import { createExportRouter } from './routes/export';
@@ -37,6 +38,7 @@ const cache = createCacheProvider();
 // WHY: Query router before reports router — more specific path first.
 app.use('/api/v1/health', createHealthRouter(cache));
 app.use('/api/v1/reports', createQueryRouter(cache));
+app.use('/api/v1/reports', createQueryRefreshRouter(cache));
 app.use('/api/v1/reports', createReportsRouter(cache));
 app.use('/api/v1/reports', createFiltersRouter(cache));
 app.use('/api/v1/reports', createExportRouter(cache));
