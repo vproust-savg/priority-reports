@@ -10,6 +10,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { SlidersHorizontal, Columns3, ArrowUpDown, Download, Loader2, RefreshCw, CalendarClock } from 'lucide-react';
+import EnvToggle from './widgets/EnvToggle';
+import type { PriorityEnvironment } from '@shared/types';
 
 interface TableToolbarProps {
   activeFilterCount: number;
@@ -30,6 +32,10 @@ interface TableToolbarProps {
   onSearch?: (term: string) => void;
   totalRows?: number;
   filteredRows?: number;
+  // WHY: Present only for widgets with envToggle (GRV). Toolbar renders
+  // the segmented control; state lives in ReportTableWidget.
+  priorityEnv?: PriorityEnvironment;
+  onEnvChange?: (env: PriorityEnvironment) => void;
 }
 
 export default function TableToolbar({
@@ -41,6 +47,7 @@ export default function TableToolbar({
   onBulkExtend,
   searchTerm = '', onSearch,
   totalRows, filteredRows,
+  priorityEnv, onEnvChange,
 }: TableToolbarProps) {
   /* WHY: Click-outside handling lives in ReportTableWidget (useClickOutside hook)
      because it must guard the toolbar AND its sibling panels together — a ref
@@ -69,6 +76,10 @@ export default function TableToolbar({
         />
 
         <div className="flex-1" />
+
+        {onEnvChange && priorityEnv && (
+          <EnvToggle value={priorityEnv} onChange={onEnvChange} />
+        )}
 
         {isFiltered && (
           <span className="text-[11px] text-[var(--color-text-muted)]">

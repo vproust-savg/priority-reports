@@ -9,7 +9,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useCallback } from 'react';
-import type { FilterGroup } from '@shared/types';
+import type { FilterGroup, PriorityEnvironment } from '@shared/types';
 
 interface ToastState {
   message: string;
@@ -27,6 +27,8 @@ export function useExport(
   reportId: string,
   filterGroup: FilterGroup,
   visibleColumnKeys?: string[],
+  // WHY: GRV UAT/Live toggle — the Excel must match the table on screen.
+  environment?: PriorityEnvironment,
 ): UseExportReturn {
   const [isExporting, setIsExporting] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -46,7 +48,7 @@ export function useExport(
       const response = await fetch(`/api/v1/reports/${reportId}/export`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filterGroup, visibleColumnKeys }),
+        body: JSON.stringify({ filterGroup, visibleColumnKeys, environment }),
         signal: controller.signal,
       });
 
@@ -94,7 +96,7 @@ export function useExport(
       clearTimeout(timeout);
       setIsExporting(false);
     }
-  }, [reportId, filterGroup, visibleColumnKeys]);
+  }, [reportId, filterGroup, visibleColumnKeys, environment]);
 
   return { isExporting, toast, clearToast, triggerExport };
 }

@@ -68,3 +68,30 @@ describe('useReportQuery', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('useReportQuery environment + abort', () => {
+  it('sends environment in the POST body and passes an AbortSignal', async () => {
+    const wrapper = makeWrapper();
+    const params = { filterGroup: emptyGroup, page: 1, pageSize: 50, environment: 'uat' as const };
+
+    const hook = renderHook(() => useReportQuery('grv-log', params), { wrapper });
+    await waitFor(() => expect(hook.result.current.isSuccess).toBe(true));
+
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).environment).toBe('uat');
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('omits environment from the body when not provided', async () => {
+    const wrapper = makeWrapper();
+    const params = { filterGroup: emptyGroup, page: 1, pageSize: 50 };
+
+    const hook = renderHook(() => useReportQuery('grv-log', params), { wrapper });
+    await waitFor(() => expect(hook.result.current.isSuccess).toBe(true));
+
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    // WHY: JSON.stringify drops undefined — non-toggle widgets send
+    // byte-identical bodies to the pre-feature shape.
+    expect('environment' in JSON.parse(init.body as string)).toBe(false);
+  });
+});

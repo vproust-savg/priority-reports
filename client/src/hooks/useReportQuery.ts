@@ -7,12 +7,15 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { useQuery } from '@tanstack/react-query';
-import type { ApiResponse, FilterGroup, QueryRequest } from '@shared/types';
+import type { ApiResponse, FilterGroup, PriorityEnvironment, QueryRequest } from '@shared/types';
 
 interface ReportQueryParams {
   filterGroup: FilterGroup;
   page: number;
   pageSize: number;
+  // WHY: GRV UAT/Live toggle. Part of params → part of the queryKey, so
+  // switching environments automatically refetches.
+  environment?: PriorityEnvironment;
 }
 
 // WHY: When disableCache:true, the hook flips TanStack to "always stale,
@@ -29,16 +32,21 @@ export function useReportQuery(
 ) {
   return useQuery<ApiResponse>({
     queryKey: ['report', reportId, params],
-    queryFn: async () => {
+    // WHY: TanStack's signal aborts the HTTP request on queryKey change or
+    // unmount; the server stops enrichment when the socket closes. Without
+    // it, an abandoned Live load keeps burning ~50 Priority calls.
+    queryFn: async ({ signal }) => {
       const body: QueryRequest = {
         filterGroup: params.filterGroup,
         page: params.page,
         pageSize: params.pageSize,
+        environment: params.environment,
       };
       const response = await fetch(`/api/v1/reports/${reportId}/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal,
       });
       if (!response.ok) throw new Error(`Report query failed: ${response.status}`);
       return response.json();

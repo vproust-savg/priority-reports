@@ -41,6 +41,7 @@ import { countActiveFilters } from '../../config/filterConstants';
 import { findWidgetByReportId } from '../../config/pages';
 import { getDetailComponent } from '../../config/detailRegistry';
 import { formatCellValue } from '../../utils/formatters';
+import type { PriorityEnvironment } from '@shared/types';
 
 export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const {
@@ -48,18 +49,31 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
     isFilterOpen, setIsFilterOpen, handleFilterChange,
   } = useFilterState(reportId);
 
-  const filtersQuery = useFiltersQuery(reportId);
-  const filterColumns = filtersQuery.data?.columns ?? [];
-
   // WHY: Per-widget disableCache opt-in (set on grv-log in pages.ts) flows
   // through to the hook so TanStack treats every search as always-fresh.
   const widgetConfig = findWidgetByReportId(reportId);
+
+  // WHY: Every mount starts on Live (plain state, no persistence) — a
+  // food-safety user can never inherit UAT from a previous session.
+  // activeEnv stays undefined for widgets without the toggle so their
+  // requests and queryKeys are byte-identical to before this feature.
+  const envToggleEnabled = !!widgetConfig?.envToggle;
+  const [priorityEnv, setPriorityEnv] = useState<PriorityEnvironment>('production');
+  const activeEnv = envToggleEnabled ? priorityEnv : undefined;
+  const handleEnvChange = useCallback((next: PriorityEnvironment) => {
+    setPriorityEnv(next);
+    setPage(1); // WHY: page N of Live has no meaning in UAT's result set
+  }, [setPage]);
+
+  const filtersQuery = useFiltersQuery(reportId, activeEnv);
+  const filterColumns = filtersQuery.data?.columns ?? [];
+
   // WHY: clientSidePagination reports return the whole result set in one query.
   // Fetch page 1 once and paginate locally so page changes don't refetch.
   const clientPaged = !!widgetConfig?.clientSidePagination;
   const query = useReportQuery(
     reportId,
-    { filterGroup: debouncedGroup, page: clientPaged ? 1 : page, pageSize: 50 },
+    { filterGroup: debouncedGroup, page: clientPaged ? 1 : page, pageSize: 50, environment: activeEnv },
     { disableCache: widgetConfig?.disableCache },
   );
 
@@ -83,7 +97,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   );
 
   const { isExporting, toast, clearToast, triggerExport } = useExport(
-    reportId, debouncedGroup, visibleColumnKeys,
+    reportId, debouncedGroup, visibleColumnKeys, activeEnv,
   );
 
   const [copyToast, setCopyToast] = useState<{ message: string; anchor: DOMRect } | null>(null);
@@ -222,6 +236,8 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
               isRefreshing={isRefreshing}
               onRefresh={handleRefresh}
               onBulkExtend={reportId === 'bbd' && activeSubTab === 'active' ? handleBulkExtend : undefined}
+              priorityEnv={activeEnv}
+              onEnvChange={envToggleEnabled ? handleEnvChange : undefined}
             />
             <AnimatePresence>
               {isFilterOpen && (

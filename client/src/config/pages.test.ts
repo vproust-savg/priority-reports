@@ -80,3 +80,10 @@ describe('customer-returns page configuration', () => {
     expect(ids).toContain('customer-returns');
   });
 });
+
+describe('env toggle config', () => {
+  it('grv-log widget enables the env toggle', () => {
+    const grv = pages.flatMap((p) => p.widgets).find((w) => w.reportId === 'grv-log');
+    expect(grv?.envToggle).toBe(true);
+  });
+});

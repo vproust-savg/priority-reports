@@ -23,6 +23,10 @@ const WidgetConfigSchema = z.object({
   // true the server returns the whole result set in one query, so the widget
   // fetches page 1 once and paginates/slices locally (page changes don't refetch).
   clientSidePagination: z.boolean().optional(),
+  // WHY: Renders the Live/UAT segmented control in the widget toolbar
+  // (GRV only). The server independently honors the override only for
+  // reports with allowEnvOverride — this flag is just the UI switch.
+  envToggle: z.boolean().optional(),
 });
 
 const PageConfigSchema = z.object({
@@ -50,6 +54,7 @@ export const pages = z.array(PageConfigSchema).parse([
         title: 'GRV Log — Goods Receiving Vouchers',
         colSpan: 12,
         disableCache: true,
+        envToggle: true,
       },
     ],
   },
@@ -94,7 +99,7 @@ export const pages = z.array(PageConfigSchema).parse([
 // is unambiguous.
 export function findWidgetByReportId(
   reportId: string,
-): { disableCache?: boolean; clientSidePagination?: boolean } | undefined {
+): { disableCache?: boolean; clientSidePagination?: boolean; envToggle?: boolean } | undefined {
   for (const page of pages) {
     const w = page.widgets.find((widget) => widget.reportId === reportId);
     if (w) return w;
