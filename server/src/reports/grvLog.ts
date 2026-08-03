@@ -4,7 +4,7 @@
 //          fetches DOCUMENTSTEXT_SUBFORM per row (two-step pattern).
 //          Parses HTML remarks into 8 structured inspection fields.
 // USED BY: config/reportRegistry.ts (auto-registers on import)
-// EXPORTS: (none — self-registers into reportRegistry)
+// EXPORTS: EXCLUDED_VENDOR_SUPNAME (used by routes/filters.ts)
 // ═══════════════════════════════════════════════════════════════
 
 import type { ColumnDefinition, ColumnFilterMeta } from '@shared/types';
@@ -58,8 +58,16 @@ const filterColumns: ColumnFilterMeta[] = [
   { key: 'receivedBy', label: 'Received By', filterType: 'text', filterLocation: 'server', odataField: 'OWNERLOGIN' },
 ];
 
+// WHY: Petrovich Caviar floods DOCUMENTS_P with GRVs (46% of week
+// 2026-07-27 rows) and is out of scope for the food-safety receiving log
+// (business rule, Victor 2026-08-03). Seeded into the base $filter so no
+// UI filter combination can reveal it — query.ts and export.ts AND
+// baseParams.$filter into every fetch via combineFilters (parenthesized).
+// SUPNAME (stable vendor code), not CDES (renamable display name).
+export const EXCLUDED_VENDOR_SUPNAME = 'V8491';
+
 function buildQuery(filters: ReportFilters): ODataParams {
-  const conditions: string[] = [];
+  const conditions: string[] = [`SUPNAME ne '${EXCLUDED_VENDOR_SUPNAME}'`];
 
   if (filters.from) conditions.push(`CURDATE ge ${filters.from}T00:00:00Z`);
   if (filters.to) conditions.push(`CURDATE le ${filters.to}T23:59:59Z`);
@@ -74,7 +82,7 @@ function buildQuery(filters: ReportFilters): ODataParams {
     // needed to fetch sub-forms in the enrichRows step.
     // ORDNAME = parent purchase order # (PO #) referenced by this GRV.
     $select: 'DOCNO,TYPE,ORDNAME,CURDATE,SUPNAME,CDES,STATDES,TOTPRICE,TOWARHSDES,OWNERLOGIN',
-    $filter: conditions.length > 0 ? conditions.join(' and ') : undefined,
+    $filter: conditions.join(' and '),
     $orderby: 'CURDATE desc',
     $top: pageSize,
     $skip: (page - 1) * pageSize,
