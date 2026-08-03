@@ -1,7 +1,13 @@
 # GRV Log — Exclude Vendor V8491 (Petrovich Caviar) (Design)
 
 **Date:** 2026-08-03
-**Status:** Draft v2 — Codex adversarial findings addressed; pending Victor's sign-off
+**Status:** Implemented (2026-08-03) — deployed and verified in production.
+Post-deploy: default week query 37 rows / 0 Petrovich Caviar, 8.8s/8.6s/8.6s
+(×3, vs 11.4s baseline); top-level OR-group regression 50 rows / 0 caviar;
+Excel export clean. Pre-deploy direct SUPNAME probe skipped — local .env has
+empty PRIORITY_PROD_* values (credentials live only in Railway) — post-deploy
+timings above measure the exact shipped predicate instead. Airtable embed
+visual check: Victor.
 
 ## Problem
 
