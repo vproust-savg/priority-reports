@@ -44,7 +44,7 @@ Building from specifications. Each spec has a matching implementation plan.
 
 **Airtable embed:** The dashboard is embedded in Airtable via an Omni block (Interface page "Reports > Food Safety"). The Omni block renders an iframe pointing to the production Railway URL. Test production changes at the Airtable page, not just the direct Railway URL — iframe constraints can surface different behavior.
 
-**Local Docker test:** `docker build -t priority-dashboard . && docker run --rm -p 3001:3001 -e NODE_ENV=production -e PORT=3001 priority-dashboard`
+**Local Docker test:** `docker build -t priority-dashboard . && docker run --rm -p 3001:3001 -e NODE_ENV=production -e PORT=3001 -e PRIORITY_ENV=production priority-dashboard` (PRIORITY_ENV is mandatory in production since the env-toggle boot guard, 2026-08-03)
 
 **Pre-deploy checklist (run before pushing to `main`):**
 ```bash
