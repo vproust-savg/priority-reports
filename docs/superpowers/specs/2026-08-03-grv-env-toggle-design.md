@@ -1,10 +1,22 @@
 # GRV Log — UAT/Live Environment Toggle (Design)
 
 **Date:** 2026-08-03
-**Status:** v2 — Codex adversarial review findings addressed (legacy route
+**Status:** Implemented (2026-08-04) — deployed and verified in production.
+Post-deploy probes: default query `priorityEnv:production`, 38 rows /
+0 caviar / 10.5s (baseline held); UAT query `priorityEnv:uat` 200 with
+real rows (Railway UAT creds proven); filters env-distinct (Live 76
+vendors, UAT 109); bounded UAT export 200/14.3KB/72s; bbd with
+`environment:uat` → `production` (override ignored); legacy route 404
+(deploy discriminator); boot guard live. Dev-preview verification:
+toggle GRV-only, Live default, switch aborts in-flight Live request
+(ERR_ABORTED observed), amber badge renders. Tests: server 361/361,
+client 159/159. Local-dev note: Live default 502s locally by design
+(prod creds deliberately absent in .env) — click UAT. Airtable embed
+visual check: Victor.
+v2 history: Codex adversarial review findings addressed (legacy route
 retirement, boot-env hardening + provenance, authorization posture
-documented, request cancellation). Pending Victor's review, then
-implementation.
+documented as accepted risk — confirmed by Victor at the review gate —
+and request cancellation).
 
 ## Problem
 
