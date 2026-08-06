@@ -7,7 +7,8 @@
 //          per line item, parses remarks into 4 fields, exposes
 //          attachments as metadata (bytes fetched on-demand via
 //          /api/v1/attachments). No per-document enrichment — scales to
-//          any volume because it is a single API call.
+//          any volume because it is a single API call. Hard-scoped to
+//          STATDES 'Final' — Draft/Pending returns never surface.
 // USED BY: routes/reports.ts (side-effect import)
 // EXPORTS: (none — self-registers into reportRegistry)
 // ═══════════════════════════════════════════════════════════════
@@ -78,8 +79,15 @@ const filterColumns: ColumnFilterMeta[] = [
   { key: 'expDate', label: 'Exp. Date', filterType: 'date', filterLocation: 'client' },
 ];
 
+// WHY: Only committed returns belong on the dashboard — Draft/Pending are still
+// being entered/approved in Priority. Verified live 2026-08-06: STATDES on
+// DOCUMENTS_N is 'Draft' | 'Final' | 'Pending'. The literal must match exactly —
+// a wrong status string returns 200 with zero rows, never an error (the
+// 'Cancelled'/'Canceled' bug in routes/filters.ts).
+const RETURN_STATUS_FINAL = 'Final';
+
 function buildQuery(filters: ReportFilters): ODataParams {
-  const conditions: string[] = [];
+  const conditions: string[] = [`STATDES eq '${RETURN_STATUS_FINAL}'`];
 
   if (filters.from) conditions.push(`CURDATE ge ${filters.from}T00:00:00Z`);
   if (filters.to) conditions.push(`CURDATE le ${filters.to}T23:59:59Z`);
@@ -93,7 +101,9 @@ function buildQuery(filters: ReportFilters): ODataParams {
     // WHY: One query pulls line items + remarks + attachment metadata inline.
     // No per-document enrichment, so the cost is one API call at any volume.
     $expand: SUBFORM_EXPAND,
-    $filter: conditions.length > 0 ? conditions.join(' and ') : undefined,
+    // WHY: Never undefined — the status rule is always present, so query.ts /
+    // export.ts always have a base filter to AND the UI filter onto.
+    $filter: conditions.join(' and '),
     $orderby: 'CURDATE desc',
     // WHY: clientSidePagination fetches the whole filtered window in one query;
     // the frontend filters/sorts/paginates the exploded rows. $top 5000 covers
@@ -166,6 +176,10 @@ async function fetchFilters(): Promise<Record<string, FilterOption[]>> {
     // key absent → truncated/aborted.
     $select: 'DOCNO,TYPE,CUSTNAME,CDES',
     $expand: 'TRANSORDER_N_SUBFORM($select=RETREASONCODE,RETREASONDES)',
+    // WHY: Mirror buildQuery's status rule — without it the dropdowns offer
+    // customers/codes that only appear on Draft/Pending returns and therefore
+    // match zero rows. Same guard as the excluded vendor in routes/filters.ts.
+    $filter: `STATDES eq '${RETURN_STATUS_FINAL}'`,
     $orderby: 'CDES',
     $top: 1000,
   });

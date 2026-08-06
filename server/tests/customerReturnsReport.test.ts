@@ -98,6 +98,12 @@ describe('customer-returns fetchFilters', () => {
       ],
     });
     const filters = await report.fetchFilters!();
+    // WHY: Dropdowns must be derived from the same Final-only slice the table
+    // shows — otherwise they offer customers/codes that match zero rows.
+    expect(vi.mocked(queryPriority)).toHaveBeenCalledWith(
+      'DOCUMENTS_N',
+      expect.objectContaining({ $filter: "STATDES eq 'Final'" }),
+    );
     expect(filters.customers).toEqual([{ value: 'C1', label: 'Cust One (C1)' }]);
     expect(filters.returnCodes).toEqual([
       { value: '008', label: '008 — Damaged In Transit' },

@@ -25,8 +25,19 @@ describe('Customer Returns buildQuery', () => {
     expect(q.$filter).toContain(' and ');
   });
 
-  it('omits $filter when no filters provided', () => {
-    expect(report.buildQuery({}).$filter).toBeUndefined();
+  // WHY: Business rule — only committed returns reach the dashboard. Verified
+  // live 2026-08-06 that DOCUMENTS_N.STATDES is 'Draft' | 'Final' | 'Pending';
+  // a wrong literal returns 200 with zero rows rather than erroring, so the
+  // exact string is pinned here.
+  it('always filters to STATDES eq Final with no other filters', () => {
+    expect(report.buildQuery({}).$filter).toBe("STATDES eq 'Final'");
+  });
+
+  it('keeps the status rule when a date range is supplied', () => {
+    const q = report.buildQuery({ from: '2026-05-01', to: '2026-05-27' });
+    expect(q.$filter).toBe(
+      "STATDES eq 'Final' and CURDATE ge 2026-05-01T00:00:00Z and CURDATE le 2026-05-27T23:59:59Z",
+    );
   });
 
   // WHY: clientSidePagination — buildQuery fetches the whole filtered window in
