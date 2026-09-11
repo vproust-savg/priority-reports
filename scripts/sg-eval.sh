@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -u
 
-PROJECT="/Users/victorproust/Documents/Work/SG Interface/Priority Reports"
+# WHY: Resolve the repo root from the script's own location — the old
+# hardcoded path predates the move to iCloud Drive and no longer exists.
+PROJECT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT"
 
 echo "═══════════════════════════════════════════════════"
