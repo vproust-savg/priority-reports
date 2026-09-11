@@ -1,13 +1,14 @@
 // ═══════════════════════════════════════════════════════════════
-// FILE: server/src/services/htmlParser.test.ts
+// FILE: server/tests/htmlParserLabelVariants.test.ts
 // PURPOSE: Tests parseGrvRemarks — confirms both the template default
 //          labels and the hand-typed label variants parse correctly.
+//          (Core parser cases live in htmlParser.test.ts.)
 // USED BY: Vitest (server suite)
 // EXPORTS: (none)
 // ═══════════════════════════════════════════════════════════════
 
 import { describe, it, expect } from 'vitest';
-import { parseGrvRemarks } from './htmlParser';
+import { parseGrvRemarks } from '../src/services/htmlParser';
 
 describe('parseGrvRemarks', () => {
   it('parses the template default labels (License Plate, Time of Receiving)', () => {

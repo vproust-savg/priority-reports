@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// FILE: server/src/routes/extend.test.ts
+// FILE: server/tests/extendRoute.test.ts
 // PURPOSE: Tests for POST /bbd/extend (rowData) and
 //          GET /bbd/extended endpoint.
 // USED BY: Vitest
@@ -9,11 +9,11 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { createExtendRouter } from './extend';
-import type { CacheProvider } from '../services/cache';
+import { createExtendRouter } from '../src/routes/extend';
+import type { CacheProvider } from '../src/services/cache';
 
 // WHY: Mock all external dependencies at module boundary.
-vi.mock('../config/priority', () => ({
+vi.mock('../src/config/priority', () => ({
   getPriorityConfig: () => ({
     baseUrl: 'https://test.priority.com/odata/',
     username: 'user',
@@ -22,32 +22,32 @@ vi.mock('../config/priority', () => ({
   }),
 }));
 
-vi.mock('../services/priorityHttp', () => ({
+vi.mock('../src/services/priorityHttp', () => ({
   fetchWithRetry: vi.fn(),
   postWithRetry: vi.fn(),
   extractErrorMessage: vi.fn((body: string) => body),
 }));
 
-vi.mock('../services/airtableShortDated', () => ({
+vi.mock('../src/services/airtableShortDated', () => ({
   fetchExtendedItems: vi.fn().mockResolvedValue([]),
   refreshBalancesFromPriority: vi.fn().mockResolvedValue(new Map()),
   mergeBalances: vi.fn().mockReturnValue({ mergedRows: [], changedRecords: [] }),
   batchUpdateAirtableBalances: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('../services/airtableSnapshots', () => ({
+vi.mock('../src/services/airtableSnapshots', () => ({
   snapshotExtendedItem: vi.fn().mockResolvedValue(undefined),
   snapshotExtendedItemsBatch: vi.fn().mockResolvedValue(undefined),
 }));
 
-const { fetchWithRetry, postWithRetry } = await import('../services/priorityHttp');
-const { snapshotExtendedItemsBatch } = await import('../services/airtableSnapshots');
+const { fetchWithRetry, postWithRetry } = await import('../src/services/priorityHttp');
+const { snapshotExtendedItemsBatch } = await import('../src/services/airtableSnapshots');
 const {
   fetchExtendedItems,
   refreshBalancesFromPriority,
   mergeBalances,
   batchUpdateAirtableBalances,
-} = await import('../services/airtableShortDated');
+} = await import('../src/services/airtableShortDated');
 
 const mockFetchWithRetry = vi.mocked(fetchWithRetry);
 const mockPostWithRetry = vi.mocked(postWithRetry);

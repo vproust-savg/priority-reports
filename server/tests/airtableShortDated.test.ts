@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// FILE: server/src/services/airtableShortDated.test.ts
+// FILE: server/tests/airtableShortDated.test.ts
 // PURPOSE: Tests for Airtable Short-Dated Items service — pure
 //          functions and mocked I/O operations.
 // USED BY: Vitest
@@ -12,14 +12,14 @@ import {
   fetchExtendedItems,
   refreshBalancesFromPriority,
   batchUpdateAirtableBalances,
-} from './airtableShortDated';
+} from '../src/services/airtableShortDated';
 
 // WHY: Mock environment and Priority modules at module boundary.
-vi.mock('../config/environment', () => ({
+vi.mock('../src/config/environment', () => ({
   env: { AIRTABLE_TOKEN: 'test-token' },
 }));
 
-vi.mock('../config/priority', () => ({
+vi.mock('../src/config/priority', () => ({
   getPriorityConfig: () => ({
     baseUrl: 'https://test.priority.com/odata/',
     username: 'user',
@@ -28,11 +28,11 @@ vi.mock('../config/priority', () => ({
   }),
 }));
 
-vi.mock('./priorityHttp', () => ({
+vi.mock('../src/services/priorityHttp', () => ({
   fetchWithRetry: vi.fn(),
 }));
 
-const { fetchWithRetry } = await import('./priorityHttp');
+const { fetchWithRetry } = await import('../src/services/priorityHttp');
 const mockFetchWithRetry = vi.mocked(fetchWithRetry);
 
 // --- mergeBalances (pure function) ---
@@ -114,7 +114,7 @@ describe('mergeBalances', () => {
   });
 });
 
-// WHY: snapshotExtendedItem tests moved to tests/airtableSnapshotBatch.test.ts
+// WHY: snapshotExtendedItem tests live in airtableSnapshotBatch.test.ts
 // alongside the batch implementation (services/airtableSnapshots.ts).
 
 // --- refreshBalancesFromPriority ---

@@ -1,13 +1,14 @@
 // ═══════════════════════════════════════════════════════════════
-// FILE: server/src/services/odataFilterBuilder.test.ts
+// FILE: server/tests/combineFilters.test.ts
 // PURPOSE: Tests for combineFilters — parenthesized merge that
 //          prevents OR groups from bypassing a report's base filter.
+//          (buildODataFilter cases live in odataFilterBuilder.test.ts.)
 // USED BY: Vitest
 // EXPORTS: (none)
 // ═══════════════════════════════════════════════════════════════
 
 import { describe, it, expect } from 'vitest';
-import { combineFilters } from './odataFilterBuilder';
+import { combineFilters } from '../src/services/odataFilterBuilder';
 
 describe('combineFilters', () => {
   it('parenthesizes both parts so OR groups cannot bypass the base filter', () => {

@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// FILE: server/src/reports/bbdReport.test.ts
+// FILE: server/tests/bbdExtensionMap.test.ts
 // PURPOSE: Tests for buildExtensionMap — the pure function that
 //          calculates total extension days per lot.
 // USED BY: Vitest
@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { describe, it, expect } from 'vitest';
-import { buildExtensionMap } from './bbdReport';
+import { buildExtensionMap } from '../src/reports/bbdReport';
 
 describe('buildExtensionMap', () => {
   it('builds map from EXPDSERIAL response', () => {
