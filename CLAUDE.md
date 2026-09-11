@@ -169,11 +169,10 @@ This code is maintained exclusively by LLMs. Every decision optimizes for AI rea
 
 1. **Intent block** at top of every file: `FILE`, `PURPOSE`, `USED BY`, `EXPORTS`
 2. **WHY comments** on non-obvious decisions. Never comment WHAT (LLMs can read code).
-3. **Every file under 200 lines.** Split if approaching 250.
-4. **Import order:** React/libraries → hooks → components → utils → types
-5. **Identical patterns** for identical things — all pages, all routes, all widgets.
-6. **Descriptive greppable names:** `formatCurrencyValue()` not `fmt()`
-7. **No clever abstractions.** Explicit > implicit. Boring > clever. Readable > compact.
+3. **Import order:** React/libraries → hooks → components → utils → types
+4. **Identical patterns** for identical things — all pages, all routes, all widgets.
+5. **Descriptive greppable names:** `formatCurrencyValue()` not `fmt()`
+6. **No clever abstractions.** Explicit > implicit. Boring > clever. Readable > compact.
 
 ## Architecture: Three Config Files Drive Everything
 
@@ -256,7 +255,6 @@ The Airtable "API Reports" table is Victor's request tracker (status/comments) a
 - Assuming a blank-looking production page is a bug — light greys often appear invisible in screenshots. Check the DOM (`read_page`/accessibility tree) first; if the elements are there it is a contrast issue, not a rendering bug.
 - Using `useEffect` for data fetching instead of TanStack Query
 - Dynamic Tailwind classes like `` col-span-${n} `` — use the `COL_SPAN_CLASSES` map
-- Making files longer than 200 lines instead of splitting
 - Forgetting the intent block at top of new files
 - Colocating tests under `server/src/` — all server tests live in `server/tests/` (vitest picks up both locations, so a stray file still runs, but the convention is one directory)
 - Using Airtable field names instead of field IDs
