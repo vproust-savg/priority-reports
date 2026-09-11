@@ -6,7 +6,7 @@
 // EXPORTS: (none)
 // ═══════════════════════════════════════════════════════════════
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { getReport } from '../src/config/reportRegistry';
 
 // WHY: Named import also side-effect-registers the report into reportRegistry.
@@ -175,12 +175,64 @@ describe('bbdReport filterRows', () => {
   });
 });
 
+describe('bbdReport transformRow status (LA calendar days)', () => {
+  const report = getReport('bbd')!;
+
+  const lot = (expiry: string, perishable: 'Yes' | 'No') => report.transformRow({
+    PARTNAME: 'P001', PARTDES: 'Widget', QUANT: 10, UNITNAME: 'ea',
+    EXPIRYDATE: expiry, SUPDES: 'Acme',
+    Y_9966_5_ESH: perishable, Y_9952_5_ESH: '', Y_2074_5_ESH: '',
+    CURDATE: null, Y_8737_0_ESH: 1, SERIALNAME: 'S',
+    RAWSERIALBAL_SUBFORM: [{ BALANCE: 1 }],
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('perishable lots warn through day 15 and drop from day 16', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-11T12:00:00Z')); // 2026-09-11 05:00 LA
+    expect(lot('2026-09-26T00:00:00Z', 'Yes').status).toBe('expiring-perishable');
+    expect(lot('2026-09-27T00:00:00Z', 'Yes').status).toBe('');
+  });
+
+  it('non-perishable lots warn through day 60 and drop from day 61', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-11T12:00:00Z'));
+    expect(lot('2026-11-10T00:00:00Z', 'No').status).toBe('expiring-non-perishable');
+    expect(lot('2026-11-11T00:00:00Z', 'No').status).toBe('');
+  });
+
+  it('a lot expiring tomorrow is not expired during the LA evening after UTC midnight', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-12T03:00:00Z')); // 2026-09-11 20:00 LA
+    const row = lot('2026-09-12T00:00:00Z', 'Yes');
+    expect(row.daysUntilExpiry).toBe(1);
+    expect(row.status).toBe('expiring-perishable');
+  });
+});
+
 describe('bbdReport buildQuery', () => {
   const report = getReport('bbd')!;
 
-  it('expands RAWSERIALBAL_SUBFORM with nested $select on BALANCE', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('expands RAWSERIALBAL_SUBFORM skipping empty bins but keeping negative ones', () => {
     const params = report.buildQuery({});
-    expect(params.$expand).toBe('RAWSERIALBAL_SUBFORM($select=BALANCE)');
+    // WHY: ne 0 (not gt 0) so a negative bin still nets against the total,
+    // matching BbdDetailPanel which shows every bin. The space is
+    // percent-encoded because $expand is appended to the URL raw.
+    expect(params.$expand).toBe('RAWSERIALBAL_SUBFORM($filter=BALANCE%20ne%200;$select=BALANCE)');
+  });
+
+  it('cuts off 60 days after the LA calendar day, even after UTC midnight', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-12T03:00:00Z')); // still 2026-09-11 in LA
+    const params = report.buildQuery({});
+    expect(params.$filter).toBe('EXPIRYDATE le 2026-11-10T23:59:59Z and QUANT gt 0');
   });
 
   it('fetches up to 5000 rows to clear the 2000-row truncation', () => {

@@ -15,6 +15,7 @@ import { reportRegistry } from '../config/reportRegistry';
 import { queryPriority } from '../services/priorityClient';
 import { fetchWithRetry } from '../services/priorityHttp';
 import { getPriorityConfig } from '../config/priority';
+import { classifyLot, daysUntilExpiry, buildExpiryCutoffIso, todayInLA } from './bbdThresholds';
 
 // --- Column Definitions ---
 
@@ -54,12 +55,11 @@ const filterColumns: ColumnFilterMeta[] = [
 
 // --- OData Query Builder ---
 
-// WHY: Computes the 30-day cutoff internally. Ignores from/to from ReportFilters
-// (those are GRV Log concepts). All BBD filters are client-side.
+// WHY: The cutoff is FETCH_WINDOW_DAYS after the LA calendar day (see
+// bbdThresholds). Ignores from/to from ReportFilters (those are GRV Log
+// concepts). All BBD filters are client-side.
 function buildQuery(_filters: ReportFilters): ODataParams {
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() + 30);
-  const cutoffIso = cutoffDate.toISOString().split('T')[0] + 'T23:59:59Z';
+  const cutoffIso = buildExpiryCutoffIso(todayInLA());
 
   return {
     // WHY: QUANT is the original lot quantity on RAWSERIAL — it never
@@ -69,7 +69,13 @@ function buildQuery(_filters: ReportFilters): ODataParams {
     // WHY: Real current stock lives in RAWSERIALBAL_SUBFORM bin rows.
     // BALANCE (not TBALANCE) matches what BbdDetailPanel shows per bin, so
     // the table total equals the sum of the visible expanded rows.
-    $expand: 'RAWSERIALBAL_SUBFORM($select=BALANCE)',
+    // The nested $filter drops empty bins server-side (RAWSERIAL has no
+    // current-balance column of its own); lots with no stocked bins still
+    // arrive as an empty array and are removed by filterRows. `ne 0`, not
+    // `gt 0`: a negative bin must still net against the total so the report
+    // agrees with BbdDetailPanel, which fetches every bin. Space is
+    // percent-encoded because priorityClient appends $expand raw.
+    $expand: 'RAWSERIALBAL_SUBFORM($filter=BALANCE%20ne%200;$select=BALANCE)',
     $filter: `EXPIRYDATE le ${cutoffIso} and QUANT gt 0`,
     $orderby: 'EXPIRYDATE asc',
     // WHY: Single fetch (post-fetch filtering makes OData pagination
@@ -161,29 +167,13 @@ function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
   const balance = sumBinBalances(raw.RAWSERIALBAL_SUBFORM);
 
   const expiryRaw = raw.EXPIRYDATE as string | null;
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
+  // WHY: Priority returns "Yes"/"No" (not "Y"/"N"). Empty/null treated as non-perishable.
+  const isPerishable = (raw.Y_9966_5_ESH as string)?.toUpperCase() === 'YES';
 
-  let daysUntilExpiry = 0;
-  let status: string | null = null;
-
-  if (expiryRaw) {
-    const expiryDate = new Date(expiryRaw);
-    expiryDate.setHours(0, 0, 0, 0);
-    daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-    // WHY: Priority returns "Yes"/"No" (not "Y"/"N"). Empty/null treated as non-perishable.
-    const isPerishable = (raw.Y_9966_5_ESH as string)?.toUpperCase() === 'YES';
-
-    // WHY: Day 0 (expiry date is today) counts as expired — the best-by date has arrived.
-    if (daysUntilExpiry <= 0) {
-      status = 'expired';
-    } else if (isPerishable && daysUntilExpiry <= 7) {
-      status = 'expiring-perishable';
-    } else if (!isPerishable && daysUntilExpiry <= 30) {
-      status = 'expiring-non-perishable';
-    }
-  }
+  // WHY: Windows and the LA-calendar-day math live in bbdThresholds so the
+  // query cutoff and the row colouring can never disagree.
+  const daysLeft = expiryRaw ? daysUntilExpiry(expiryRaw, todayInLA()) : 0;
+  const status = expiryRaw ? classifyLot(daysLeft, isPerishable) : '';
 
   // WHY: Convert family code to description using the cached lookup map.
   const familyCode = (raw.Y_2074_5_ESH as string) ?? '';
@@ -200,10 +190,10 @@ function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
     value: balance * Number(raw.Y_8737_0_ESH ?? 0),
     receivingDate: raw.CURDATE,
     expiryDate: raw.EXPIRYDATE,
-    daysUntilExpiry,
-    status: status ?? '',
+    daysUntilExpiry: daysLeft,
+    status,
     vendor: raw.SUPDES ?? '',
-    perishable: (raw.Y_9966_5_ESH as string)?.toUpperCase() === 'YES' ? 'Yes' : 'No',
+    perishable: isPerishable ? 'Yes' : 'No',
     brand: raw.Y_9952_5_ESH ?? '',
     family: familyDesc,
   };
