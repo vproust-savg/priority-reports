@@ -1,5 +1,7 @@
 # Customer Returns Report Implementation Plan
 
+**Status:** Implemented 2026-05-27 on `feat/customer-returns` (merged); last change 57405f6 restricted the report to `STATDES eq 'Final'`. The design spec referenced below was a Claude plan file outside the repo that no longer exists — the Task 0 findings in this plan plus `server/src/reports/customerReturns.ts` are the record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a new "Customer Returns" tab under Food Safety that pulls returns from Priority's `DOCUMENTS_N` entity, parses HTML remarks into 4 structured fields, and lets users download per-row attachments from `EXTFILES_SUBFORM`.
@@ -79,7 +81,7 @@ Expected (confirm before continuing):
 - The entity's key set lists `DOCNO` AND `TYPE`.
 - Navigation properties include both `DOCUMENTSTEXT_SUBFORM` and `EXTFILES_SUBFORM`.
 
-If either subform name differs, edit `specs/plan-13-customer-returns.md` (this file) AND `specs/spec-13-customer-returns.md` (if you copy the spec) before continuing.
+If either subform name differs, edit `specs/done/plan-13-customer-returns.md` (this file) AND `specs/spec-13-customer-returns.md` (if you copy the spec) before continuing.
 
 - [ ] **Step 2: Fetch a sample DOCUMENTS_N row to see TYPE values**
 
@@ -2099,7 +2101,7 @@ After implementing all tasks, audit the work against the spec:
   - disableCache on both client and server ✓ Tasks 3 (server) + 7 (client)
   - Plain Excel export (no template) ✓ default behavior, attachments excluded in Task 9
 
-- [ ] **Placeholder scan:** No "TBD", "TODO", or open-ended steps remain. Every code block compiles. Every command is the actual command. Verify by `grep -nE "TBD|TODO|FIXME|<.+>" specs/plan-13-customer-returns.md` — only the angle-bracketed placeholders in curl example URLs (e.g. `<DOCNO>`) should remain, and those are intended.
+- [ ] **Placeholder scan:** No "TBD", "TODO", or open-ended steps remain. Every code block compiles. Every command is the actual command. Verify by `grep -nE "TBD|TODO|FIXME|<.+>" specs/done/plan-13-customer-returns.md` — only the angle-bracketed placeholders in curl example URLs (e.g. `<DOCNO>`) should remain, and those are intended.
 
 - [ ] **Type consistency:** `parseCustomerReturnsRemarks`, `CustomerReturnsRemarkFields`, `AttachmentsCell`, `triggerDownload`, `createAttachmentsRouter` — every name used in a later task is defined in an earlier task with the same spelling.
 

@@ -1,5 +1,7 @@
 # Excel Print-Ready Export Design
 
+**Status:** Implemented 2026-03-23 (`excelStyle` on the bbd and grv-log report configs, print setup in `excelExporter.ts`; c7863c0). Plan: `docs/superpowers/plans/2026-03-23-excel-print-ready.md`.
+
 ## Problem
 
 Both Excel reports (BBD and GRV Log) export with auto-sized columns, no print setup, and no page formatting. They don't fit on a letter-size sheet when printed. Additionally, the export always includes all columns — even columns the user has hidden in the UI.

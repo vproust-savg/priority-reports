@@ -4,7 +4,7 @@
 >
 > **REQUIRED SKILL:** Use `/priority-erp-api` before writing any Priority API code.
 >
-> **Spec:** `specs/spec-11-bbd-purchasing-reports.md`
+> **Spec:** `specs/done/spec-11-bbd-purchasing-reports.md`
 
 **Goal:** Add a "Purchasing Reports" page with a BBD (Best By Dates) report that monitors expiring inventory from Priority's RAWSERIAL entity, with row-level color coding by urgency.
 

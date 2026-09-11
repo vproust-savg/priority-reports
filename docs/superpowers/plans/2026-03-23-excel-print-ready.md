@@ -8,7 +8,7 @@
 
 **Tech Stack:** ExcelJS (server), Zod (validation), React hooks (client), TanStack Query (client state)
 
-**Spec:** `specs/2026-03-23-excel-print-ready-design.md`
+**Spec:** `docs/superpowers/specs/2026-03-23-excel-print-ready-design.md`
 
 ---
 

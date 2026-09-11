@@ -1,5 +1,7 @@
 # API Call Optimization Implementation Plan
 
+**Status:** Partially implemented (archived 2026-09-11). Tasks 4–7 shipped (maxpagesize header, export cache-first + 100K cap, filter TTL, truncation toast). Tasks 1–3 ($expand on DOCUMENTS_P) were abandoned — Priority/CloudFront aborts the connection; GRV Log keeps the two-step `enrichRows` pattern.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Reduce Priority API calls by 98% on GRV Log pages (51→1 call), enable 40K-row exports, and extend filter caching from 5 min to 1 hour.
@@ -8,7 +10,7 @@
 
 **Tech Stack:** TypeScript, Express, Vitest, Upstash Redis, React 19
 
-**Spec:** `specs/spec-11-api-call-optimization.md`
+**Spec:** `specs/done/spec-11-api-call-optimization.md`
 
 ---
 

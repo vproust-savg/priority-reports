@@ -1,5 +1,7 @@
 # Spec 11: Priority API Call Optimization
 
+**Status:** Partially implemented (archived 2026-09-11). Items 2–4 shipped: `Prefer: odata.maxpagesize=49900` in `priorityHttp.ts`, cache-first export with `ROW_CAP = 100_000` in `export.ts`, 3600 s filter TTL in `filters.ts`. Item 1 (`$expand` on `DOCUMENTS_P`) was abandoned — Priority/CloudFront aborts the connection (see CLAUDE.md Common Mistakes); GRV Log keeps the two-step `enrichRows` pattern.
+
 ## Problem
 
 The dashboard wastes API calls due to patterns established when MAXAPILINES was 2,000. The 100 calls/minute limit is **shared across all Priority users** — every unnecessary call impacts everyone on the system.
