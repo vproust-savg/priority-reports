@@ -89,6 +89,10 @@ export const pages = z.array(PageConfigSchema).parse([
         type: 'table',
         title: 'BBD — Best By Dates',
         colSpan: 12,
+        // WHY: bbdReport.ts sets clientSidePagination on the server, so every
+        // page request returns the whole alert list. Without this mirror the
+        // widget refetched (and re-pulled Priority, ~30 s) on every Next click.
+        clientSidePagination: true,
       },
     ],
   },

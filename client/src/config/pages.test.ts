@@ -81,6 +81,16 @@ describe('customer-returns page configuration', () => {
   });
 });
 
+describe('clientSidePagination mirrors the server opt-in', () => {
+  // WHY: The server returns the whole result set for these reports no matter
+  // which page is requested. Without the widget flag, every "Next" click
+  // changes the query key, misses the Redis cache (keyed by page) and
+  // re-pulls Priority — ~30 s per page on BBD (Victor, 2026-09-11).
+  it.each(['bbd', 'customer-returns'])('%s widget paginates locally', (reportId) => {
+    expect(findWidgetByReportId(reportId)?.clientSidePagination).toBe(true);
+  });
+});
+
 describe('env toggle config', () => {
   it('grv-log widget enables the env toggle', () => {
     const grv = pages.flatMap((p) => p.widgets).find((w) => w.reportId === 'grv-log');
