@@ -49,6 +49,7 @@ describe('GRV Log transformRow', () => {
     expect(result.productTemp).toBe('36');
     expect(result.productCondition).toBe('accept');
     expect(result.truckCondition).toBe('accept');
+    expect(result.tttCheck).toBe('Accept');
     expect(result.receivingTime).toBe('10:30 AM');
     expect(result.comments).toBe('All good');
     expect(result.receivedBy).toBe('jsmith');
@@ -66,8 +67,20 @@ describe('GRV Log transformRow', () => {
     expect(result.productTemp).toBeNull();
     expect(result.productCondition).toBeNull();
     expect(result.truckCondition).toBeNull();
+    expect(result.tttCheck).toBeNull();
     expect(result.comments).toBeNull();
     expect(result.receivingTime).toBeNull();
+  });
+
+  it('derives TTT Check from Product Condition', () => {
+    const withCondition = (condition: string) => ({
+      ...FULL_ROW,
+      DOCUMENTSTEXT_SUBFORM: { TEXT: `<p>Condition of Product (accept/reject) : ${condition}</p>` },
+    });
+    expect(transformRow(withCondition('Accept')).tttCheck).toBe('Accept');
+    expect(transformRow(withCondition('accept')).tttCheck).toBe('Accept');
+    expect(transformRow(withCondition('reject')).tttCheck).toBe('Not Accepted');
+    expect(transformRow(withCondition('Test line 5')).tttCheck).toBe('Not Accepted');
   });
 
   it('returns null poNumber when ORDNAME is missing or null', () => {

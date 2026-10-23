@@ -30,6 +30,7 @@ const columns: ColumnDefinition[] = [
   { key: 'productTemp', label: 'Product Temp °F', type: 'string' },
   { key: 'productCondition', label: 'Product Condition', type: 'string' },
   { key: 'truckCondition', label: 'Truck Condition', type: 'string' },
+  { key: 'tttCheck', label: 'TTT Check', type: 'string' },
   { key: 'comments', label: 'Comments', type: 'string' },
   { key: 'receivedBy', label: 'Received By', type: 'string' },
 ];
@@ -54,6 +55,7 @@ const filterColumns: ColumnFilterMeta[] = [
   { key: 'productTemp', label: 'Product Temp °F', filterType: 'text', filterLocation: 'client' },
   { key: 'productCondition', label: 'Product Condition', filterType: 'text', filterLocation: 'client' },
   { key: 'truckCondition', label: 'Truck Condition', filterType: 'text', filterLocation: 'client' },
+  { key: 'tttCheck', label: 'TTT Check', filterType: 'text', filterLocation: 'client' },
   { key: 'comments', label: 'Comments', filterType: 'text', filterLocation: 'client' },
   { key: 'receivedBy', label: 'Received By', filterType: 'text', filterLocation: 'server', odataField: 'OWNERLOGIN' },
 ];
@@ -133,6 +135,15 @@ async function enrichRows(
   return rows;
 }
 
+// WHY: TTT Check is derived from Product Condition (Victor, 2026-10-23).
+// Inspectors type the value free-hand ("accept", "Accept"), so compare
+// trimmed and case-insensitive. No product condition recorded → blank,
+// so GRVs without remarks are not flagged as Not Accepted.
+function deriveTttCheck(productCondition: string | null): string | null {
+  if (!productCondition || productCondition.trim() === '') return null;
+  return productCondition.trim().toLowerCase() === 'accept' ? 'Accept' : 'Not Accepted';
+}
+
 function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
   const subform = raw.DOCUMENTSTEXT_SUBFORM as Record<string, unknown> | null;
   const htmlText = (subform?.TEXT as string) ?? null;
@@ -147,6 +158,7 @@ function transformRow(raw: Record<string, unknown>): Record<string, unknown> {
     status: raw.STATDES,
     total: raw.TOTPRICE,
     ...remarks,
+    tttCheck: deriveTttCheck(remarks.productCondition),
     receivedBy: raw.OWNERLOGIN,
   };
 }
@@ -176,8 +188,9 @@ reportRegistry.set('grv-log', {
   // WHY: Maps GRV Log Excel template columns (A-M) to transformRow output fields.
   // Columns B (Time) and F (Driver Name) are hardcoded in the template — left
   // untouched so the existing print layout is unchanged.
-  // N and O are appended after the template's last column for poNumber and
-  // receivingTime — new fields go at the end so existing letters stay stable.
+  // N, O and P are appended after the template's last column for poNumber,
+  // receivingTime and tttCheck — new fields go at the end so existing letters
+  // stay stable.
   exportConfig: {
     mapping: {
       'A': 'date',
@@ -193,6 +206,7 @@ reportRegistry.set('grv-log', {
       'M': 'comments',
       'N': 'poNumber',
       'O': 'receivingTime',
+      'P': 'tttCheck',
     },
     dataStartRow: 5,
   },
@@ -214,6 +228,7 @@ reportRegistry.set('grv-log', {
       receivedBy: 12,
       poNumber: 12,
       receivingTime: 11,
+      tttCheck: 12,
     },
     fontSize: 8,
   },
