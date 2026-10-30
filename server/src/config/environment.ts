@@ -36,6 +36,9 @@ const EnvSchema = z.object({
 
   // Airtable (for report status updates)
   AIRTABLE_TOKEN: optionalString,
+
+  // Supabase (GRV receiving log read path) — Supavisor session pooler URL, sslmode=require
+  SUPABASE_GRV_DATABASE_URL: optionalString,
 });
 
 // WHY: Crash on startup if env vars are wrong. This prevents
