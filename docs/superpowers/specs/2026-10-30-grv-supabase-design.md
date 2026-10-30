@@ -1,6 +1,6 @@
 # GRV receiving log from Supabase: design
 
-**Status:** Draft (2026-10-30). Waiting for Victor's approval.
+**Status:** Approved by Victor (2026-10-30). Supabase side live 2026-10-30 ~21:07Z (migrations 0225–0227); the role password is pending.
 **Scope:** Goods Receiving Vouchers only. Customer returns get the same treatment in a later spec.
 
 ## 1. Intent
