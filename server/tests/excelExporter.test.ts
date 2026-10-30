@@ -131,6 +131,7 @@ describe('generateTemplateExcel', () => {
   }
 
   const exportConfig: ExportConfig = {
+    templateRecordId: 'recTest000000000',
     mapping: { 'A': 'name', 'B': 'amount' },
     dataStartRow: 4,
   };

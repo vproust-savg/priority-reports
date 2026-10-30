@@ -4,7 +4,8 @@
 //          fetches DOCUMENTSTEXT_SUBFORM per row (two-step pattern).
 //          Parses HTML remarks into 8 structured inspection fields.
 // USED BY: config/reportRegistry.ts (auto-registers on import)
-// EXPORTS: EXCLUDED_VENDOR_SUPNAME (used by routes/filters.ts)
+// EXPORTS: EXCLUDED_VENDOR_SUPNAME (used by routes/filters.ts),
+//          GRV_LOG_TEMPLATE_RECORD_ID
 // ═══════════════════════════════════════════════════════════════
 
 import type { ColumnDefinition, ColumnFilterMeta } from '@shared/types';
@@ -14,6 +15,10 @@ import { reportRegistry } from '../config/reportRegistry';
 import { querySubform } from '../services/priorityClient';
 import { parseGrvRemarks } from '../services/htmlParser';
 import { escapeODataString } from '../services/odataFilterBuilder';
+
+// WHY: Airtable record ID of the GRV Log template row (API Reports table).
+// Exported so the Supabase-backed GRV page reuses the same template.
+export const GRV_LOG_TEMPLATE_RECORD_ID = 'recJluOijRUZcZnBS';
 
 const columns: ColumnDefinition[] = [
   { key: 'date', label: 'Date', type: 'date' },
@@ -192,6 +197,7 @@ reportRegistry.set('grv-log', {
   // receivingTime and tttCheck — new fields go at the end so existing letters
   // stay stable.
   exportConfig: {
+    templateRecordId: GRV_LOG_TEMPLATE_RECORD_ID,
     mapping: {
       'A': 'date',
       'C': 'docNo',

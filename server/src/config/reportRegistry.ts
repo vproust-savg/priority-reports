@@ -20,6 +20,10 @@ export interface ReportFilters {
 }
 
 export interface ExportConfig {
+  // WHY: Airtable record ID of the template row in the API Reports table.
+  // Report ID there is a number formula (since 2026-10), so the record ID is
+  // the only stable key. Shared by every page that exports with this template.
+  templateRecordId: string;
   // WHY: Maps template column letters to data field keys.
   // The column letter (A, B, C...) is the Excel column in the template.
   // The value is the field key from transformRow output.

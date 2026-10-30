@@ -179,7 +179,9 @@ export function createExportRouter(cache: CacheProvider): Router {
     // --- Generate Excel ---
     let excelBuffer: Buffer;
     try {
-      const template = await getTemplate(reportId);
+      const template = report.exportConfig
+        ? await getTemplate(report.exportConfig.templateRecordId)
+        : null;
 
       if (template && report.exportConfig) {
         excelBuffer = await generateTemplateExcel(
