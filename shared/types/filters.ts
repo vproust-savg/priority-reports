@@ -52,6 +52,9 @@ export interface ColumnFilterMeta {
   filterType: ColumnFilterType;
   filterLocation: 'server' | 'client';
   odataField?: string;            // Priority field name (server-side columns only)
+  // WHY: Supabase view column (priority_reports.grv_receiving_log). Server-only meaning,
+  // like odataField; the client ignores it. Must match /^[a-z_][a-z0-9_]*$/.
+  sqlColumn?: string;
   enumKey?: string;               // Key in FiltersResponse.filters (enum columns only)
 }
 
