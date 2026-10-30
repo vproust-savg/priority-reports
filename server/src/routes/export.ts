@@ -27,6 +27,7 @@ import { sendSupabaseFetchError } from './queryHelpers';
 // WHY: Import report definitions so they self-register into reportRegistry.
 // Same pattern as query.ts — ensures reports are available when this router loads.
 import '../reports/grvLog';
+import '../reports/grvLogSupabase';
 import '../reports/bbdReport';
 
 const ROW_CAP = 100_000;

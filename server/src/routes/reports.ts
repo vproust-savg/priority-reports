@@ -14,6 +14,7 @@ import { reportRegistry } from '../config/reportRegistry';
 // reports.ts is the ONLY module importing customerReturns — removing these
 // imports would silently drop that report from every route.
 import '../reports/grvLog';
+import '../reports/grvLogSupabase';
 import '../reports/bbdReport';
 import '../reports/customerReturns';
 

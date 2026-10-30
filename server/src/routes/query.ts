@@ -30,6 +30,7 @@ import type { ApiResponse } from '@shared/types';
 
 // WHY: Import report definitions so they self-register into reportRegistry
 import '../reports/grvLog';
+import '../reports/grvLogSupabase';
 import '../reports/bbdReport';
 
 // WHY: fetchRows reports (Supabase) load their whole filtered set in one go and
