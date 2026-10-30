@@ -4,11 +4,13 @@
 //          priority_reports.grv_receiving_log (one row per GRV, remarks
 //          already parsed, vendor V8491 already excluded). Twin of grv-log.
 // USED BY: config/reportRegistry.ts (auto-registers on import)
-// EXPORTS: transformGrvSupabaseRow
+// EXPORTS: transformGrvSupabaseRow, buildHistoryFloorWarnings, refreshGrvSource,
+//          GRV_SUPABASE_HISTORY_FLOOR
 // ═══════════════════════════════════════════════════════════════
 
 import type { ColumnDefinition, ColumnFilterMeta, FilterGroup, FilterOption } from '@shared/types';
 import { reportRegistry } from '../config/reportRegistry';
+import type { RefreshOutcome } from '../config/reportRegistry';
 import { GRV_LOG_TEMPLATE_RECORD_ID } from './grvLog';
 import { querySupabase } from '../services/supabaseDb';
 import { buildSqlWhere } from '../services/sqlFilterBuilder';
@@ -141,6 +143,92 @@ export function transformGrvSupabaseRow(raw: Record<string, unknown>): Record<st
   };
 }
 
+// WHY: Supabase only holds GRVs from this date (the first Priority backfill).
+// Earlier GRVs live on the Priority-backed Receiving Log page.
+export const GRV_SUPABASE_HISTORY_FLOOR = '2026-06-28';
+
+const HISTORY_FLOOR_WARNING =
+  `This page holds GRVs from ${GRV_SUPABASE_HISTORY_FLOOR} on. ` +
+  'For earlier dates, use the Receiving Log page.';
+
+// WHY: Only operators whose first value is a lower bound (or an exact day) can
+// prove the result stays at or after the floor. isBefore/isOnOrBefore never can.
+const FLOOR_SAFE_OPERATORS = new Set(['isOnOrAfter', 'isAfter', 'isBetween', 'isInWeek', 'equals']);
+
+// WHY: Warn unless the filter provably stays inside the held range. An 'or' root or a
+// date condition nested in a sub-group could still reach earlier dates, so those warn
+// too. ISO dates compare correctly as strings (a datetime value sorts after its date).
+export function buildHistoryFloorWarnings(group: FilterGroup): string[] {
+  const staysAfterFloor =
+    group.conjunction === 'and' &&
+    group.conditions.some(
+      (condition) =>
+        condition.field === 'date' &&
+        FLOOR_SAFE_OPERATORS.has(condition.operator) &&
+        condition.value >= GRV_SUPABASE_HISTORY_FLOOR,
+    );
+  return staysAfterFloor ? [] : [HISTORY_FLOOR_WARNING];
+}
+
+const REFRESH_POLL_INTERVAL_MS = 3_000;
+const REFRESH_TIMEOUT_MS = 90_000;
+
+// WHY: type alias (not interface) so it satisfies querySupabase's Record<string, unknown> bound.
+type RefreshRow = {
+  request_id: string | null;
+  status: string;
+};
+
+interface RefreshDeps {
+  query: (sql: string, params: unknown[]) => Promise<RefreshRow[]>;
+  sleep: (ms: number) => Promise<void>;
+  now: () => number;
+}
+
+const defaultRefreshDeps: RefreshDeps = {
+  query: (sql, params) => querySupabase<RefreshRow>(sql, params),
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  now: Date.now,
+};
+
+// WHY: Asks the Supabase side to re-read the last 30 days from Priority, then waits
+// for it so the widget's refetch sees fresh rows. deps is injected so tests never sleep.
+// Errors from querySupabase propagate: the /refresh route turns a throw into status 'error'.
+export async function refreshGrvSource(
+  signal?: AbortSignal,
+  deps: RefreshDeps = defaultRefreshDeps,
+): Promise<RefreshOutcome> {
+  const [request] = await deps.query('select * from priority_reports.request_grv_refresh()', []);
+  // WHY: The SQL function always returns one row; none means something is wrong, and
+  // throwing lets the /refresh route report status 'error' instead of a misleading 'busy'.
+  if (!request) throw new Error('request_grv_refresh() returned no row');
+  // WHY: 'busy' (01:45-02:45 LA) queues nothing and has a null request_id.
+  if (request.status === 'busy' || request.request_id === null) {
+    return { status: 'busy' };
+  }
+  // WHY: A reused request (deduplicated within 2 minutes) may already be finished.
+  if (request.status === 'done' || request.status === 'error') {
+    return { status: request.status };
+  }
+
+  const startedAt = deps.now();
+  while (deps.now() - startedAt < REFRESH_TIMEOUT_MS) {
+    if (signal?.aborted) return { status: 'timeout' };
+    await deps.sleep(REFRESH_POLL_INTERVAL_MS);
+    if (signal?.aborted) return { status: 'timeout' };
+    // WHY: request_id is a bigint, which node-postgres returns as a string; pass it back unchanged.
+    const [current] = await deps.query(
+      'select * from priority_reports.grv_refresh_status($1)',
+      [request.request_id],
+    );
+    if (current?.status === 'done' || current?.status === 'error') {
+      return { status: current.status };
+    }
+    // No row, pending or running: keep polling until the timeout.
+  }
+  return { status: 'timeout' };
+}
+
 // WHY: Self-registration — importing this file adds the report to the registry.
 reportRegistry.set('grv-log-supabase', {
   id: 'grv-log-supabase',
@@ -160,6 +248,8 @@ reportRegistry.set('grv-log-supabase', {
   // WHY: No-op kept so the /refresh route's optional-chain call site stays valid
   // (no in-memory cache exists for this report).
   clearMemoryCache: () => {},
+  queryWarnings: buildHistoryFloorWarnings,
+  refreshSource: (signal) => refreshGrvSource(signal),
   // WHY: Same template and layout as grv-log. Its TTT Check column P is replaced by
   // Temp Tracker Included (P), and Temp Tracker Accepted is appended as Q so the
   // existing letters stay stable. B and F stay hardcoded in the template.
