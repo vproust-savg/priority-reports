@@ -128,6 +128,23 @@ describe('POST /query — fetchRows branch', () => {
     expect(res.body.pagination).toMatchObject({ totalCount: 5, totalPages: 3 });
   });
 
+  it('returns every capped row when clientSidePagination is set', async () => {
+    const rows = Array.from({ length: 51 }, (_, i) => ({ DOCNO: `S${i}` }));
+    registerFakeReport('fr-a', {
+      fetchRows: vi.fn().mockResolvedValue(rows), clientSidePagination: true, disableCache: true,
+    });
+    registerFakeReport('fr-b', { fetchRows: vi.fn().mockResolvedValue(rows), disableCache: true });
+    const app = makeApp(makeStubCache());
+
+    const paged = await request(app).post('/api/v1/reports/fr-a/query').send(queryBody);
+    expect(paged.body.data).toHaveLength(51);
+    expect(paged.body.pagination.totalCount).toBe(51);
+
+    const sliced = await request(app).post('/api/v1/reports/fr-b/query').send(queryBody);
+    expect(sliced.body.data).toHaveLength(50);
+    expect(sliced.body.pagination.totalCount).toBe(51);
+  });
+
   it('includes queryWarnings output in warnings', async () => {
     registerFakeReport('fr-a', {
       fetchRows: vi.fn().mockResolvedValue([{ DOCNO: 'S1' }]),

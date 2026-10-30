@@ -111,7 +111,13 @@ export function createQueryRouter(cache: CacheProvider): Router {
       const { rows: fetchedRows, warnings: fetchWarnings } =
         shapeFetchedRows(report, fetched, body.filterGroup, FETCH_ROWS_CAP);
 
+      // WHY: Mirrors the Priority path — clientSidePagination reports (GRV log)
+      // get every capped row and the widget sorts/paginates locally; others
+      // are sliced server-side.
       const start = (body.page - 1) * body.pageSize;
+      const pageRows = report.clientSidePagination
+        ? fetchedRows
+        : fetchedRows.slice(start, start + body.pageSize);
       const fetchResponse: ApiResponse = {
         meta: {
           reportId, reportName: report.name, generatedAt: new Date().toISOString(),
@@ -119,7 +125,7 @@ export function createQueryRouter(cache: CacheProvider): Router {
           source: 'supabase', priorityEnv: 'production', rowStyleField: report.rowStyleField,
           expandConfig: report.expandConfig ? { rowKeyField: report.expandConfig.rowKeyField } : undefined,
         },
-        data: fetchedRows.slice(start, start + body.pageSize),
+        data: pageRows,
         pagination: {
           page: body.page, pageSize: body.pageSize, totalCount: fetchedRows.length,
           totalPages: Math.ceil(fetchedRows.length / body.pageSize),
