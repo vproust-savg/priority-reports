@@ -3,6 +3,8 @@
 // PURPOSE: POST /api/v1/reports/:reportId/export endpoint.
 //          Cache-first paginated fetch from Priority, applies
 //          client-side filters, generates Excel, streams file.
+//          Reports with fetchRows (Supabase) skip Priority and the
+//          client-side filter step.
 // USED BY: index.ts (mounted at /api/v1/reports)
 // EXPORTS: createExportRouter
 // ═══════════════════════════════════════════════════════════════
@@ -20,6 +22,7 @@ import { getTemplate } from '../services/templateService';
 import { generateTemplateExcel, generateFallbackExcel } from '../services/excelExporter';
 import { logApiCall } from '../services/logger';
 import { ExportRequestSchema } from './exportSchemas';
+import { sendSupabaseFetchError } from './queryHelpers';
 
 // WHY: Import report definitions so they self-register into reportRegistry.
 // Same pattern as query.ts — ensures reports are available when this router loads.
@@ -74,7 +77,14 @@ export function createExportRouter(cache: CacheProvider): Router {
     let cacheHits = 0;
 
     try {
-      while (true) {
+      // WHY: `else while` keeps the Priority loop below untouched. fetchRows
+      // reports get already-filtered rows from their own source (no paging, no
+      // cache); one extra row over the cap signals truncation.
+      if (report.fetchRows) {
+        const fetched = await report.fetchRows(body.filterGroup, { limit: ROW_CAP + 1 });
+        if (fetched.length > ROW_CAP) truncated = true;
+        allRawRows.push(...fetched.slice(0, ROW_CAP));
+      } else while (true) {
         // WHY: Check cache before hitting Priority API. Repeated exports
         // with the same filters are instant (cached 15 min).
         const cacheKey = buildExportCacheKey(reportId, body.filterGroup, page, baseParams.$filter, resolvedEnv);
@@ -117,6 +127,10 @@ export function createExportRouter(cache: CacheProvider): Router {
         page++;
       }
     } catch (err) {
+      if (report.fetchRows) {
+        sendSupabaseFetchError(res, err, reportId);
+        return;
+      }
       const message = err instanceof Error ? err.message : 'Unknown error';
       console.error(`[export] Priority fetch failed for ${reportId}: ${message}`);
       res.status(502).json({ error: `Failed to fetch from Priority: ${message}` });
@@ -153,9 +167,11 @@ export function createExportRouter(cache: CacheProvider): Router {
       transformedRows = report.filterRows(transformedRows);
     }
 
-    const filteredRows = applyServerClientFilters(
-      transformedRows, body.filterGroup, report.filterColumns,
-    );
+    // WHY: fetchRows rows are already filtered at the source (SQL); re-applying
+    // client filters would double-filter against columns that have no client meta.
+    const filteredRows = report.fetchRows
+      ? transformedRows
+      : applyServerClientFilters(transformedRows, body.filterGroup, report.filterColumns);
 
     // --- Determine export columns (visibility + order from UI) ---
     // WHY: Only applies to fallback mode. Template mode ignores visibility

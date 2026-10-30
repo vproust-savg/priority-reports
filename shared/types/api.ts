@@ -31,7 +31,7 @@ export interface ResponseMeta {
   generatedAt: string;
   cache: 'hit' | 'miss';
   executionTimeMs: number;
-  source: 'priority-odata' | 'mock';
+  source: 'priority-odata' | 'mock' | 'supabase';
   // WHY: Which Priority environment served this response (GRV UAT/Live
   // toggle). Lets probes and the UI verify provenance instead of
   // inferring it from data shape. Absent on routes that don't resolve it.

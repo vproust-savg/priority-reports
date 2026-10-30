@@ -4,10 +4,10 @@
 //          Priority entity, columns, OData query builder, and row
 //          transformer. Adding a report = one file + register here.
 // USED BY: routes/reports.ts, routes/filters.ts
-// EXPORTS: ReportConfig, ReportFilters, ExportConfig, ExcelStyle, reportRegistry, getReport
+// EXPORTS: ReportConfig, ReportFilters, ExportConfig, ExcelStyle, RefreshOutcome, reportRegistry, getReport
 // ═══════════════════════════════════════════════════════════════
 
-import type { ColumnDefinition, ColumnFilterMeta, FilterOption } from '@shared/types';
+import type { ColumnDefinition, ColumnFilterMeta, FilterGroup, FilterOption } from '@shared/types';
 import type { ODataParams } from '../services/priorityClient';
 
 export interface ReportFilters {
@@ -43,6 +43,10 @@ export interface ExcelStyle {
   // Default: 10 if omitted.
   fontSize?: number;
 }
+
+// WHY: Outcome of a report's refreshSource hook, merged into the /refresh JSON
+// so the widget can tell the user whether the upstream sync finished.
+export type RefreshOutcome = { status: 'done' | 'error' | 'timeout' | 'busy' };
 
 export interface ReportConfig {
   id: string;
@@ -115,6 +119,23 @@ export interface ReportConfig {
   // the field, and write routes never read it — so only grv-log reads can
   // be pointed at UAT. Single opt-in point, greppable.
   allowEnvOverride?: boolean;
+  // WHY: Source-agnostic row fetch. When present, query/export skip Priority
+  // entirely (buildQuery, enrichRows, explodeRows, OData filters and client-only
+  // filtering are all bypassed) and take already-filtered raw rows from here;
+  // transformRow and filterRows still run. `limit` is the cap + 1 so the route
+  // can detect truncation. Used by the Supabase-backed GRV log.
+  fetchRows?: (
+    filterGroup: FilterGroup,
+    options: { limit: number; signal?: AbortSignal },
+  ) => Promise<Record<string, unknown>[]>;
+  // WHY: Lets a report trigger its own upstream sync on Refresh (after the
+  // cache clear). Must resolve with an outcome; the route turns a throw into
+  // status 'error' so Refresh never answers 500.
+  refreshSource?: (signal?: AbortSignal) => Promise<RefreshOutcome>;
+  // WHY: Per-request notices (e.g. a history-floor warning) appended to the
+  // query response's `warnings`. Not applied to Excel exports: an xlsx has no
+  // warnings channel.
+  queryWarnings?: (filterGroup: FilterGroup) => string[];
 }
 
 export const reportRegistry = new Map<string, ReportConfig>();

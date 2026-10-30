@@ -3,11 +3,12 @@
 // PURPOSE: POST /api/v1/reports/:reportId/query endpoint.
 //          Single-phase: OData filter → Priority fetch → enrich →
 //          post-enrichment filter (client-only columns) → cache.
+//          Reports with fetchRows (Supabase) skip Priority entirely.
 //          Honors the GRV UAT/Live env override (allowEnvOverride
 //          reports only) and aborts enrichment on client disconnect.
 //          (/:reportId/refresh moved to queryRefresh.ts, 2026-08-03.)
 // USED BY: index.ts (mounted at /api/v1/reports)
-// EXPORTS: createQueryRouter
+// EXPORTS: createQueryRouter, FETCH_ROWS_CAP
 // ═══════════════════════════════════════════════════════════════
 
 import { Router } from 'express';
@@ -23,12 +24,18 @@ import { QueryRequestSchema } from './querySchemas';
 import {
   CLIENT_FILTER_MAX_FETCH, hasClientOnlyConditions,
   resolveEnvOverride, createClientDisconnectAbort,
+  sendSupabaseFetchError, shapeFetchedRows,
 } from './queryHelpers';
 import type { ApiResponse } from '@shared/types';
 
 // WHY: Import report definitions so they self-register into reportRegistry
 import '../reports/grvLog';
 import '../reports/bbdReport';
+
+// WHY: fetchRows reports (Supabase) load their whole filtered set in one go and
+// paginate in memory; this bounds that set. The route asks for CAP + 1 rows so
+// it can tell "exactly 5,000" from "truncated".
+export const FETCH_ROWS_CAP = 5000;
 
 export function createQueryRouter(cache: CacheProvider): Router {
   const router = Router();
@@ -80,6 +87,54 @@ export function createQueryRouter(cache: CacheProvider): Router {
         odataFilter: odataFilter ?? 'none', environment: resolvedEnv,
       });
       res.json(cached);
+      return;
+    }
+
+    // WHY: Source-agnostic branch — a report with fetchRows never touches
+    // Priority. Rows come back already filtered, so there are no client-only
+    // filters; pagination is in memory over the capped set.
+    if (report.fetchRows) {
+      let fetched: Record<string, unknown>[];
+      try {
+        fetched = await report.fetchRows(body.filterGroup, {
+          limit: FETCH_ROWS_CAP + 1, signal: abortController.signal,
+        });
+      } catch (err) {
+        sendSupabaseFetchError(res, err, reportId);
+        return;
+      }
+      if (abortController.signal.aborted) {
+        res.end();
+        return;
+      }
+      const { rows: fetchedRows, warnings: fetchWarnings } =
+        shapeFetchedRows(report, fetched, body.filterGroup, FETCH_ROWS_CAP);
+
+      const start = (body.page - 1) * body.pageSize;
+      const fetchResponse: ApiResponse = {
+        meta: {
+          reportId, reportName: report.name, generatedAt: new Date().toISOString(),
+          cache: 'miss', executionTimeMs: Date.now() - startTime,
+          source: 'supabase', priorityEnv: 'production', rowStyleField: report.rowStyleField,
+          expandConfig: report.expandConfig ? { rowKeyField: report.expandConfig.rowKeyField } : undefined,
+        },
+        data: fetchedRows.slice(start, start + body.pageSize),
+        pagination: {
+          page: body.page, pageSize: body.pageSize, totalCount: fetchedRows.length,
+          totalPages: Math.ceil(fetchedRows.length / body.pageSize),
+        },
+        columns: report.columns,
+        warnings: fetchWarnings.length > 0 ? fetchWarnings : undefined,
+      };
+      // WHY: No cache write — fetchRows reports are expected to set disableCache
+      // (Supabase is the live source and is cheap to re-query).
+      logApiCall({
+        level: 'info', event: 'query_fetch', reportId,
+        durationMs: Date.now() - startTime, cacheHit: false,
+        rowCount: fetchedRows.length, statusCode: 200,
+        odataFilter: 'none', environment: 'production',
+      });
+      res.json(fetchResponse);
       return;
     }
 

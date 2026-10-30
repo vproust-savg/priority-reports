@@ -4,13 +4,15 @@
 //          Extracted to keep query.ts under 200 lines.
 // USED BY: routes/query.ts
 // EXPORTS: CLIENT_FILTER_MAX_FETCH, hasClientOnlyConditions,
-//          resolveEnvOverride, createClientDisconnectAbort
+//          resolveEnvOverride, createClientDisconnectAbort,
+//          sendSupabaseFetchError, shapeFetchedRows
 // ═══════════════════════════════════════════════════════════════
 
 import type { Response } from 'express';
 import type { FilterGroup, ColumnFilterMeta, PriorityEnvironment } from '@shared/types';
 import type { ReportConfig } from '../config/reportRegistry';
 import { env } from '../config/environment';
+import { SupabaseNotConfiguredError } from '../services/supabaseDb';
 
 // WHY: When request has client-only filter conditions, the server can't
 // rely on OData $top for accurate pagination because post-enrichment
@@ -58,4 +60,42 @@ export function createClientDisconnectAbort(res: Response): AbortController {
     if (!res.writableEnded) abortController.abort();
   });
   return abortController;
+}
+
+const FETCH_ROWS_CAP_WARNING = 'Showing the first 5,000 rows; narrow the filter';
+
+// WHY: One mapping for fetchRows/fetchFilters failures across query, export and
+// filters. Unset env var = 503 (that report only, Priority reports unaffected);
+// any runtime error = 502. The message is logged and returned; the connection
+// string never appears in either (SupabaseNotConfiguredError names only the
+// variable).
+export function sendSupabaseFetchError(res: Response, err: unknown, reportId: string): void {
+  if (err instanceof SupabaseNotConfiguredError) {
+    res.status(503).json({ error: 'Supabase is not configured for this report' });
+    return;
+  }
+  const message = err instanceof Error ? err.message : 'Unknown error';
+  console.error(`[supabase] Fetch failed for ${reportId}: ${message}`);
+  res.status(502).json({ error: `Failed to fetch from Supabase: ${message}` });
+}
+
+// WHY: Post-fetch shaping for fetchRows reports, kept out of query.ts (line
+// budget). Over-cap rows are dropped with a generic warning (not tied to any
+// one filter field), then transformRow -> filterRows, then queryWarnings.
+export function shapeFetchedRows(
+  report: ReportConfig,
+  fetched: Record<string, unknown>[],
+  filterGroup: FilterGroup,
+  cap: number,
+): { rows: Record<string, unknown>[]; warnings: string[] } {
+  const warnings: string[] = [];
+  let raw = fetched;
+  if (raw.length > cap) {
+    raw = raw.slice(0, cap);
+    warnings.push(FETCH_ROWS_CAP_WARNING);
+  }
+  let rows = raw.map(report.transformRow);
+  if (report.filterRows) rows = report.filterRows(rows);
+  warnings.push(...(report.queryWarnings?.(filterGroup) ?? []));
+  return { rows, warnings };
 }

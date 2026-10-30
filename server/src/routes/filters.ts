@@ -14,6 +14,8 @@ import { runWithPriorityEnv } from '../config/priorityEnvContext';
 import type { CacheProvider } from '../services/cache';
 import { queryPriority } from '../services/priorityClient';
 import { getReport } from '../config/reportRegistry';
+import { sendSupabaseFetchError } from './queryHelpers';
+import { SupabaseNotConfiguredError } from '../services/supabaseDb';
 import type { FiltersResponse, FilterOption } from '@shared/types';
 
 // WHY: Ensure report definitions are registered even if filters.ts
@@ -66,6 +68,12 @@ export function createFiltersRouter(cache: CacheProvider): Router {
       try {
         filters = await runWithPriorityEnv(requestedEnv, () => report.fetchFilters!());
       } catch (err) {
+        // WHY: Supabase-backed reports (fetchRows) get the 503/502 Supabase
+        // mapping; Priority reports keep their original 502 message.
+        if (report.fetchRows || err instanceof SupabaseNotConfiguredError) {
+          sendSupabaseFetchError(res, err, reportId);
+          return;
+        }
         const message = err instanceof Error ? err.message : 'Unknown error';
         console.error(`[filters] fetchFilters failed for ${reportId}: ${message}`);
         res.status(502).json({ error: `Failed to fetch filters: ${message}` });
