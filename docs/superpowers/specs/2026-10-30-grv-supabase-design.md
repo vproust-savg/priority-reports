@@ -1,6 +1,6 @@
 # GRV receiving log from Supabase: design
 
-**Status:** Approved by Victor (2026-10-30). Supabase side live 2026-10-30 ~21:07Z (migrations 0225–0227); the role password is pending.
+**Status:** Implemented (2026-10-31). Deployed to production as `grv-log-supabase` at the hidden page `/food-safety/receiving-log-supabase` (commit 21f8ef5); the old `grv-log` page stays live until the Airtable embed is moved. Supabase side live 2026-10-30 ~21:07Z (migrations 0225–0227).
 **Scope:** Goods Receiving Vouchers only. Customer returns get the same treatment in a later spec.
 
 ## 1. Intent

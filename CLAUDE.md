@@ -9,11 +9,12 @@ Reports are **widgets** arranged on **configurable pages**. Adding a page or rea
 **Language:** TypeScript strict mode throughout. Zero plain JavaScript.
 **Maintained by:** Claude Code (sole developer).
 
-## Production state (2026-09-11)
+## Production state (2026-10-31)
 
 | Report id | Page | Key behavior |
 |-----------|------|--------------|
 | `grv-log` | `/food-safety/receiving-log` | Goods Receiving Vouchers from `DOCUMENTS_P`. Never cached (`disableCache`), Live/UAT toggle, vendor V8491 hard-excluded, week filter, template-mode Excel export |
+| `grv-log-supabase` | `/food-safety/receiving-log-supabase` (hidden, no nav tab) | Same receiving log read from the Supabase view `priority_reports.grv_receiving_log` (Live only, ~5 min sync lag); Temp Tracker Included / Accepted columns (Excel P / Q); Refresh button re-reads the last 30 days from Priority |
 | `grv-log-supabase` | `/food-safety/receiving-log-supabase` (hidden, no nav tab) | Same GRVs read from Supabase view `priority_reports.grv_receiving_log` (remarks parsed by the sync; V8491 excluded in the view); SQL-side filters (`sqlFilterBuilder.ts`), Temp Tracker Included/Accepted columns (Excel P/Q), Refresh re-reads the last 30 days via `priority_reports.request_grv_refresh()`. Live only |
 | `customer-returns` | `/food-safety/customer-returns` | `DOCUMENTS_N` returns with `STATDES eq 'Final'`, exploded to one row per line item, attachments downloaded through `/api/v1/attachments` |
 | `bbd` | `/purchasing/bbd` | Best By Dates from `RAWSERIAL`; balance = sum of `RAWSERIALBAL_SUBFORM` bins; Extend (single, or bulk up to 1,000 lots in 50-lot chunks) writes to Priority + Airtable; "Extended" sub-tab lists extended lots from Airtable |
