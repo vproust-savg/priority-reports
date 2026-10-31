@@ -71,7 +71,7 @@ Both must pass cleanly — any TypeScript error kills the Railway Docker build.
 
 ## Environments
 
-- `SUPABASE_GRV_DATABASE_URL` (optional): session-pooler URL for role `priority_reports_server`, which can read only the GRV view and call the two refresh functions. Unset → the `grv-log-supabase` routes answer 503 and everything else works.
+- `SUPABASE_GRV_DATABASE_URL` (optional): session-pooler URL for role `priority_reports_server`, which can read only the GRV view and call the two refresh functions. Unset → the `grv-log-supabase` routes answer 503 and everything else works. It is set only as a Railway variable (no local `.env` copy): for local live checks run the server with `railway run -p ba2225e5-2792-4708-aa66-d3b178cfb8d0 -e production -s priority-reports -- …`, which also injects production Priority credentials.
 - `PRIORITY_ENV=uat|production` selects the `PRIORITY_UAT_*` or `PRIORITY_PROD_*` credentials from `.env` (`server/src/config/environment.ts`). With `NODE_ENV=production` the server refuses to boot unless `PRIORITY_ENV` is set explicitly.
 - The GRV widget's Live/UAT toggle sends `environment: 'production' | 'uat'` on query, filters and export requests. The server honors it only for reports with `allowEnvOverride: true` (grv-log), through the request-scoped override in `server/src/config/priorityEnvContext.ts` that `getPriorityConfig()` consults. Every other report and every write route ignores it, so writes can never be pointed at UAT.
 - Redis keys are environment-scoped (query, export, filters), so Live and UAT data never mix. Responses carry `meta.priorityEnv` as provenance — assert it in probes.

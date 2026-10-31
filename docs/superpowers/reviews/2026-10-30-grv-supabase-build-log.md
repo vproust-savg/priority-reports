@@ -24,10 +24,18 @@ Branch `feat/grv-supabase` (worktree `~/worktrees/priority-reports-grv-supabase`
 - Server 507/507, client 186/186 (run twice), both `tsc` clean, lint unchanged at 10 pre-existing problems.
 - `docker build` OK. Booting the image without `SUPABASE_GRV_DATABASE_URL`: health 200, `grv-log-supabase` answers 503 "Supabase is not configured for this report", all 4 reports listed, the hidden URL serves.
 
-## Not yet verified (gated on the password reaching the local `.env`)
-- Live probe with the real role (row count, `typeof curdate === 'string'`, `SET statement_timeout` accepted).
-- Local end-to-end in the browser (rows, tracker columns, dropdowns, refresh, export P/Q).
-- Parity with the old page on a completed past week, and speed (old ~51 Priority calls vs new).
+## Live checks (2026-10-31)
+The URL lives only in Railway (Victor's ruling, 2026-10-31). Every live check ran with `railway run -p ba2225e5-2792-4708-aa66-d3b178cfb8d0 -e production -s priority-reports -- …`, so the secret never reached a file or a transcript. Nothing called `request_grv_refresh()`.
+- **Probe through `priority_reports_server`:** TLS with the pinned root passes. The view holds 850 GRVs (2026-06-29 to 2026-10-30). `curdate` is a string and `totprice` a number. `statement_timeout` is `10s`.
+- **Startup-parameter timeout:** Supavisor ignores `statement_timeout` sent at login (the role default `15s` applied, and `pg_sleep(11)` completed). The SET stays. It used to run unawaited from the pool's `connect` event, which raced the first query (pg deprecation warning). Fixed in f8bd2fd: the SET is awaited once per client on checkout. Server 509/509, `tsc` clean, warning gone live.
+- **Local end-to-end** (`grv-wt-backend` / `grv-wt-frontend` in the local `.claude/launch.json`):
+  - the hidden page renders with no nav tab and no console errors;
+  - vendor, tracker and isEmpty filters work, and the history-floor warning shows for a range before 2026-06-28;
+  - template-mode export: Airtable template fetched by record ID, Temp Tracker Included in column P, Accepted in Q.
+- **Parity, 2026-10-18..24 vs `grv-log` on Priority production:** 30/30 GRVs and all 16 shared columns identical. Only the within-day row order differs: the new page sorts date then GRV # descending; the old one keeps Priority's order.
+- **Speed for that week:** old 8.0 s, new 0.14 s warm. The first load after boot takes about 1.5 s (TLS and connect).
+- **Open:** `temp_tracker_accepted` is NULL on all 850 rows. It may only be because the "Temp Tracker Accepted" line was added to the form on 2026-10-30. Backend boss has been asked to confirm against the raw remarks; the dashboard can't read them.
+- **Not exercised live:** the Refresh button. It queues a 30-day Priority re-read, so it's left to unit tests and the first production use.
 
 ## Rulings
 See the controller ledger summary in the hand-off message; each is also recorded in the spec/plan review logs where it changed a document.
