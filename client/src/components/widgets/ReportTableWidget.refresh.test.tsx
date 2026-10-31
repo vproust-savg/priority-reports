@@ -1,9 +1,10 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: client/src/components/widgets/ReportTableWidget.refresh.test.tsx
 // PURPOSE: Confirms the widget shows the source-refresh outcome
-//          (timeout / error / busy) as an amber notice, invalidates
-//          the report query whatever the status, and clears the
-//          notice when Refresh is clicked again.
+//          (timeout / error / busy) as an amber notice, shows an
+//          "could not be confirmed" notice when the POST fails or
+//          its answer is unusable, invalidates the report query
+//          whatever happens, and clears the notice on the next click.
 // ═══════════════════════════════════════════════════════════════
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -64,6 +65,7 @@ vi.mock('../../config/pages', async (importOriginal) => {
 const TIMEOUT_TEXT = 'Still refreshing from Priority, so data may update in a minute';
 const ERROR_TEXT = 'Refresh from Priority failed; showing the last synced data';
 const BUSY_TEXT = 'Priority refresh is paused during the nightly sync (1:45–2:45 AM); try again later';
+const UNCONFIRMED_TEXT = 'Refresh could not be confirmed; showing the last synced data';
 
 let queryClient: QueryClient;
 
@@ -91,6 +93,7 @@ describe('ReportTableWidget — source refresh outcome', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('labels the Refresh button for a sourceRefresh widget', () => {
@@ -130,6 +133,7 @@ describe('ReportTableWidget — source refresh outcome', () => {
     expect(screen.queryByText(TIMEOUT_TEXT)).toBeNull();
     expect(screen.queryByText(ERROR_TEXT)).toBeNull();
     expect(screen.queryByText(BUSY_TEXT)).toBeNull();
+    expect(screen.queryByText(UNCONFIRMED_TEXT)).toBeNull();
   });
 
   it('invalidates the report query when the status is not done', async () => {
@@ -140,13 +144,38 @@ describe('ReportTableWidget — source refresh outcome', () => {
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['report', 'grv-log-supabase'] });
   });
 
-  it('shows no notice when the body has no status or is not JSON', async () => {
+  it('shows the unconfirmed notice when the body is not JSON', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response('not json', { status: 200 }))));
     renderWidget();
     fireEvent.click(screen.getByLabelText(REFRESH_LABEL));
-    await waitFor(() => expect(queryClient.invalidateQueries).toHaveBeenCalled());
-    // WHY: The mocked report has no warnings, so any amber row would be a refresh notice.
-    expect(document.querySelectorAll('.text-amber-700')).toHaveLength(0);
+    expect(await screen.findByText(UNCONFIRMED_TEXT)).toBeInTheDocument();
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['report', 'grv-log-supabase'] });
+  });
+
+  it('shows the unconfirmed notice when the body has no recognized status', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ cleared: true })));
+    renderWidget();
+    fireEvent.click(screen.getByLabelText(REFRESH_LABEL));
+    expect(await screen.findByText(UNCONFIRMED_TEXT)).toBeInTheDocument();
+  });
+
+  it('shows the unconfirmed notice on a 502 with an HTML body', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubGlobal('fetch', vi.fn(() =>
+      Promise.resolve(new Response('<html><body>Bad Gateway</body></html>', { status: 502 }))));
+    renderWidget();
+    fireEvent.click(screen.getByLabelText(REFRESH_LABEL));
+    expect(await screen.findByText(UNCONFIRMED_TEXT)).toBeInTheDocument();
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['report', 'grv-log-supabase'] });
+  });
+
+  it('shows the unconfirmed notice when fetch rejects, still invalidates and stops the spinner', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))));
+    renderWidget();
+    fireEvent.click(screen.getByLabelText(REFRESH_LABEL));
+    expect(await screen.findByText(UNCONFIRMED_TEXT)).toBeInTheDocument();
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['report', 'grv-log-supabase'] });
+    await waitFor(() => expect(document.querySelector('.animate-spin')).toBeNull());
   });
 
   it('clears the earlier notice on the next click, before the new answer arrives', async () => {

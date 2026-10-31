@@ -43,13 +43,25 @@ import { getDetailComponent } from '../../config/detailRegistry';
 import { formatCellValue } from '../../utils/formatters';
 import type { PriorityEnvironment } from '@shared/types';
 
-// WHY: Copy per non-success outcome of a source refresh. 'done' (and no status)
-// deliberately have no entry — success needs no message.
+// WHY: Copy per non-success outcome of a source refresh. 'done' (and, for
+// widgets without a source refresh, no status) deliberately have no entry —
+// success needs no message.
 const REFRESH_NOTICES: Record<string, string> = {
   timeout: 'Still refreshing from Priority, so data may update in a minute',
   error: 'Refresh from Priority failed; showing the last synced data',
   busy: 'Priority refresh is paused during the nightly sync (1:45–2:45 AM); try again later',
 };
+const REFRESH_UNCONFIRMED_NOTICE = 'Refresh could not be confirmed; showing the last synced data';
+
+// WHY: A sourceRefresh POST always answers 200 with one of these statuses
+// (queryRefresh.ts). Anything else — a proxy 502/504 HTML page, an
+// unparseable body, a missing or unknown status — is not a confirmed refresh.
+function getSourceRefreshNotice(res: Response, body: { status?: string } | null): string | null {
+  const status = body?.status;
+  if (!res.ok || !status) return REFRESH_UNCONFIRMED_NOTICE;
+  if (status === 'done') return null;
+  return REFRESH_NOTICES[status] ?? REFRESH_UNCONFIRMED_NOTICE;
+}
 
 export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const {
@@ -135,15 +147,25 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
     setIsRefreshing(true);
     setRefreshNotice(null);
     try {
-      const res = await fetch(`/api/v1/reports/${reportId}/refresh`, { method: 'POST' });
-      if (!res.ok) console.warn(`[refresh] Server returned ${res.status}`);
-      // WHY: Widgets without a source refresh answer with no status; a body that
-      // is not JSON is ignored so it can never block the invalidation below.
-      const body: { status?: string } | null = await res.json().catch(() => null);
-      await queryClient.invalidateQueries({ queryKey: ['report', reportId] });
-      if (myRefreshId === latestRefreshIdRef.current) {
-        setRefreshNotice(body?.status ? REFRESH_NOTICES[body.status] ?? null : null);
+      let notice: string | null;
+      try {
+        const res = await fetch(`/api/v1/reports/${reportId}/refresh`, { method: 'POST' });
+        if (!res.ok) console.warn(`[refresh] Server returned ${res.status}`);
+        // WHY: Widgets without a source refresh answer with no status; a body that
+        // is not JSON is ignored so it can never block the invalidation below.
+        const body: { status?: string } | null = await res.json().catch(() => null);
+        notice = widgetConfig?.sourceRefresh
+          ? getSourceRefreshNotice(res, body)
+          : body?.status ? REFRESH_NOTICES[body.status] ?? null : null;
+      } catch (err) {
+        // WHY: Other widgets keep their old behaviour. For a sourceRefresh widget a
+        // rejected fetch (network drop) still invalidates below and shows the
+        // unconfirmed notice instead of escaping as an unhandled rejection.
+        if (!widgetConfig?.sourceRefresh) throw err;
+        notice = REFRESH_UNCONFIRMED_NOTICE;
       }
+      await queryClient.invalidateQueries({ queryKey: ['report', reportId] });
+      if (myRefreshId === latestRefreshIdRef.current) setRefreshNotice(notice);
     } finally {
       if (myRefreshId === latestRefreshIdRef.current) setIsRefreshing(false);
     }
