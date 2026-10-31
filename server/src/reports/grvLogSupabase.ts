@@ -14,6 +14,7 @@ import type { RefreshOutcome } from '../config/reportRegistry';
 import { GRV_LOG_TEMPLATE_RECORD_ID } from './grvLog';
 import { querySupabase } from '../services/supabaseDb';
 import { buildSqlWhere } from '../services/sqlFilterBuilder';
+import { staysOnOrAfterFloor } from '../services/historyFloorWarnings';
 
 // WHY: Same columns as grv-log (labels, order, copyable) so the widget and the
 // Excel layout look identical. TTT Check is dropped (the view carries the raw
@@ -151,23 +152,10 @@ const HISTORY_FLOOR_WARNING =
   `This page holds GRVs from ${GRV_SUPABASE_HISTORY_FLOOR} on. ` +
   'For earlier dates, use the Receiving Log page.';
 
-// WHY: Only operators whose first value is a lower bound (or an exact day) can
-// prove the result stays at or after the floor. isBefore/isOnOrBefore never can.
-const FLOOR_SAFE_OPERATORS = new Set(['isOnOrAfter', 'isAfter', 'isBetween', 'isInWeek', 'equals']);
-
-// WHY: Warn unless the filter provably stays inside the held range. An 'or' root or a
-// date condition nested in a sub-group could still reach earlier dates, so those warn
-// too. ISO dates compare correctly as strings (a datetime value sorts after its date).
+// WHY: Warn unless the filter provably stays inside the held range (rules in
+// staysOnOrAfterFloor, shared with customer-returns-supabase).
 export function buildHistoryFloorWarnings(group: FilterGroup): string[] {
-  const staysAfterFloor =
-    group.conjunction === 'and' &&
-    group.conditions.some(
-      (condition) =>
-        condition.field === 'date' &&
-        FLOOR_SAFE_OPERATORS.has(condition.operator) &&
-        condition.value >= GRV_SUPABASE_HISTORY_FLOOR,
-    );
-  return staysAfterFloor ? [] : [HISTORY_FLOOR_WARNING];
+  return staysOnOrAfterFloor(group, GRV_SUPABASE_HISTORY_FLOOR) ? [] : [HISTORY_FLOOR_WARNING];
 }
 
 const REFRESH_POLL_INTERVAL_MS = 3_000;
