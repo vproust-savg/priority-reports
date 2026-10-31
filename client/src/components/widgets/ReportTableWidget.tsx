@@ -43,6 +43,14 @@ import { getDetailComponent } from '../../config/detailRegistry';
 import { formatCellValue } from '../../utils/formatters';
 import type { PriorityEnvironment } from '@shared/types';
 
+// WHY: Copy per non-success outcome of a source refresh. 'done' (and no status)
+// deliberately have no entry — success needs no message.
+const REFRESH_NOTICES: Record<string, string> = {
+  timeout: 'Still refreshing from Priority, so data may update in a minute',
+  error: 'Refresh from Priority failed; showing the last synced data',
+  busy: 'Priority refresh is paused during the nightly sync (1:45–2:45 AM); try again later',
+};
+
 export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const {
     filterGroup, debouncedGroup, page, setPage,
@@ -114,12 +122,21 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const filterLoadError = filtersQuery.error;
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // WHY: Outcome of the last source refresh (Supabase-backed widgets only). Set
+  // after the POST answers, cleared at the start of the next click so a stale
+  // message never sits next to a refresh that is still running.
+  const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
   const handleRefresh = async () => {
     setIsRefreshing(true);
+    setRefreshNotice(null);
     try {
       const res = await fetch(`/api/v1/reports/${reportId}/refresh`, { method: 'POST' });
       if (!res.ok) console.warn(`[refresh] Server returned ${res.status}`);
+      // WHY: Widgets without a source refresh answer with no status; a body that
+      // is not JSON is ignored so it can never block the invalidation below.
+      const body: { status?: string } | null = await res.json().catch(() => null);
       await queryClient.invalidateQueries({ queryKey: ['report', reportId] });
+      setRefreshNotice(body?.status ? REFRESH_NOTICES[body.status] ?? null : null);
     } finally {
       setIsRefreshing(false);
     }
@@ -235,6 +252,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
               onExport={triggerExport}
               isRefreshing={isRefreshing}
               onRefresh={handleRefresh}
+              refreshLabel={widgetConfig?.sourceRefresh ? 'Refresh last 30 days from Priority' : undefined}
               onBulkExtend={reportId === 'bbd' && activeSubTab === 'active' ? handleBulkExtend : undefined}
               priorityEnv={activeEnv}
               onEnvChange={envToggleEnabled ? handleEnvChange : undefined}
@@ -287,7 +305,9 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
               <span>Failed to load filter options. Try refreshing the page.</span>
             </div>
           )}
-          {data?.warnings && data.warnings.length > 0 && data.warnings.map((msg, i) => (
+          {/* WHY: The refresh notice goes through the same map as data.warnings so the
+              amber row is written once; the notice sits first, just above the warnings. */}
+          {[...(refreshNotice ? [refreshNotice] : []), ...(data?.warnings ?? [])].map((msg, i) => (
             <div key={`warn-${i}`} className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-amber-700 bg-amber-50/80 border border-amber-200/60 rounded-lg">
               <AlertTriangle size={14} className="shrink-0 text-amber-500" />
               <span>{msg}</span>

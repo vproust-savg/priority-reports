@@ -60,3 +60,16 @@ describe('TableToolbar — Sort button', () => {
     expect(sortBtn.className).toContain('color-text-muted');
   });
 });
+
+describe('TableToolbar — Refresh button label', () => {
+  it('names the Refresh button "Refresh" by default', () => {
+    render(<TableToolbar {...defaultProps} onRefresh={vi.fn()} />);
+    expect(screen.getByLabelText('Refresh')).toBeTruthy();
+  });
+
+  it('uses refreshLabel as the Refresh button aria-label when given', () => {
+    render(<TableToolbar {...defaultProps} onRefresh={vi.fn()} refreshLabel="Refresh last 30 days from Priority" />);
+    expect(screen.getByLabelText('Refresh last 30 days from Priority')).toBeTruthy();
+    expect(screen.queryByLabelText('Refresh')).toBeNull();
+  });
+});

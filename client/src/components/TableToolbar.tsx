@@ -27,6 +27,9 @@ interface TableToolbarProps {
   onExport: () => void;
   isRefreshing?: boolean;
   onRefresh?: () => void;
+  // WHY: Accessible name for the Refresh button. Defaults to "Refresh"; widgets
+  // with a source refresh pass a longer text saying what the refresh does.
+  refreshLabel?: string;
   onBulkExtend?: () => void;
   searchTerm?: string;
   onSearch?: (term: string) => void;
@@ -43,7 +46,7 @@ export default function TableToolbar({
   hiddenColumnCount, isColumnPanelOpen, onColumnToggle,
   sortCount, isSortPanelOpen, onSortToggle,
   isExporting, onExport,
-  isRefreshing, onRefresh,
+  isRefreshing, onRefresh, refreshLabel,
   onBulkExtend,
   searchTerm = '', onSearch,
   totalRows, filteredRows,
@@ -90,7 +93,7 @@ export default function TableToolbar({
         <ToolbarIcon
           isOpen={false} isActive={false} badge={null}
           onClick={onRefresh} spinning={isRefreshing}
-          icon={<RefreshCw size={14} />} label="Refresh"
+          icon={<RefreshCw size={14} />} label={refreshLabel ?? 'Refresh'}
         />
         {onBulkExtend && (
           <ToolbarIcon
