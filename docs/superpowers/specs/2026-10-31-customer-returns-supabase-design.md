@@ -1,6 +1,6 @@
 # Customer Returns from Supabase — Design
 
-**Status:** Approved to build (2026-10-31; Victor: "ok go", questions skipped)
+**Status:** Implemented (2026-10-31). Deployed as `customer-returns-supabase` at the hidden page `/food-safety/customer-returns-supabase` (commit 185450d). Production probe: 128 October rows in 150 ms, `meta.source` supabase. The old `customer-returns` page stays live until the Airtable embed is moved. Deferred issues: vproust-savg/priority-reports#9, #10.
 **Builds on:** `2026-10-30-grv-supabase-design.md`. This is the same move for Customer Returns: a twin report reads a Supabase view and sits on a hidden page beside the old one. Wherever this document says nothing, the GRV Supabase design applies.
 
 ## Intent
