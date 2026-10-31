@@ -178,6 +178,11 @@ Truck Temp °F · Product Temp °F · Product Condition · Truck Condition · **
   small `Pool` in a new `server/src/services/supabaseDb.ts`:
   - it reads one new env var, `SUPABASE_GRV_DATABASE_URL`;
   - pool max is about 3, with a statement timeout of about 10 s;
+  - **As built (2026-10-31):** `sslmode=require` makes node-postgres verify the certificate against Node's CA store,
+    which lacks Supabase's root, so every connect failed (`SELF_SIGNED_CERT_IN_CHAIN`). The code now strips the
+    `ssl*` params from the URL and pins Supabase Root 2021 CA (`server/src/config/supabaseRootCa.ts`, SHA-256
+    `80:70:25:AD:…:CA:FA`, expires 2031-04-26) with `rejectUnauthorized: true`. `statement_timeout` is a
+    `SET` on each new connection, not a startup parameter. The Railway variable stays as set;
   - Railway reaches Supabase through the Supavisor pooler, over TLS. The probe also has to settle the TLS settings
     that node-postgres needs for the pooler certificate, and must never disable verification silently.
   - The env var holds the role password, so it is a Railway secret and is never logged, including in error
@@ -224,7 +229,7 @@ Truck Temp °F · Product Temp °F · Product Condition · Truck Condition · **
   `odataField`; a key with no mapping is ignored, never interpolated.
   - It supports every `FilterOperator`, including contains / notContains / startsWith / endsWith, which OData could
     not do.
-  - Semantics must match `applyServerClientFilters` for text, which is case-insensitive. Enum equality is exact.
+  - Semantics must match `applyServerClientFilters` for text, which is case-insensitive. Enum compares the same way (case-insensitive; build ruling 2026-10-31: dropdown values match exactly, so results are identical).
     Date and number operators follow `odataFilterBuilder`: day bounds are inclusive, invalid values are skipped, and
     `between` requires lo ≤ hi.
   - **Nulls.** `applyServerClientFilters` compares `String(cellValue ?? '')`, so a missing value counts as `''`.

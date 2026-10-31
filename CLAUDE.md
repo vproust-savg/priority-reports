@@ -14,6 +14,7 @@ Reports are **widgets** arranged on **configurable pages**. Adding a page or rea
 | Report id | Page | Key behavior |
 |-----------|------|--------------|
 | `grv-log` | `/food-safety/receiving-log` | Goods Receiving Vouchers from `DOCUMENTS_P`. Never cached (`disableCache`), Live/UAT toggle, vendor V8491 hard-excluded, week filter, template-mode Excel export |
+| `grv-log-supabase` | `/food-safety/receiving-log-supabase` (hidden, no nav tab) | Same GRVs read from Supabase view `priority_reports.grv_receiving_log` (remarks parsed by the sync; V8491 excluded in the view); SQL-side filters (`sqlFilterBuilder.ts`), Temp Tracker Included/Accepted columns (Excel P/Q), Refresh re-reads the last 30 days via `priority_reports.request_grv_refresh()`. Live only |
 | `customer-returns` | `/food-safety/customer-returns` | `DOCUMENTS_N` returns with `STATDES eq 'Final'`, exploded to one row per line item, attachments downloaded through `/api/v1/attachments` |
 | `bbd` | `/purchasing/bbd` | Best By Dates from `RAWSERIAL`; balance = sum of `RAWSERIALBAL_SUBFORM` bins; Extend (single, or bulk up to 1,000 lots in 50-lot chunks) writes to Priority + Airtable; "Extended" sub-tab lists extended lots from Airtable |
 
@@ -70,6 +71,7 @@ Both must pass cleanly — any TypeScript error kills the Railway Docker build.
 
 ## Environments
 
+- `SUPABASE_GRV_DATABASE_URL` (optional): session-pooler URL for role `priority_reports_server`, which can read only the GRV view and call the two refresh functions. Unset → the `grv-log-supabase` routes answer 503 and everything else works.
 - `PRIORITY_ENV=uat|production` selects the `PRIORITY_UAT_*` or `PRIORITY_PROD_*` credentials from `.env` (`server/src/config/environment.ts`). With `NODE_ENV=production` the server refuses to boot unless `PRIORITY_ENV` is set explicitly.
 - The GRV widget's Live/UAT toggle sends `environment: 'production' | 'uat'` on query, filters and export requests. The server honors it only for reports with `allowEnvOverride: true` (grv-log), through the request-scoped override in `server/src/config/priorityEnvContext.ts` that `getPriorityConfig()` consults. Every other report and every write route ignores it, so writes can never be pointed at UAT.
 - Redis keys are environment-scoped (query, export, filters), so Live and UAT data never mix. Responses carry `meta.priorityEnv` as provenance — assert it in probes.
@@ -271,4 +273,6 @@ The Airtable "API Reports" table is Victor's request tracker (status/comments) a
 - Modifying Dockerfile paths without checking `__dirname` math — server at `/app/server/dist/server/src/` serves client from `../../../../client/dist` (4 levels up to `/app/`)
 - Leaving unused variables/destructured bindings — `noUnusedLocals: true` in `tsconfig.app.json` means `tsc -b` fails, killing the Railway Docker build. Always clean up unused destructured props.
 - Deleting `railway.json` — Railway needs this file to use the Dockerfile builder. Without it, deploy breaks.
+- Removing the OID 1082 type parser in `server/src/services/supabaseDb.ts` — node-postgres turns a `date` into a local-midnight JS Date, shifting GRV dates by a day off UTC
+- Connecting to Supabase with `sslmode=require` left in the URL, or disabling verification — node-postgres treats `require` as verify-full and Supabase's root CA isn't in Node's store; `buildPoolConfig` strips the URL's ssl params and pins `SUPABASE_ROOT_CA_2021` (expires 2031-04-26)
 - Trusting a failing or silently stalled `tsc`/`vitest` run on this iCloud-backed repo before warming `node_modules` (see Commands)
