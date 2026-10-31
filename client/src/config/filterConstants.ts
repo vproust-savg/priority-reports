@@ -152,9 +152,10 @@ export function createDefaultFilterGroup(reportId?: string): FilterGroup {
 
   // WHY: Receiving Log hides canceled GRVs by default as a removable chip the
   // user can edit (-> "is Canceled") or delete to reveal them. 'Canceled' is
-  // the exact STATDES value in Priority (verified 2026-06-01). Appended after
+  // the exact STATDES value in Priority (verified 2026-06-01). The Supabase-backed
+  // copy of the report (grv-log-supabase) gets the same default. Appended after
   // the date condition so conditions[0] stays the date filter.
-  if (reportId === 'grv-log') {
+  if (reportId === 'grv-log' || reportId === 'grv-log-supabase') {
     conditions.push({
       id: crypto.randomUUID(),
       field: 'status',

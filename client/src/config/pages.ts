@@ -4,7 +4,7 @@
 //          This is the ONLY file you edit to rearrange the dashboard.
 //          Zod-validated — app crashes on startup if config is invalid.
 // USED BY: DepartmentLayout.tsx (for nav tabs), PageRenderer (for widget grid)
-// EXPORTS: pages, findWidgetByReportId
+// EXPORTS: pages, findWidgetByReportId, firstVisiblePage
 // ═══════════════════════════════════════════════════════════════
 
 import { z } from 'zod';
@@ -27,6 +27,10 @@ const WidgetConfigSchema = z.object({
   // (GRV only). The server independently honors the override only for
   // reports with allowEnvOverride — this flag is just the UI switch.
   envToggle: z.boolean().optional(),
+  // WHY: Marks a widget whose report reads from a mirrored source (Supabase),
+  // so its Refresh button asks the server to re-sync that source first.
+  // Only the UI switch; the server decides what a refresh does.
+  sourceRefresh: z.boolean().optional(),
 });
 
 const PageConfigSchema = z.object({
@@ -34,6 +38,9 @@ const PageConfigSchema = z.object({
   department: z.string(),
   name: z.string(),
   path: z.string(),
+  // WHY: The page stays routable by URL but gets no nav tab (DepartmentLayout)
+  // and is skipped by the department index redirect (firstVisiblePage).
+  hiddenFromNav: z.boolean().optional(),
   widgets: z.array(WidgetConfigSchema),
 });
 
@@ -55,6 +62,27 @@ export const pages = z.array(PageConfigSchema).parse([
         colSpan: 12,
         disableCache: true,
         envToggle: true,
+      },
+    ],
+  },
+  {
+    id: 'receiving-log-supabase',
+    department: 'food-safety',
+    name: 'Receiving Log (Supabase)',
+    path: '/receiving-log-supabase',
+    hiddenFromNav: true,
+    widgets: [
+      {
+        id: 'grv-log-supabase',
+        reportId: 'grv-log-supabase',
+        type: 'table',
+        title: 'GRV Log — Goods Receiving Vouchers',
+        colSpan: 12,
+        disableCache: true,
+        // WHY: The Supabase report returns the whole result set in one query
+        // (mirrors the server-side clientSidePagination opt-in).
+        clientSidePagination: true,
+        sourceRefresh: true,
       },
     ],
   },
@@ -103,10 +131,24 @@ export const pages = z.array(PageConfigSchema).parse([
 // is unambiguous.
 export function findWidgetByReportId(
   reportId: string,
-): { disableCache?: boolean; clientSidePagination?: boolean; envToggle?: boolean } | undefined {
+): {
+  disableCache?: boolean;
+  clientSidePagination?: boolean;
+  envToggle?: boolean;
+  sourceRefresh?: boolean;
+} | undefined {
   for (const page of pages) {
     const w = page.widgets.find((widget) => widget.reportId === reportId);
     if (w) return w;
   }
   return undefined;
+}
+
+// WHY: The department index route and the nav must agree on the landing page.
+// Hidden pages are reachable by URL only, so the redirect skips them; if every
+// page were hidden, fall back to the first so the department still lands somewhere.
+export function firstVisiblePage<T extends { hiddenFromNav?: boolean }>(
+  deptPages: T[],
+): T | undefined {
+  return deptPages.find((p) => !p.hiddenFromNav) ?? deptPages[0];
 }

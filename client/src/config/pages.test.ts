@@ -6,7 +6,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { describe, it, expect } from 'vitest';
-import { pages, findWidgetByReportId } from './pages';
+import { pages, findWidgetByReportId, firstVisiblePage } from './pages';
 import { departments } from './departments';
 
 describe('pages config', () => {
@@ -95,5 +95,60 @@ describe('env toggle config', () => {
   it('grv-log widget enables the env toggle', () => {
     const grv = pages.flatMap((p) => p.widgets).find((w) => w.reportId === 'grv-log');
     expect(grv?.envToggle).toBe(true);
+  });
+});
+
+describe('receiving-log-supabase hidden page', () => {
+  const page = pages.find((p) => p.id === 'receiving-log-supabase');
+
+  it('exists under food-safety, hidden from the nav', () => {
+    expect(page).toBeDefined();
+    expect(page!.department).toBe('food-safety');
+    expect(page!.name).toBe('Receiving Log (Supabase)');
+    expect(page!.path).toBe('/receiving-log-supabase');
+    expect(page!.hiddenFromNav).toBe(true);
+  });
+
+  it('widget has no env toggle and mirrors the server opt-ins', () => {
+    expect(page!.widgets).toHaveLength(1);
+    const w = page!.widgets[0];
+    expect(w.id).toBe('grv-log-supabase');
+    expect(w.reportId).toBe('grv-log-supabase');
+    expect(w.title).toBe('GRV Log — Goods Receiving Vouchers');
+    expect(w.envToggle).toBeUndefined();
+    expect(w.disableCache).toBe(true);
+    expect(w.clientSidePagination).toBe(true);
+    expect(w.sourceRefresh).toBe(true);
+  });
+
+  it('the original receiving-log page stays visible and unchanged', () => {
+    const old = pages.find((p) => p.id === 'receiving-log')!;
+    expect(old.hiddenFromNav).toBeUndefined();
+    expect(old.widgets[0].envToggle).toBe(true);
+    expect(old.widgets[0].sourceRefresh).toBeUndefined();
+  });
+});
+
+describe('firstVisiblePage', () => {
+  it('skips hidden pages', () => {
+    const list = [
+      { id: 'a', department: 'd', name: 'A', path: '/a', hiddenFromNav: true, widgets: [] },
+      { id: 'b', department: 'd', name: 'B', path: '/b', widgets: [] },
+    ];
+    expect(firstVisiblePage(list)?.id).toBe('b');
+  });
+
+  it('falls back to the first page when every page is hidden', () => {
+    const list = [{ id: 'a', department: 'd', name: 'A', path: '/a', hiddenFromNav: true, widgets: [] }];
+    expect(firstVisiblePage(list)?.id).toBe('a');
+  });
+
+  it('returns undefined for an empty list', () => {
+    expect(firstVisiblePage([])).toBeUndefined();
+  });
+
+  it('food-safety lands on receiving-log', () => {
+    const foodSafety = pages.filter((p) => p.department === 'food-safety');
+    expect(firstVisiblePage(foodSafety)?.id).toBe('receiving-log');
   });
 });

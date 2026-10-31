@@ -13,7 +13,7 @@ import DepartmentLayout from './components/DepartmentLayout';
 import PageRenderer from './components/PageRenderer';
 import NotFoundPage from './components/NotFoundPage';
 import { departments } from './config/departments';
-import { pages } from './config/pages';
+import { pages, firstVisiblePage } from './config/pages';
 
 const queryClient = new QueryClient();
 
@@ -31,6 +31,7 @@ export default function App() {
               a new department or page NEVER requires touching App.tsx. */}
           {departments.map((dept) => {
             const deptPages = pages.filter((p) => p.department === dept.id);
+            const landingPage = firstVisiblePage(deptPages);
             return (
               <Route
                 key={dept.id}
@@ -38,15 +39,16 @@ export default function App() {
                 element={<DepartmentLayout department={dept} />}
               >
                 {/* WHY: Guard against empty departments. If a department has no pages,
-                    skip the index redirect to avoid runtime crash on deptPages[0]. */}
-                {deptPages.length > 0 && (
+                    skip the index redirect (landingPage is undefined). Hidden pages never
+                    win the redirect (firstVisiblePage). */}
+                {landingPage && (
                   <Route
                     index
                     element={
                       /* WHY: Navigate uses relative path (no leading /) because this is
                          inside a nested route. '/receiving-log' would navigate to the app root,
                          'receiving-log' navigates relative to the department basePath. */
-                      <Navigate to={deptPages[0].path.slice(1)} replace />
+                      <Navigate to={landingPage.path.slice(1)} replace />
                     }
                   />
                 )}

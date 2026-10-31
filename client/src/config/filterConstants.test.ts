@@ -63,6 +63,19 @@ describe('createDefaultFilterGroup', () => {
     expect(statusCond!.value).toBe('Canceled');
   });
 
+  it("grv-log-supabase hides Canceled GRVs like grv-log", () => {
+    vi.mocked(nowInLA).mockReturnValue(new Date(2026, 4, 15)); // May 15
+
+    const group = createDefaultFilterGroup('grv-log-supabase');
+
+    expect(group.conditions[0].field).toBe('date');
+    expect(group.conditions[0].operator).toBe('isInWeek');
+    const statusCond = group.conditions.find((c) => c.field === 'status');
+    expect(statusCond).toBeDefined();
+    expect(statusCond!.operator).toBe('notEquals');
+    expect(statusCond!.value).toBe('Canceled');
+  });
+
   it("does not add a status condition for non-grv-log reports", () => {
     vi.mocked(nowInLA).mockReturnValue(new Date(2026, 4, 15)); // May 15
 

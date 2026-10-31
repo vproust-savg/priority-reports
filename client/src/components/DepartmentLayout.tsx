@@ -21,8 +21,9 @@ export default function DepartmentLayout({ department }: DepartmentLayoutProps) 
 
   // WHY: Filter pages to this department, then map paths to full URLs
   // so NavTabs can compare against location.pathname for active state.
+  // Pages flagged hiddenFromNav keep their route but get no tab.
   const navPages = pages
-    .filter((p) => p.department === department.id)
+    .filter((p) => p.department === department.id && !p.hiddenFromNav)
     .map((p) => ({ ...p, path: department.basePath + p.path }));
 
   return (
