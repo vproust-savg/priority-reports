@@ -145,7 +145,8 @@ describe('ReportTableWidget — source refresh outcome', () => {
     renderWidget();
     fireEvent.click(screen.getByLabelText(REFRESH_LABEL));
     await waitFor(() => expect(queryClient.invalidateQueries).toHaveBeenCalled());
-    expect(screen.queryByText(TIMEOUT_TEXT)).toBeNull();
+    // WHY: The mocked report has no warnings, so any amber row would be a refresh notice.
+    expect(document.querySelectorAll('.text-amber-700')).toHaveLength(0);
   });
 
   it('clears the earlier notice on the next click, before the new answer arrives', async () => {
@@ -166,5 +167,33 @@ describe('ReportTableWidget — source refresh outcome', () => {
     resolveSecond(new Response(JSON.stringify({ status: 'done' }), { status: 200 }));
     await waitFor(() => expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(2));
     expect(screen.queryByText(TIMEOUT_TEXT)).toBeNull();
+  });
+
+  it('ignores a stale answer from an overlapping click and keeps the spinner until the newest click ends', async () => {
+    let resolveFirst: (r: Response) => void = () => {};
+    let resolveSecond: (r: Response) => void = () => {};
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { resolveFirst = resolve; }))
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { resolveSecond = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+    renderWidget();
+
+    // Click 1 and click 2 are both in flight (the button stays clickable while spinning).
+    fireEvent.click(screen.getByLabelText(REFRESH_LABEL));
+    fireEvent.click(screen.getByLabelText(REFRESH_LABEL));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // Click 1 answers late with a failure: no notice, spinner still on for click 2.
+    resolveFirst(new Response(JSON.stringify({ status: 'timeout' }), { status: 200 }));
+    await waitFor(() => expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(TIMEOUT_TEXT)).toBeNull();
+    expect(document.querySelector('.animate-spin')).not.toBeNull();
+
+    // Click 2 answers: its own outcome shows and the spinner stops.
+    resolveSecond(new Response(JSON.stringify({ status: 'busy' }), { status: 200 }));
+    expect(await screen.findByText(BUSY_TEXT)).toBeInTheDocument();
+    expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(document.querySelector('.animate-spin')).toBeNull());
   });
 });

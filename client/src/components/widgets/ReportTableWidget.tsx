@@ -126,7 +126,12 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   // after the POST answers, cleared at the start of the next click so a stale
   // message never sits next to a refresh that is still running.
   const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
+  // WHY: The Refresh button stays clickable while a refresh runs, so answers can
+  // overlap. Only the newest click may set the notice or stop the spinner; an
+  // older answer still invalidates the query (the data is fresh either way).
+  const latestRefreshIdRef = useRef(0);
   const handleRefresh = async () => {
+    const myRefreshId = ++latestRefreshIdRef.current;
     setIsRefreshing(true);
     setRefreshNotice(null);
     try {
@@ -136,9 +141,11 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
       // is not JSON is ignored so it can never block the invalidation below.
       const body: { status?: string } | null = await res.json().catch(() => null);
       await queryClient.invalidateQueries({ queryKey: ['report', reportId] });
-      setRefreshNotice(body?.status ? REFRESH_NOTICES[body.status] ?? null : null);
+      if (myRefreshId === latestRefreshIdRef.current) {
+        setRefreshNotice(body?.status ? REFRESH_NOTICES[body.status] ?? null : null);
+      }
     } finally {
-      setIsRefreshing(false);
+      if (myRefreshId === latestRefreshIdRef.current) setIsRefreshing(false);
     }
   };
 
