@@ -106,6 +106,26 @@ export const pages = z.array(PageConfigSchema).parse([
     ],
   },
   {
+    id: 'customer-returns-supabase',
+    department: 'food-safety',
+    name: 'Customer Returns (Supabase)',
+    path: '/customer-returns-supabase',
+    hiddenFromNav: true,
+    widgets: [
+      {
+        id: 'customer-returns-supabase',
+        reportId: 'customer-returns-supabase',
+        type: 'table',
+        title: 'Customer Returns',
+        colSpan: 12,
+        disableCache: true,
+        // WHY: Server returns the whole month, one row per line item; the
+        // widget paginates these rows locally (mirrors the server opt-in).
+        clientSidePagination: true,
+      },
+    ],
+  },
+  {
     id: 'bbd',
     department: 'purchasing',
     name: 'BBD — Best By Dates',

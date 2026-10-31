@@ -111,14 +111,15 @@ export function createEmptyGroup(): FilterGroup {
 }
 
 // WHY: Default to "Date is in week [current week]" for most reports.
-// customer-returns uses "current calendar month" instead — returns span
-// months and a full-month view is more useful than a single-week slice.
+// customer-returns (and its Supabase twin, customer-returns-supabase) uses
+// "current calendar month" instead — returns span months and a full-month
+// view is more useful than a single-week slice.
 export function createDefaultFilterGroup(reportId?: string): FilterGroup {
   // WHY: Use LA-now so defaults reflect the Savory Gourmet business
   // calendar, not the browser's or Railway's wall-clock TZ.
   const today = nowInLA();
 
-  if (reportId === 'customer-returns') {
+  if (reportId === 'customer-returns' || reportId === 'customer-returns-supabase') {
     const fromStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
     const toStr = toISODate(today);
     return {

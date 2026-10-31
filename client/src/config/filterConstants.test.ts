@@ -83,6 +83,19 @@ describe('createDefaultFilterGroup', () => {
     expect(group.conditions.some((c) => c.field === 'status')).toBe(false);
   });
 
+  describe('customer-returns-supabase', () => {
+    it('gets the same current-month default as customer-returns', () => {
+      vi.mocked(nowInLA).mockReturnValue(new Date(2026, 4, 15)); // May 15, 2026
+
+      const condition = createDefaultFilterGroup('customer-returns-supabase').conditions[0];
+
+      expect(condition.field).toBe('date');
+      expect(condition.operator).toBe('isBetween');
+      expect(condition.value).toBe('2026-05-01');
+      expect(condition.valueTo).toBe('2026-05-15');
+    });
+  });
+
   describe('customer-returns', () => {
     it("defaults from the first day of the current LA month to today (mid-month)", () => {
       // WHY: Pin to May 15 2026 — a mid-month date. Verifies first-of-month
