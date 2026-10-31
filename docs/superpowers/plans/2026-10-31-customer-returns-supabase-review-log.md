@@ -31,3 +31,20 @@ Verdict: needs-attention, with one finding.
 | # | Finding (severity) | Decision | Reason | Change made |
 |---|---|---|---|---|
 | 1 | The floor check ignores `valueTo`. An `isBetween` with a missing, malformed or inverted end date suppresses the warning, while `sqlFilterBuilder` drops the predicate and returns all history (medium) | deferred, filed as vproust-savg/priority-reports#9 | Frequency 2 (the date UI fills both ends) × severity 2 (the rows shown are correct; only the hint about older Priority-only history is missing) = 4 < 5. GRV already has this behaviour, and the shared helper keeps it. | None |
+
+## Final branch reviews
+
+Two reviews of the whole branch `949c2ae..98f4bac`: one by Opus, one by Codex on a high-effort pass.
+
+| # | Finding (severity) | Decision | Reason | Change made |
+|---|---|---|---|---|
+| 1 | Opus: 0 critical, 0 important. Ready to merge. All five Review Focus items are handled and tested | — | — | — |
+| 2 | Opus minor: a view file entry with a null `name` would show as "null.pdf" | deferred, filed as vproust-savg/priority-reports#10 | Frequency 1 (all 30 synced files have names) × severity 2 (cosmetic; the download works by number) = 2 < 5 | None |
+| 3 | Opus minor: out-of-date `USED BY` and intent lines in sqlFilterBuilder.ts, customerReturnsLineItems.ts, supabaseDb.ts, and the reportRegistry `fetchRows` comment | deferred | Comment-only; editing them would go beyond what this change needs to touch | None |
+| 4 | Opus minor: no `suffix: null` test (the `''` case takes the same branch and is tested) | deferred | Behaviour is already correct and pinned by the `''` case | None |
+| 5 | Codex: the floor warning ignores `valueTo` (same as the plan-review finding) | deferred, #9 | Re-scored at 2 × 2 = 4 < 5. A cleared end date also widens the visible result, so the user sees it | None |
+
+Rulings made during the build:
+- `npm run lint` reports 8 errors and 2 warnings, all in files this branch does not touch. Left alone.
+- The spec asked for an in-browser download click. The same `/api/v1/attachments/DOCUMENTS_N/RT26000409/N/1` route was fetched directly instead, because a click would save a file to Victor's disk. It returned 200, `application/pdf`, 55,686 bytes, which is the listed size.
+- `grvLogSupabase.ts` (already deployed) now calls the shared `staysOnOrAfterFloor`. The predicate moved word for word, and the GRV floor tests are unchanged and pass.
