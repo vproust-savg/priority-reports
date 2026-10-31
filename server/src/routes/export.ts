@@ -28,6 +28,7 @@ import { sendSupabaseFetchError } from './queryHelpers';
 // Same pattern as query.ts — ensures reports are available when this router loads.
 import '../reports/grvLog';
 import '../reports/grvLogSupabase';
+import '../reports/customerReturnsSupabase';
 import '../reports/bbdReport';
 
 const ROW_CAP = 100_000;
