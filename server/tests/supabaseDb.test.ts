@@ -1,12 +1,15 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/tests/supabaseDb.test.ts
 // PURPOSE: Supabase pool wrapper — unconfigured guard, secret-free
-//          errors, raw date parsing, idle-client error listener.
+//          errors, raw date parsing, idle-client error listener,
+//          pinned Supabase root CA, sslmode stripping, and the
+//          per-connection statement_timeout SET.
 //          pg.Pool is faked; no database is reachable from tests.
 // USED BY: Vitest
 // ═══════════════════════════════════════════════════════════════
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import crypto from 'node:crypto';
 import pg from 'pg';
 
 // WHY hoisted: vi.mock factories run before imports; the mutable env and
@@ -15,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   env: { SUPABASE_GRV_DATABASE_URL: undefined as string | undefined },
   queryImpl: { fn: async (_sql: string, _params: unknown[]): Promise<{ rows: unknown[] }> => ({ rows: [] }) },
   onCalls: [] as string[],
+  listeners: {} as Record<string, (arg: unknown) => void>,
+  poolConfigs: [] as Record<string, unknown>[],
 }));
 
 vi.mock('../src/config/environment', () => ({ env: mocks.env }));
@@ -24,8 +29,12 @@ vi.mock('../src/config/environment', () => ({ env: mocks.env }));
 vi.mock('pg', async (importOriginal) => {
   const actual = await importOriginal<typeof import('pg')>();
   class FakePool {
-    constructor(_config: unknown) {}
-    on(event: string) { mocks.onCalls.push(event); return this; }
+    constructor(config: Record<string, unknown>) { mocks.poolConfigs.push(config); }
+    on(event: string, listener: (arg: unknown) => void) {
+      mocks.onCalls.push(event);
+      mocks.listeners[event] = listener;
+      return this;
+    }
     query(sql: string, params: unknown[]) { return mocks.queryImpl.fn(sql, params); }
   }
   return { ...actual, default: { ...actual, Pool: FakePool }, Pool: FakePool };
@@ -36,12 +45,19 @@ import {
   isSupabaseConfigured,
   querySupabase,
   parseDateAsString,
+  buildPoolConfig,
 } from '../src/services/supabaseDb';
+import { SUPABASE_ROOT_CA_2021 } from '../src/config/supabaseRootCa';
+
+const SUPABASE_ROOT_FINGERPRINT_256 =
+  '80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA';
 
 describe('supabaseDb', () => {
   beforeEach(() => {
     mocks.env.SUPABASE_GRV_DATABASE_URL = undefined;
     mocks.onCalls.length = 0;
+    mocks.poolConfigs.length = 0;
+    for (const key of Object.keys(mocks.listeners)) delete mocks.listeners[key];
   });
 
   it('querySupabase rejects with SupabaseNotConfiguredError when the URL is unset', async () => {
@@ -73,5 +89,55 @@ describe('supabaseDb', () => {
     const rows = await fresh.querySupabase('select 1', []);
     expect(rows).toEqual([{ a: 1 }]);
     expect(mocks.onCalls).toContain('error');
+  });
+
+  it('embedded root CA is the Supabase Root 2021 CA', () => {
+    const cert = new crypto.X509Certificate(SUPABASE_ROOT_CA_2021);
+    expect(cert.subject).toContain('CN=Supabase Root 2021 CA');
+    expect(cert.fingerprint256).toBe(SUPABASE_ROOT_FINGERPRINT_256);
+  });
+
+  it('buildPoolConfig strips sslmode and pins verification to the Supabase root', () => {
+    const config = buildPoolConfig('postgresql://u:p@h:5432/postgres?sslmode=require&application_name=x');
+    expect(config.connectionString).not.toContain('sslmode');
+    expect(config.connectionString).toContain('application_name=x');
+    expect(config.ssl).toEqual({ ca: SUPABASE_ROOT_CA_2021, rejectUnauthorized: true });
+    expect(config).not.toHaveProperty('statement_timeout');
+  });
+
+  it('buildPoolConfig strips every URL param that would override the ssl option', () => {
+    const config = buildPoolConfig(
+      'postgresql://u:p@h:5432/postgres?sslmode=no-verify&sslrootcert=/x&sslcert=/y&sslkey=/z&uselibpqcompat=true',
+    );
+    expect(config.connectionString).toBe('postgresql://u:p@h:5432/postgres');
+  });
+
+  it('pool sets statement_timeout per connection, not as a startup parameter', async () => {
+    mocks.env.SUPABASE_GRV_DATABASE_URL = 'postgresql://u:SECRETPW@h:5432/postgres?sslmode=require';
+    mocks.queryImpl.fn = async () => ({ rows: [] });
+    vi.resetModules();
+    const fresh = await import('../src/services/supabaseDb');
+    await fresh.querySupabase('select 1', []);
+    expect(mocks.poolConfigs).toHaveLength(1);
+    expect(mocks.poolConfigs[0]).not.toHaveProperty('statement_timeout');
+    expect(mocks.poolConfigs[0].connectionString).not.toContain('sslmode');
+    const clientQuery = vi.fn().mockResolvedValue({});
+    mocks.listeners.connect({ query: clientQuery });
+    expect(clientQuery).toHaveBeenCalledWith('SET statement_timeout = 10000');
+  });
+
+  it('a failed statement_timeout SET is logged without the connection string', async () => {
+    mocks.env.SUPABASE_GRV_DATABASE_URL = 'postgresql://u:SECRETPW@h:5432/postgres?sslmode=require';
+    mocks.queryImpl.fn = async () => ({ rows: [] });
+    vi.resetModules();
+    const fresh = await import('../src/services/supabaseDb');
+    await fresh.querySupabase('select 1', []);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.listeners.connect({ query: vi.fn().mockRejectedValue(new Error('SET refused')) });
+    await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled());
+    const logged = errorSpy.mock.calls.flat().join(' ');
+    expect(logged).toContain('SET refused');
+    expect(logged).not.toContain('SECRETPW');
+    errorSpy.mockRestore();
   });
 });
