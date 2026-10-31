@@ -120,10 +120,12 @@ export interface ReportConfig {
   // be pointed at UAT. Single opt-in point, greppable.
   allowEnvOverride?: boolean;
   // WHY: Source-agnostic row fetch. When present, query/export skip Priority
-  // entirely (buildQuery, enrichRows, explodeRows, OData filters and client-only
-  // filtering are all bypassed) and take already-filtered raw rows from here;
-  // transformRow and filterRows still run. `limit` is the cap + 1 so the route
-  // can detect truncation. Used by the Supabase-backed GRV log.
+  // entirely (buildQuery, OData filters and client-only filtering are bypassed)
+  // and take already-filtered raw rows from here; transformRow and filterRows
+  // still run. The query route also bypasses enrichRows/explodeRows, but export
+  // still runs them if defined, so fetchRows reports must not define them.
+  // `limit` is the cap + 1 so the route can detect truncation. Used by the
+  // Supabase-backed GRV log.
   fetchRows?: (
     filterGroup: FilterGroup,
     options: { limit: number; signal?: AbortSignal },
