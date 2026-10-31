@@ -33,6 +33,26 @@ export class SupabaseNotConfiguredError extends Error {
 
 let pool: pg.Pool | undefined;
 
+// WHY: Supavisor ignores statement_timeout sent as a startup parameter (probed
+// 2026-10-31: the role default 15s applied), so each new connection runs a SET.
+// It is awaited before the connection's first query: pg.Pool's 'connect' event
+// cannot be awaited, and a query issued while the SET is in flight is deprecated.
+const STATEMENT_TIMEOUT_SQL = 'SET statement_timeout = 10000';
+const clientsWithTimeout = new WeakSet<pg.PoolClient>();
+
+async function applyStatementTimeoutOnce(client: pg.PoolClient): Promise<void> {
+  if (clientsWithTimeout.has(client)) return;
+  clientsWithTimeout.add(client);
+  try {
+    await client.query(STATEMENT_TIMEOUT_SQL);
+  } catch (err) {
+    // WHY continue: the role default timeout still applies. Log only the
+    // message (never the connection string).
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[supabaseDb] SET statement_timeout failed:', message);
+  }
+}
+
 export function isSupabaseConfigured(): boolean {
   return Boolean(env.SUPABASE_GRV_DATABASE_URL);
 }
@@ -67,15 +87,6 @@ function getPool(connectionString: string): pg.Pool {
     pool.on('error', (err) => {
       console.error('[supabaseDb] idle client error:', err.message);
     });
-    // WHY a session SET: Supavisor's handling of statement_timeout as a
-    // startup parameter is unverified, while a SET on each new connection is
-    // plain SQL. Log only the message (never the connection string).
-    pool.on('connect', (client) => {
-      client.query('SET statement_timeout = 10000').catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error('[supabaseDb] SET statement_timeout failed:', message);
-      });
-    });
   }
   return pool;
 }
@@ -87,13 +98,18 @@ export async function querySupabase<T extends Record<string, unknown>>(
   const connectionString = env.SUPABASE_GRV_DATABASE_URL;
   if (!connectionString) throw new SupabaseNotConfiguredError();
 
+  let client: pg.PoolClient | undefined;
   try {
-    const result = await getPool(connectionString).query(sql, params);
+    client = await getPool(connectionString).connect();
+    await applyStatementTimeoutOnce(client);
+    const result = await client.query(sql, params);
     return result.rows as T[];
   } catch (err) {
     // WHY: rewrap with only the message. The connection string is a secret and
     // must never reach logs or API error bodies; pg messages do not include it.
     const message = err instanceof Error ? err.message : String(err);
     throw new Error(`Supabase query failed: ${message}`);
+  } finally {
+    client?.release();
   }
 }

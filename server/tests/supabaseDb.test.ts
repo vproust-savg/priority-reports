@@ -20,6 +20,9 @@ const mocks = vi.hoisted(() => ({
   onCalls: [] as string[],
   listeners: {} as Record<string, (arg: unknown) => void>,
   poolConfigs: [] as Record<string, unknown>[],
+  clientCalls: [] as string[],
+  setImpl: { fn: async (): Promise<unknown> => ({}) },
+  releaseCount: { n: 0 },
 }));
 
 vi.mock('../src/config/environment', () => ({ env: mocks.env }));
@@ -35,7 +38,15 @@ vi.mock('pg', async (importOriginal) => {
       mocks.listeners[event] = listener;
       return this;
     }
-    query(sql: string, params: unknown[]) { return mocks.queryImpl.fn(sql, params); }
+    // WHY one client per pool: lets a test check the SET runs once per connection.
+    private client = {
+      query: (sql: string, params?: unknown[]) => {
+        mocks.clientCalls.push(sql);
+        return sql.startsWith('SET ') ? mocks.setImpl.fn() : mocks.queryImpl.fn(sql, params ?? []);
+      },
+      release: () => { mocks.releaseCount.n += 1; },
+    };
+    async connect() { return this.client; }
   }
   return { ...actual, default: { ...actual, Pool: FakePool }, Pool: FakePool };
 });
@@ -57,6 +68,9 @@ describe('supabaseDb', () => {
     mocks.env.SUPABASE_GRV_DATABASE_URL = undefined;
     mocks.onCalls.length = 0;
     mocks.poolConfigs.length = 0;
+    mocks.clientCalls.length = 0;
+    mocks.setImpl.fn = async () => ({});
+    mocks.releaseCount.n = 0;
     for (const key of Object.keys(mocks.listeners)) delete mocks.listeners[key];
   });
 
@@ -121,23 +135,40 @@ describe('supabaseDb', () => {
     expect(mocks.poolConfigs).toHaveLength(1);
     expect(mocks.poolConfigs[0]).not.toHaveProperty('statement_timeout');
     expect(mocks.poolConfigs[0].connectionString).not.toContain('sslmode');
-    const clientQuery = vi.fn().mockResolvedValue({});
-    mocks.listeners.connect({ query: clientQuery });
-    expect(clientQuery).toHaveBeenCalledWith('SET statement_timeout = 10000');
   });
 
-  it('a failed statement_timeout SET is logged without the connection string', async () => {
-    mocks.env.SUPABASE_GRV_DATABASE_URL = 'postgresql://u:SECRETPW@h:5432/postgres?sslmode=require';
+  it('the SET finishes before the first query and runs once per connection', async () => {
+    mocks.env.SUPABASE_GRV_DATABASE_URL = 'postgresql://u:SECRETPW@h:5432/postgres';
     mocks.queryImpl.fn = async () => ({ rows: [] });
     vi.resetModules();
     const fresh = await import('../src/services/supabaseDb');
     await fresh.querySupabase('select 1', []);
+    await fresh.querySupabase('select 2', []);
+    expect(mocks.clientCalls).toEqual(['SET statement_timeout = 10000', 'select 1', 'select 2']);
+    expect(mocks.releaseCount.n).toBe(2);
+  });
+
+  it('a failed statement_timeout SET is logged without the connection string, and the query still runs', async () => {
+    mocks.env.SUPABASE_GRV_DATABASE_URL = 'postgresql://u:SECRETPW@h:5432/postgres?sslmode=require';
+    mocks.queryImpl.fn = async () => ({ rows: [{ a: 1 }] });
+    mocks.setImpl.fn = async () => { throw new Error('SET refused'); };
+    vi.resetModules();
+    const fresh = await import('../src/services/supabaseDb');
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    mocks.listeners.connect({ query: vi.fn().mockRejectedValue(new Error('SET refused')) });
-    await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled());
+    const rows = await fresh.querySupabase('select 1', []);
+    expect(rows).toEqual([{ a: 1 }]);
     const logged = errorSpy.mock.calls.flat().join(' ');
     expect(logged).toContain('SET refused');
     expect(logged).not.toContain('SECRETPW');
     errorSpy.mockRestore();
+  });
+
+  it('a failed query still releases the client', async () => {
+    mocks.env.SUPABASE_GRV_DATABASE_URL = 'postgresql://u:SECRETPW@h:5432/postgres';
+    mocks.queryImpl.fn = async () => { throw new Error('boom'); };
+    vi.resetModules();
+    const fresh = await import('../src/services/supabaseDb');
+    await expect(fresh.querySupabase('select 1', [])).rejects.toThrow('Supabase query failed: boom');
+    expect(mocks.releaseCount.n).toBe(1);
   });
 });
