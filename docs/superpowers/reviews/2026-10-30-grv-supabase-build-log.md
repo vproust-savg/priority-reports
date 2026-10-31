@@ -34,7 +34,7 @@ The URL lives only in Railway (Victor's ruling, 2026-10-31). Every live check ra
   - template-mode export: Airtable template fetched by record ID, Temp Tracker Included in column P, Accepted in Q.
 - **Parity, 2026-10-18..24 vs `grv-log` on Priority production:** 30/30 GRVs and all 16 shared columns identical. Only the within-day row order differs: the new page sorts date then GRV # descending; the old one keeps Priority's order.
 - **Speed for that week:** old 8.0 s, new 0.14 s warm. The first load after boot takes about 1.5 s (TLS and connect).
-- **Open:** `temp_tracker_accepted` is NULL on all 850 rows. It may only be because the "Temp Tracker Accepted" line was added to the form on 2026-10-30. Backend boss has been asked to confirm against the raw remarks; the dashboard can't read them.
+- **Resolved:** `temp_tracker_accepted` being NULL on all rows is expected. Backend boss checked read-only (counts only): only 6 remarks have the "Temp Tracker Accepted" line, all from 2026-10-30 ~21:10Z, and all 6 are left blank. `raw.parse_grv_remarks` maps a synthetic `Y` to `Yes`, so the column fills on its own once receivers answer that line.
 - **Not exercised live:** the Refresh button. It queues a 30-day Priority re-read, so it's left to unit tests and the first production use.
 
 ## Rulings
