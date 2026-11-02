@@ -33,6 +33,12 @@ export interface ExportConfig {
   dataStartRow: number;
   // WHY: Some templates have multiple sheets. Default: 0 (first sheet).
   sheetIndex?: number;
+  // WHY: Renames the filled sheet's tab. The GRV Log template's tab says 2025
+  // and the template in Airtable is not ours to edit. Omitted: keep the tab name.
+  sheetName?: string;
+  // WHY: Widths, by column letter, for form columns no field fills (GRV Log's
+  // hand-written Driver Name). excelStyle widths only reach mapped columns.
+  unmappedColumnWidths?: Record<string, number>;
 }
 
 export interface ExcelStyle {

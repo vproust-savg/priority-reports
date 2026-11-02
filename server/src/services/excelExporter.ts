@@ -33,9 +33,24 @@ function columnLetterToNumber(letter: string): number {
   return result;
 }
 
+// WHY: ExcelJS shares style objects between cells; a deep copy lets each cell
+// get its own font size and alignment without changing the template's other cells.
+function copyCellStyle(style: Partial<ExcelJS.Style>): Partial<ExcelJS.Style> {
+  return JSON.parse(JSON.stringify(style)) as Partial<ExcelJS.Style>;
+}
+
+function columnNumberToLetter(colNum: number): string {
+  let letter = '';
+  for (let n = colNum; n > 0; n = Math.floor((n - 1) / 26)) {
+    letter = String.fromCharCode(65 + ((n - 1) % 26)) + letter;
+  }
+  return letter;
+}
+
 export async function generateTemplateExcel(
   templateBuffer: Buffer,
   rows: Record<string, unknown>[],
+  columns: ColumnDefinition[],
   config: ExportConfig,
   excelStyle?: ExcelStyle,
 ): Promise<Buffer> {
@@ -48,7 +63,64 @@ export async function generateTemplateExcel(
   const worksheet = workbook.worksheets[config.sheetIndex ?? 0];
   if (!worksheet) throw new Error('Template worksheet not found');
 
+  // WHY: Templates can carry old revisions of the form on other sheets (the GRV
+  // Log template has a blank R4 form). Printing the workbook would add them as
+  // extra pages, so the export keeps only the sheet it fills.
+  for (const other of [...workbook.worksheets]) {
+    if (other !== worksheet) workbook.removeWorksheet(other.id);
+  }
+  if (config.sheetName) worksheet.name = config.sheetName;
+
   const dataStartRow = config.dataStartRow;
+  const headerRowNum = dataStartRow - 1;
+
+  // WHY: The form's right edge is the last labelled header cell. Mapped columns
+  // past it (GRV # and the tracker columns on GRV Log) are not on the paper
+  // form, so they get a header, borders and the title width added below.
+  let formLastCol = 0;
+  worksheet.getRow(headerRowNum).eachCell((cell, colNum) => {
+    if (cell.value != null && cell.value !== '') formLastCol = Math.max(formLastCol, colNum);
+  });
+
+  // WHY: Captured before any row is inserted or filled — the template's first
+  // data row is the look every data row gets, inserted rows included.
+  const dataRowStyles = new Map<number, Partial<ExcelJS.Style>>();
+  for (let c = 1; c <= formLastCol; c++) {
+    dataRowStyles.set(c, copyCellStyle(worksheet.getRow(dataStartRow).getCell(c).style));
+  }
+
+  // WHY: Convert mapping once — from column letters to column numbers.
+  const colMap = Object.entries(config.mapping).map(([letter, fieldKey]) => ({
+    colNum: columnLetterToNumber(letter.toUpperCase()),
+    fieldKey,
+  }));
+
+  const lastCol = Math.max(formLastCol, ...colMap.map(({ colNum }) => colNum));
+
+  // WHY: The title and footer merges span the form (A:M on GRV Log). Widen the
+  // ones that end at the form's edge to the last mapped column, and move the
+  // revision stamp above the header to that edge, so the page reads as one form.
+  // Done before rows are inserted: spliceRows shifts merged cells but not
+  // ExcelJS's merge list, so widening afterwards would merge the wrong rows.
+  if (lastCol > formLastCol) {
+    const formEdgeLetter = columnNumberToLetter(formLastCol);
+    const lastLetter = columnNumberToLetter(lastCol);
+    const merges = (worksheet.model as unknown as { merges: string[] }).merges;
+    for (const range of merges) {
+      const match = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(range);
+      if (!match || match[3] !== formEdgeLetter) continue;
+      worksheet.unMergeCells(range);
+      worksheet.mergeCells(`${match[1]}${match[2]}:${lastLetter}${match[4]}`);
+    }
+    for (let r = 1; r < headerRowNum; r++) {
+      const stampCell = worksheet.getRow(r).getCell(formLastCol);
+      if (stampCell.value == null || stampCell.isMerged) continue;
+      const newCell = worksheet.getRow(r).getCell(lastCol);
+      newCell.value = stampCell.value;
+      newCell.style = copyCellStyle(stampCell.style);
+      stampCell.value = null;
+    }
+  }
 
   // WHY: Find the footer region — scan forward from dataStartRow to find
   // the first non-empty row. Everything between dataStartRow and that row
@@ -78,12 +150,6 @@ export async function generateTemplateExcel(
     );
   }
 
-  // WHY: Convert mapping once — from column letters to column numbers.
-  const colMap = Object.entries(config.mapping).map(([letter, fieldKey]) => ({
-    colNum: columnLetterToNumber(letter.toUpperCase()),
-    fieldKey,
-  }));
-
   // Fill data rows
   for (let i = 0; i < rows.length; i++) {
     const excelRow = worksheet.getRow(dataStartRow + i);
@@ -96,6 +162,33 @@ export async function generateTemplateExcel(
     excelRow.commit();
   }
 
+  // WHY: Mapped columns past the form get the report's column label, styled
+  // like the form's last header cell, so they print as part of the form.
+  const formHeaderCell = worksheet.getRow(headerRowNum).getCell(formLastCol);
+  for (const { colNum, fieldKey } of colMap) {
+    if (colNum <= formLastCol) continue;
+    const headerCell = worksheet.getRow(headerRowNum).getCell(colNum);
+    headerCell.style = copyCellStyle(formHeaderCell.style);
+    headerCell.value = columns.find((c) => c.key === fieldKey)?.label ?? fieldKey;
+  }
+
+  // WHY: The template's data rows are 14pt with fixed heights, while rows the
+  // splice inserted have no style at all, so long exports printed half large
+  // and boxed, half small and bare. Every data-region row gets the template's
+  // data-row style at the report's font size, with wrapping and no fixed height
+  // so Excel grows a row to fit a long comment.
+  const dataRegionRowCount = Math.max(rows.length, emptyRowCount);
+  for (let r = dataStartRow; r < dataStartRow + dataRegionRowCount; r++) {
+    const excelRow = worksheet.getRow(r);
+    for (let c = 1; c <= lastCol; c++) {
+      const style = copyCellStyle(dataRowStyles.get(Math.min(c, formLastCol)) ?? {});
+      if (excelStyle?.fontSize) style.font = { ...style.font, size: excelStyle.fontSize };
+      style.alignment = { ...style.alignment, vertical: 'middle', wrapText: true };
+      excelRow.getCell(c).style = style;
+    }
+    excelRow.height = undefined as unknown as number;
+  }
+
   // WHY: Override column widths from excelStyle for print-ready layout.
   // These override any widths baked into the Airtable template.
   if (excelStyle?.columnWidths) {
@@ -106,6 +199,9 @@ export async function generateTemplateExcel(
         worksheet.getColumn(columnLetterToNumber(letter.toUpperCase())).width = width;
       }
     }
+  }
+  for (const [letter, width] of Object.entries(config.unmappedColumnWidths ?? {})) {
+    worksheet.getColumn(columnLetterToNumber(letter.toUpperCase())).width = width;
   }
 
   // WHY: Print setup — same as fallback except printTitlesRow repeats the

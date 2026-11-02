@@ -5,7 +5,7 @@
 //          Parses HTML remarks into 8 structured inspection fields.
 // USED BY: config/reportRegistry.ts (auto-registers on import)
 // EXPORTS: EXCLUDED_VENDOR_SUPNAME (used by routes/filters.ts),
-//          GRV_LOG_TEMPLATE_RECORD_ID
+//          GRV_LOG_TEMPLATE_RECORD_ID, GRV_LOG_SHEET_NAME
 // ═══════════════════════════════════════════════════════════════
 
 import type { ColumnDefinition, ColumnFilterMeta } from '@shared/types';
@@ -19,6 +19,10 @@ import { escapeODataString } from '../services/odataFilterBuilder';
 // WHY: Airtable record ID of the GRV Log template row (API Reports table).
 // Exported so the Supabase-backed GRV page reuses the same template.
 export const GRV_LOG_TEMPLATE_RECORD_ID = 'recJluOijRUZcZnBS';
+
+// WHY: The template's tab reads "Inbound Log 2025"; Victor wants the 2026 log
+// (2026-11-02). Shared by both GRV pages, like the template itself.
+export const GRV_LOG_SHEET_NAME = 'Inbound Log 2026';
 
 const columns: ColumnDefinition[] = [
   { key: 'date', label: 'Date', type: 'date' },
@@ -198,6 +202,7 @@ reportRegistry.set('grv-log', {
   // stay stable.
   exportConfig: {
     templateRecordId: GRV_LOG_TEMPLATE_RECORD_ID,
+    sheetName: GRV_LOG_SHEET_NAME,
     mapping: {
       'A': 'date',
       'C': 'docNo',
@@ -215,6 +220,9 @@ reportRegistry.set('grv-log', {
       'P': 'tttCheck',
     },
     dataStartRow: 5,
+    // WHY: The blank Driver Name column is 21 wide in the template; narrowed so
+    // all 16 columns fit one US Letter landscape page at a readable size.
+    unmappedColumnWidths: { F: 11 },
   },
   // WHY: Only columns present in exportConfig.mapping get widths applied
   // in template mode. warehouse, status, total are NOT mapped (they don't

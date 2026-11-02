@@ -203,7 +203,7 @@ export function createExportRouter(cache: CacheProvider): Router {
 
       if (template && report.exportConfig) {
         excelBuffer = await generateTemplateExcel(
-          template, filteredRows, report.exportConfig, report.excelStyle,
+          template, filteredRows, report.columns, report.exportConfig, report.excelStyle,
         );
       } else {
         excelBuffer = await generateFallbackExcel(

@@ -119,10 +119,17 @@ describe('report definition', () => {
     expect(r.filterColumns.map((f) => f.key)).toEqual(r.columns.map((c) => c.key));
   });
 
-  it('maps tracker columns into the export template', () => {
+  it('fills the form own Time and PO columns, then GRV # and the tracker columns after Comments', () => {
     const cfg = report().exportConfig!;
-    expect(cfg.mapping.P).toBe('tempTrackerIncluded');
-    expect(cfg.mapping.Q).toBe('tempTrackerAccepted');
+    expect(cfg.mapping.B).toBe('receivingTime');
+    expect(cfg.mapping.C).toBe('poNumber');
+    expect(cfg.mapping.M).toBe('comments');
+    expect(cfg.mapping.N).toBe('docNo');
+    expect(cfg.mapping.O).toBe('tempTrackerIncluded');
+    expect(cfg.mapping.P).toBe('tempTrackerAccepted');
+    expect(cfg.mapping).not.toHaveProperty('Q');
+    expect(cfg.unmappedColumnWidths).toEqual({ F: 11 });
+    expect(cfg.sheetName).toBe('Inbound Log 2026');
     expect(cfg.templateRecordId).toBe('recJluOijRUZcZnBS');
     expect(cfg.dataStartRow).toBe(5);
     expect(report().excelStyle!.columnWidths).not.toHaveProperty('tttCheck');

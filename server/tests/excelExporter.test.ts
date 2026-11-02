@@ -142,7 +142,7 @@ describe('generateTemplateExcel', () => {
       fontSize: 8,
     };
     const template = await createTestTemplate();
-    const buffer = await generateTemplateExcel(template, testRows, exportConfig, style);
+    const buffer = await generateTemplateExcel(template, testRows, testColumns, exportConfig, style);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as Buffer);
     const ws = wb.getWorksheet(1)!;
@@ -161,7 +161,7 @@ describe('generateTemplateExcel', () => {
 
   it('fills template with data rows', async () => {
     const template = await createTestTemplate();
-    const buffer = await generateTemplateExcel(template, testRows, exportConfig);
+    const buffer = await generateTemplateExcel(template, testRows, testColumns, exportConfig);
 
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as Buffer);
@@ -192,7 +192,7 @@ describe('generateTemplateExcel', () => {
     ];
 
     const template = await createTestTemplate();
-    const buffer = await generateTemplateExcel(template, manyRows, exportConfig);
+    const buffer = await generateTemplateExcel(template, manyRows, testColumns, exportConfig);
 
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as Buffer);
@@ -208,7 +208,7 @@ describe('generateTemplateExcel', () => {
 
   it('handles empty data (headers only)', async () => {
     const template = await createTestTemplate();
-    const buffer = await generateTemplateExcel(template, [], exportConfig);
+    const buffer = await generateTemplateExcel(template, [], testColumns, exportConfig);
 
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as Buffer);
@@ -218,5 +218,121 @@ describe('generateTemplateExcel', () => {
     expect(ws.getRow(1).getCell(1).value).toBe('Company Name');
     // Footer still present
     expect(ws.getRow(6).getCell(1).value).toBe('Footer: Instructions');
+  });
+});
+
+describe('generateTemplateExcel print layout', () => {
+  const thinBox: Partial<ExcelJS.Borders> = {
+    top: { style: 'thin' }, left: { style: 'thin' },
+    bottom: { style: 'thin' }, right: { style: 'thin' },
+  };
+
+  // WHY: Shaped like the GRV Log form — a title merged across the form's
+  // columns (A:B), a revision stamp at the form's right edge, two bordered
+  // 14pt data rows with fixed heights, a merged footer, and a stale second
+  // sheet. Column C is mapped but is not part of the form.
+  async function createFormTemplate(): Promise<Buffer> {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Form');
+    ws.getCell('A1').value = 'Company Name';
+    ws.mergeCells('A1:B1');
+    ws.getCell('B2').value = 'R5 03/31/2025';
+    ws.getCell('B2').alignment = { horizontal: 'right' };
+    ws.getCell('A3').value = 'Name';
+    ws.getCell('B3').value = 'Amount';
+    for (const ref of ['A3', 'B3']) {
+      ws.getCell(ref).border = thinBox;
+      ws.getCell(ref).font = { name: 'Arial', size: 10, bold: true };
+    }
+    for (const r of [4, 5]) {
+      ws.getRow(r).height = 23;
+      for (const c of [1, 2]) {
+        ws.getRow(r).getCell(c).border = thinBox;
+        ws.getRow(r).getCell(c).font = { name: 'Arial', size: 14 };
+      }
+    }
+    ws.getCell('A6').value = 'Footer: Instructions';
+    ws.mergeCells('A6:B6');
+    wb.addWorksheet('Old Form').getCell('A1').value = 'stale';
+    return Buffer.from(await wb.xlsx.writeBuffer());
+  }
+
+  const formColumns: ColumnDefinition[] = [
+    { key: 'name', label: 'Name', type: 'string' },
+    { key: 'amount', label: 'Amount', type: 'currency' },
+    { key: 'note', label: 'Extra Note', type: 'string' },
+  ];
+
+  const formConfig: ExportConfig = {
+    templateRecordId: 'recTest000000000',
+    mapping: { 'A': 'name', 'B': 'amount', 'C': 'note' },
+    dataStartRow: 4,
+  };
+
+  const fourRows = [
+    { name: 'Alice', amount: 1, note: 'a' },
+    { name: 'Bob', amount: 2, note: 'b' },
+    { name: 'Carol', amount: 3, note: 'c' },
+    { name: 'Dave', amount: 4, note: 'd' },
+  ];
+
+  async function exportForm(rows: Record<string, unknown>[], config = formConfig): Promise<ExcelJS.Workbook> {
+    const buffer = await generateTemplateExcel(
+      await createFormTemplate(), rows, formColumns, config, { columnWidths: {}, fontSize: 8 },
+    );
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as Buffer);
+    return wb;
+  }
+
+  it('labels mapped columns past the form with the report column label, styled like the form header', async () => {
+    const ws = (await exportForm(fourRows)).worksheets[0];
+    expect(ws.getCell('C3').value).toBe('Extra Note');
+    expect(ws.getCell('C3').border?.left?.style).toBe('thin');
+    expect(ws.getCell('C3').font?.bold).toBe(true);
+  });
+
+  it('gives every data row, inserted ones included, borders, the excelStyle font size and no fixed height', async () => {
+    const ws = (await exportForm(fourRows)).worksheets[0];
+    // Rows 4-5 come from the template; 6-7 were inserted to fit four rows.
+    for (const r of [4, 5, 6, 7]) {
+      for (const c of [1, 2, 3]) {
+        const cell = ws.getRow(r).getCell(c);
+        expect(cell.border?.bottom?.style).toBe('thin');
+        expect(cell.font?.size).toBe(8);
+        expect(cell.alignment?.wrapText).toBe(true);
+      }
+      // WHY: no fixed height lets Excel grow the row for wrapped comments.
+      expect(ws.getRow(r).height).toBeUndefined();
+    }
+    expect(ws.getCell('A8').value).toBe('Footer: Instructions');
+  });
+
+  it('widens merges that end at the form edge and moves the revision stamp to the new edge', async () => {
+    const ws = (await exportForm(fourRows)).worksheets[0];
+    const merges = (ws.model as unknown as { merges: string[] }).merges;
+    expect(merges).toContain('A1:C1');
+    expect(merges).toContain('A8:C8');
+    expect(ws.getCell('C2').value).toBe('R5 03/31/2025');
+    expect(ws.getCell('B2').value).toBeNull();
+  });
+
+  it('keeps only the filled worksheet so printing the workbook prints only the log', async () => {
+    const wb = await exportForm(fourRows);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['Form']);
+  });
+
+  it('renames the filled sheet when sheetName is set', async () => {
+    const wb = await exportForm(fourRows, { ...formConfig, sheetName: 'Inbound Log 2026' });
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['Inbound Log 2026']);
+  });
+
+  it('sets widths of form columns that hold no data from unmappedColumnWidths', async () => {
+    const ws = (await exportForm(fourRows, {
+      ...formConfig,
+      mapping: { 'A': 'name', 'C': 'note' },
+      unmappedColumnWidths: { 'B': 6 },
+    })).worksheets[0];
+    expect(ws.getColumn(2).width).toBe(6);
   });
 });

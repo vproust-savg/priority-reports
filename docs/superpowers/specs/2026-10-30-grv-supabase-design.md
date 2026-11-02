@@ -28,6 +28,7 @@ The same work adds the two Temp Tracker columns that Victor just put into the Pr
 | D7 | Show **two** columns instead of TTT Check: Temp Tracker Included and Temp Tracker Accepted. | "you'll need two columns instead of one" |
 | D8 | Tracker values come out as Yes / No / N/A. Anything unclear shows the text exactly as typed. | "the output should be Yes or No", "for na, N/A, NA, you can output n/a", "if anything is unclear, output the written text so the data is not lost" |
 | D9 | In the Excel export, Included goes in column **P** and Accepted in column **Q**. | "ok for column P and Q" |
+| D9a | **Amended 2026-11-02.** The export now fills the form's own Time (B) and PO Number/BOL# (C) columns; GRV # goes in N, Included in **O** and Accepted in **P**. Columns past the form get headers and borders, and every data row is styled alike so the log prints on US Letter. The tab is renamed "Inbound Log 2026" (the template's says 2025). Applies over D9 and §6.2. | Victor picked "Use the form's columns" |
 | D10 | The new page's Refresh button makes Supabase re-read the last 30 days of GRVs from Priority. | "add a refresh button that refreshes the last 30 days" |
 
 ## 3. Goals, non-goals, anti-goals

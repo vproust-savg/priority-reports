@@ -11,7 +11,7 @@
 import type { ColumnDefinition, ColumnFilterMeta, FilterGroup, FilterOption } from '@shared/types';
 import { reportRegistry } from '../config/reportRegistry';
 import type { RefreshOutcome } from '../config/reportRegistry';
-import { GRV_LOG_TEMPLATE_RECORD_ID } from './grvLog';
+import { GRV_LOG_TEMPLATE_RECORD_ID, GRV_LOG_SHEET_NAME } from './grvLog';
 import { querySupabase } from '../services/supabaseDb';
 import { buildSqlWhere } from '../services/sqlFilterBuilder';
 import { staysOnOrAfterFloor } from '../services/historyFloorWarnings';
@@ -238,14 +238,17 @@ reportRegistry.set('grv-log-supabase', {
   clearMemoryCache: () => {},
   queryWarnings: buildHistoryFloorWarnings,
   refreshSource: (signal) => refreshGrvSource(signal),
-  // WHY: Same template and layout as grv-log. Its TTT Check column P is replaced by
-  // Temp Tracker Included (P), and Temp Tracker Accepted is appended as Q so the
-  // existing letters stay stable. B and F stay hardcoded in the template.
+  // WHY: Same template as grv-log, but the time and PO # go in the form's own
+  // Time (B) and PO Number/BOL# (C) columns (Victor, 2026-11-02). GRV #, which the
+  // paper form has no column for, follows Comments in N, then the two tracker
+  // columns in O and P. F (Driver Name) is written by hand, so it stays blank.
   exportConfig: {
     templateRecordId: GRV_LOG_TEMPLATE_RECORD_ID,
+    sheetName: GRV_LOG_SHEET_NAME,
     mapping: {
       'A': 'date',
-      'C': 'docNo',
+      'B': 'receivingTime',
+      'C': 'poNumber',
       'D': 'vendor',
       'E': 'driverId',
       'G': 'licensePlate',
@@ -255,31 +258,33 @@ reportRegistry.set('grv-log-supabase', {
       'K': 'truckCondition',
       'L': 'receivedBy',
       'M': 'comments',
-      'N': 'poNumber',
-      'O': 'receivingTime',
-      'P': 'tempTrackerIncluded',
-      'Q': 'tempTrackerAccepted',
+      'N': 'docNo',
+      'O': 'tempTrackerIncluded',
+      'P': 'tempTrackerAccepted',
     },
     dataStartRow: 5,
+    unmappedColumnWidths: { F: 11 },
   },
-  // WHY: Only mapped columns get widths in template mode (see grv-log).
+  // WHY: Widths sized for 8pt text so all 16 columns print on one US Letter
+  // landscape page. A-E together stay as wide as the template's (about 57) so the
+  // instruction lines under the table, which overflow from column A, are not cut.
   excelStyle: {
     columnWidths: {
-      date: 11,
-      docNo: 10,
-      vendor: 20,
-      driverId: 10,
-      licensePlate: 12,
-      truckTemp: 8,
-      productTemp: 8,
-      productCondition: 10,
-      truckCondition: 10,
-      comments: 22,
-      receivedBy: 12,
+      date: 9,
+      receivingTime: 7,
       poNumber: 12,
-      receivingTime: 11,
-      tempTrackerIncluded: 12,
-      tempTrackerAccepted: 12,
+      vendor: 19,
+      driverId: 10,
+      licensePlate: 9,
+      truckTemp: 7,
+      productTemp: 7,
+      productCondition: 8,
+      truckCondition: 8,
+      receivedBy: 9,
+      comments: 22,
+      docNo: 10,
+      tempTrackerIncluded: 9,
+      tempTrackerAccepted: 9,
     },
     fontSize: 8,
   },
