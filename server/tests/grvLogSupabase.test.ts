@@ -14,7 +14,7 @@ vi.mock('../src/services/supabaseDb', () => ({
   SupabaseNotConfiguredError: class SupabaseNotConfiguredError extends Error {},
 }));
 
-import { transformGrvSupabaseRow, toTttCheck } from '../src/reports/grvLogSupabase';
+import { transformGrvSupabaseRow } from '../src/reports/grvLogSupabase';
 import { reportRegistry } from '../src/config/reportRegistry';
 import { querySupabase } from '../src/services/supabaseDb';
 
@@ -33,7 +33,7 @@ const raw = {
   docno: 'GR26001234', curdate: '2026-10-27', receiving_time: '09:30', ordname: 'PO26000001',
   vendor_name: 'Acme Foods', towarhsdes: 'Main', statdes: 'Final', totprice: 12.5,
   driver_id: 'D1', license_plate: 'ABC123', truck_temp: '34', product_temp: '36',
-  product_condition: 'Accept', truck_condition: 'Clean', temp_tracker_included: null,
+  product_condition: 'Accept', truck_condition: 'Clean', ttt_check: null,
   temp_tracker_accepted: 'Yes', comments: 'ok', ownerlogin: 'jdoe',
 };
 
@@ -60,23 +60,22 @@ describe('transformGrvSupabaseRow', () => {
   });
 });
 
-describe('toTttCheck', () => {
-  it('turns the Temp Tracker Included answer into Accept / Not Accepted', () => {
-    expect(toTttCheck('Yes')).toBe('Accept');
-    expect(toTttCheck('No')).toBe('Not Accepted');
+describe('TTT Check', () => {
+  it('shows the view\'s ttt_check exactly as computed there', () => {
+    // WHY: The view applies the rule (not-cold GRV -> N/A, Yes -> Accept, No stays No);
+    // the dashboard must not remap it again.
+    for (const value of ['N/A', 'Accept', 'No', 'Y - TempTale 4 QBV31A05S0']) {
+      expect(transformGrvSupabaseRow({ ...raw, ttt_check: value }).tttCheck).toBe(value);
+    }
+    expect(transformGrvSupabaseRow(raw).tttCheck).toBeNull();
   });
 
-  it('keeps N/A, blank and unclear text exactly as the view has them', () => {
-    expect(toTttCheck('N/A')).toBe('N/A');
-    expect(toTttCheck('Y - TempTale 4 QBV31A05S0')).toBe('Y - TempTale 4 QBV31A05S0');
-    expect(toTttCheck(null)).toBeNull();
-  });
-
-  it('fills tttCheck from temp_tracker_included, not from the Accepted answer', () => {
-    const row = transformGrvSupabaseRow({ ...raw, temp_tracker_included: 'Yes', temp_tracker_accepted: 'No' });
-    expect(row.tttCheck).toBe('Accept');
-    expect(row).not.toHaveProperty('tempTrackerIncluded');
-    expect(row).not.toHaveProperty('tempTrackerAccepted');
+  it('selects ttt_check and not the raw tracker answers', async () => {
+    await report().fetchRows!(emptyGroup(), { limit: 10 });
+    const [sql] = vi.mocked(querySupabase).mock.calls[0];
+    expect(sql).toContain('ttt_check');
+    expect(sql).not.toContain('temp_tracker_included');
+    expect(sql).not.toContain('temp_tracker_accepted');
   });
 });
 
@@ -109,28 +108,28 @@ describe('fetchRows', () => {
 });
 
 describe('fetchFilters', () => {
-  it('maps the distinct queries to option lists, TTT Check labelled Accept / Not Accepted', async () => {
+  it('maps the distinct queries to option lists, TTT Check from the view\'s ttt_check', async () => {
     vi.mocked(querySupabase)
       .mockResolvedValueOnce([{ v: 'Acme' }])
       .mockResolvedValueOnce([{ v: 'Main' }])
       .mockResolvedValueOnce([{ v: 'Final' }])
-      .mockResolvedValueOnce([{ v: 'N/A' }, { v: 'No' }, { v: 'Yes' }]);
+      .mockResolvedValueOnce([{ v: 'Accept' }, { v: 'N/A' }, { v: 'No' }]);
     const result = await report().fetchFilters!();
     expect(result).toEqual({
       vendors: [{ value: 'Acme', label: 'Acme' }],
       warehouses: [{ value: 'Main', label: 'Main' }],
       statuses: [{ value: 'Final', label: 'Final' }],
       tttChecks: [
+        { value: 'Accept', label: 'Accept' },
         { value: 'N/A', label: 'N/A' },
-        { value: 'No', label: 'Not Accepted' },
-        { value: 'Yes', label: 'Accept' },
+        { value: 'No', label: 'No' },
       ],
     });
     const sqls = vi.mocked(querySupabase).mock.calls.map((c) => c[0]);
     expect(sqls[0]).toContain('vendor_name');
     expect(sqls[1]).toContain('towarhsdes');
     expect(sqls[2]).toContain('statdes');
-    expect(sqls[3]).toContain('temp_tracker_included');
+    expect(sqls[3]).toContain('ttt_check');
   });
 });
 
@@ -144,7 +143,7 @@ describe('report definition', () => {
     expect(r.filterColumns.map((f) => f.key)).toEqual(r.columns.map((c) => c.key));
   });
 
-  it('has one TTT Check column right after Truck Condition, filtering on temp_tracker_included', () => {
+  it('has one TTT Check column right after Truck Condition, filtering on ttt_check', () => {
     const r = report();
     const keys = r.columns.map((c) => c.key);
     expect(keys.indexOf('tttCheck')).toBe(keys.indexOf('truckCondition') + 1);
@@ -152,7 +151,7 @@ describe('report definition', () => {
     expect(keys).not.toContain('tempTrackerIncluded');
     expect(keys).not.toContain('tempTrackerAccepted');
     const filter = r.filterColumns.find((f) => f.key === 'tttCheck')!;
-    expect(filter.sqlColumn).toBe('temp_tracker_included');
+    expect(filter.sqlColumn).toBe('ttt_check');
     expect(filter.filterType).toBe('enum');
     expect(filter.enumKey).toBe('tttChecks');
   });

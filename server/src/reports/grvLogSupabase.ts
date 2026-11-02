@@ -4,7 +4,7 @@
 //          priority_reports.grv_receiving_log (one row per GRV, remarks
 //          already parsed, vendor V8491 already excluded). Twin of grv-log.
 // USED BY: config/reportRegistry.ts (auto-registers on import)
-// EXPORTS: transformGrvSupabaseRow, toTttCheck, buildHistoryFloorWarnings,
+// EXPORTS: transformGrvSupabaseRow, buildHistoryFloorWarnings,
 //          refreshGrvSource, GRV_SUPABASE_HISTORY_FLOOR
 // ═══════════════════════════════════════════════════════════════
 
@@ -16,9 +16,10 @@ import { querySupabase } from '../services/supabaseDb';
 import { buildSqlWhere } from '../services/sqlFilterBuilder';
 import { staysOnOrAfterFloor } from '../services/historyFloorWarnings';
 
-// WHY: Same columns as grv-log (labels, order, copyable). TTT Check comes from the
-// Temp Tracker Included answer (toTttCheck); the Accepted answer is not shown
-// (Victor's team template, 2026-11-02).
+// WHY: Same columns as grv-log (labels, order, copyable). TTT Check is the view's
+// ttt_check: N/A when the GRV received nothing refrigerated or frozen (LOGPART
+// SPEC13), else the Temp Tracker Included answer with Yes shown as Accept
+// (Victor, 2026-11-02; migration 0257 in supabase-priority).
 const columns: ColumnDefinition[] = [
   { key: 'date', label: 'Date', type: 'date' },
   { key: 'receivingTime', label: 'Receiving Time', type: 'string' },
@@ -60,9 +61,9 @@ const filterColumns: ColumnFilterMeta[] = [
   { key: 'productTemp', label: 'Product Temp °F', filterType: 'text', filterLocation: 'server', sqlColumn: 'product_temp' },
   { key: 'productCondition', label: 'Product Condition', filterType: 'text', filterLocation: 'server', sqlColumn: 'product_condition' },
   { key: 'truckCondition', label: 'Truck Condition', filterType: 'text', filterLocation: 'server', sqlColumn: 'truck_condition' },
-  // WHY: A dropdown, not text: the table shows Accept / Not Accepted but the view
-  // holds Yes / No, so each option's value is the raw answer and its label the shown word.
-  { key: 'tttCheck', label: 'TTT Check', filterType: 'enum', filterLocation: 'server', sqlColumn: 'temp_tracker_included', enumKey: 'tttChecks' },
+  // WHY: A dropdown of the values the view computes (Accept, No, N/A, and the odd
+  // typed note), so filtering matches exactly what the column shows.
+  { key: 'tttCheck', label: 'TTT Check', filterType: 'enum', filterLocation: 'server', sqlColumn: 'ttt_check', enumKey: 'tttChecks' },
   { key: 'comments', label: 'Comments', filterType: 'text', filterLocation: 'server', sqlColumn: 'comments' },
   { key: 'receivedBy', label: 'Received By', filterType: 'text', filterLocation: 'server', sqlColumn: 'ownerlogin' },
 ];
@@ -73,7 +74,7 @@ const filterColumns: ColumnFilterMeta[] = [
 const SELECT_SQL =
   'select docno, curdate, receiving_time, ordname, vendor_name, towarhsdes, statdes, ' +
   'totprice::float8 as totprice, driver_id, license_plate, truck_temp, product_temp, ' +
-  'product_condition, truck_condition, temp_tracker_included, ' +
+  'product_condition, truck_condition, ttt_check, ' +
   'comments, ownerlogin from priority_reports.grv_receiving_log';
 
 // WHY: buildQuery is required by ReportConfig but unused here: fetchRows replaces
@@ -110,23 +111,13 @@ async function fetchDistinctOptions(column: string): Promise<FilterOption[]> {
 }
 
 async function fetchFilters(): Promise<Record<string, FilterOption[]>> {
-  const [vendors, warehouses, statuses, trackerAnswers] = await Promise.all([
+  const [vendors, warehouses, statuses, tttChecks] = await Promise.all([
     fetchDistinctOptions('vendor_name'),
     fetchDistinctOptions('towarhsdes'),
     fetchDistinctOptions('statdes'),
-    fetchDistinctOptions('temp_tracker_included'),
+    fetchDistinctOptions('ttt_check'),
   ]);
-  const tttChecks = trackerAnswers.map((option) => ({ ...option, label: toTttCheck(option.value) ?? option.value }));
   return { vendors, warehouses, statuses, tttChecks };
-}
-
-// WHY: TTT Check shows Accept / Not Accepted for the tracker's Yes / No (Victor,
-// 2026-11-02). Anything else — N/A, blank, or free text the sync could not read
-// as Yes/No — is shown exactly as the view has it, so no answer is lost.
-export function toTttCheck(trackerIncluded: string | null): string | null {
-  if (trackerIncluded === 'Yes') return 'Accept';
-  if (trackerIncluded === 'No') return 'Not Accepted';
-  return trackerIncluded;
 }
 
 // WHY: curdate arrives as a raw 'YYYY-MM-DD' string (supabaseDb parses the date
@@ -148,7 +139,7 @@ export function transformGrvSupabaseRow(raw: Record<string, unknown>): Record<st
     productTemp: raw.product_temp ?? null,
     productCondition: raw.product_condition ?? null,
     truckCondition: raw.truck_condition ?? null,
-    tttCheck: toTttCheck((raw.temp_tracker_included as string | null | undefined) ?? null),
+    tttCheck: raw.ttt_check ?? null,
     comments: raw.comments ?? null,
     receivedBy: raw.ownerlogin,
   };
