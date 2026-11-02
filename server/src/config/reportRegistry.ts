@@ -48,6 +48,11 @@ export interface ExcelStyle {
   // WHY: Per-report font size. BBD uses 9pt (11 columns), GRV Log uses 8pt (14 columns).
   // Default: 10 if omitted.
   fontSize?: number;
+  // WHY: Fallback mode only. A printed sheet a reviewer signs (GRV Log): every
+  // cell boxed and wrapped, with Reviewed by / Date lines under the table.
+  reviewSheet?: boolean;
+  // WHY: Fallback mode only. Tab name; omitted, the tab is the report name.
+  sheetName?: string;
 }
 
 // WHY: Outcome of a report's refreshSource hook, merged into the /refresh JSON

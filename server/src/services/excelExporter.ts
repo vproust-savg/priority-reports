@@ -229,7 +229,7 @@ export async function generateFallbackExcel(
   excelStyle?: ExcelStyle,
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet(reportName);
+  const worksheet = workbook.addWorksheet(excelStyle?.sheetName ?? reportName);
 
   // WHY: Row 1 = bold headers from column definitions.
   // Font set to Arial at report-specific size for print consistency.
@@ -283,6 +283,31 @@ export async function generateFallbackExcel(
       );
       worksheet.getColumn(i + 1).width = Math.min(maxLength + 2, 40);
     }
+  }
+
+  // WHY: A review sheet is printed and signed (GRV Log). Every header and data
+  // cell gets a thin box and wraps, so long vendors and comments stay inside the
+  // grid, then Reviewed by and Date go one blank row under the table. Date sits a
+  // third of the way across, where the team's own template puts it.
+  if (excelStyle?.reviewSheet) {
+    const thinBox: Partial<ExcelJS.Borders> = {
+      top: { style: 'thin' }, left: { style: 'thin' },
+      bottom: { style: 'thin' }, right: { style: 'thin' },
+    };
+    for (let r = 1; r <= rows.length + 1; r++) {
+      for (let c = 1; c <= columns.length; c++) {
+        const cell = worksheet.getRow(r).getCell(c);
+        cell.border = thinBox;
+        cell.alignment = { vertical: 'top', wrapText: true };
+      }
+    }
+    const signOffRow = worksheet.getRow(rows.length + 3);
+    signOffRow.getCell(1).value = 'Reviewed by:';
+    signOffRow.getCell(Math.floor(columns.length / 3) + 1).value = 'Date:';
+    signOffRow.eachCell((cell) => {
+      cell.font = { name: 'Arial', bold: true, size: fontSize + 2 };
+    });
+    signOffRow.height = 24;
   }
 
   // Freeze header row

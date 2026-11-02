@@ -4,21 +4,21 @@
 //          priority_reports.grv_receiving_log (one row per GRV, remarks
 //          already parsed, vendor V8491 already excluded). Twin of grv-log.
 // USED BY: config/reportRegistry.ts (auto-registers on import)
-// EXPORTS: transformGrvSupabaseRow, buildHistoryFloorWarnings, refreshGrvSource,
-//          GRV_SUPABASE_HISTORY_FLOOR
+// EXPORTS: transformGrvSupabaseRow, toTttCheck, buildHistoryFloorWarnings,
+//          refreshGrvSource, GRV_SUPABASE_HISTORY_FLOOR
 // ═══════════════════════════════════════════════════════════════
 
 import type { ColumnDefinition, ColumnFilterMeta, FilterGroup, FilterOption } from '@shared/types';
 import { reportRegistry } from '../config/reportRegistry';
 import type { RefreshOutcome } from '../config/reportRegistry';
-import { GRV_LOG_TEMPLATE_RECORD_ID, GRV_LOG_SHEET_NAME } from './grvLog';
+import { GRV_LOG_SHEET_NAME } from './grvLog';
 import { querySupabase } from '../services/supabaseDb';
 import { buildSqlWhere } from '../services/sqlFilterBuilder';
 import { staysOnOrAfterFloor } from '../services/historyFloorWarnings';
 
-// WHY: Same columns as grv-log (labels, order, copyable) so the widget and the
-// Excel layout look identical. TTT Check is dropped (the view carries the raw
-// tracker answers instead) and the two tracker columns follow Truck Condition.
+// WHY: Same columns as grv-log (labels, order, copyable). TTT Check comes from the
+// Temp Tracker Included answer (toTttCheck); the Accepted answer is not shown
+// (Victor's team template, 2026-11-02).
 const columns: ColumnDefinition[] = [
   { key: 'date', label: 'Date', type: 'date' },
   { key: 'receivingTime', label: 'Receiving Time', type: 'string' },
@@ -34,8 +34,7 @@ const columns: ColumnDefinition[] = [
   { key: 'productTemp', label: 'Product Temp °F', type: 'string' },
   { key: 'productCondition', label: 'Product Condition', type: 'string' },
   { key: 'truckCondition', label: 'Truck Condition', type: 'string' },
-  { key: 'tempTrackerIncluded', label: 'Temp Tracker Included', type: 'string' },
-  { key: 'tempTrackerAccepted', label: 'Temp Tracker Accepted', type: 'string' },
+  { key: 'tttCheck', label: 'TTT Check', type: 'string' },
   { key: 'comments', label: 'Comments', type: 'string' },
   { key: 'receivedBy', label: 'Received By', type: 'string' },
 ];
@@ -61,8 +60,9 @@ const filterColumns: ColumnFilterMeta[] = [
   { key: 'productTemp', label: 'Product Temp °F', filterType: 'text', filterLocation: 'server', sqlColumn: 'product_temp' },
   { key: 'productCondition', label: 'Product Condition', filterType: 'text', filterLocation: 'server', sqlColumn: 'product_condition' },
   { key: 'truckCondition', label: 'Truck Condition', filterType: 'text', filterLocation: 'server', sqlColumn: 'truck_condition' },
-  { key: 'tempTrackerIncluded', label: 'Temp Tracker Included', filterType: 'text', filterLocation: 'server', sqlColumn: 'temp_tracker_included' },
-  { key: 'tempTrackerAccepted', label: 'Temp Tracker Accepted', filterType: 'text', filterLocation: 'server', sqlColumn: 'temp_tracker_accepted' },
+  // WHY: A dropdown, not text: the table shows Accept / Not Accepted but the view
+  // holds Yes / No, so each option's value is the raw answer and its label the shown word.
+  { key: 'tttCheck', label: 'TTT Check', filterType: 'enum', filterLocation: 'server', sqlColumn: 'temp_tracker_included', enumKey: 'tttChecks' },
   { key: 'comments', label: 'Comments', filterType: 'text', filterLocation: 'server', sqlColumn: 'comments' },
   { key: 'receivedBy', label: 'Received By', filterType: 'text', filterLocation: 'server', sqlColumn: 'ownerlogin' },
 ];
@@ -73,7 +73,7 @@ const filterColumns: ColumnFilterMeta[] = [
 const SELECT_SQL =
   'select docno, curdate, receiving_time, ordname, vendor_name, towarhsdes, statdes, ' +
   'totprice::float8 as totprice, driver_id, license_plate, truck_temp, product_temp, ' +
-  'product_condition, truck_condition, temp_tracker_included, temp_tracker_accepted, ' +
+  'product_condition, truck_condition, temp_tracker_included, ' +
   'comments, ownerlogin from priority_reports.grv_receiving_log';
 
 // WHY: buildQuery is required by ReportConfig but unused here: fetchRows replaces
@@ -110,12 +110,23 @@ async function fetchDistinctOptions(column: string): Promise<FilterOption[]> {
 }
 
 async function fetchFilters(): Promise<Record<string, FilterOption[]>> {
-  const [vendors, warehouses, statuses] = await Promise.all([
+  const [vendors, warehouses, statuses, trackerAnswers] = await Promise.all([
     fetchDistinctOptions('vendor_name'),
     fetchDistinctOptions('towarhsdes'),
     fetchDistinctOptions('statdes'),
+    fetchDistinctOptions('temp_tracker_included'),
   ]);
-  return { vendors, warehouses, statuses };
+  const tttChecks = trackerAnswers.map((option) => ({ ...option, label: toTttCheck(option.value) ?? option.value }));
+  return { vendors, warehouses, statuses, tttChecks };
+}
+
+// WHY: TTT Check shows Accept / Not Accepted for the tracker's Yes / No (Victor,
+// 2026-11-02). Anything else — N/A, blank, or free text the sync could not read
+// as Yes/No — is shown exactly as the view has it, so no answer is lost.
+export function toTttCheck(trackerIncluded: string | null): string | null {
+  if (trackerIncluded === 'Yes') return 'Accept';
+  if (trackerIncluded === 'No') return 'Not Accepted';
+  return trackerIncluded;
 }
 
 // WHY: curdate arrives as a raw 'YYYY-MM-DD' string (supabaseDb parses the date
@@ -137,8 +148,7 @@ export function transformGrvSupabaseRow(raw: Record<string, unknown>): Record<st
     productTemp: raw.product_temp ?? null,
     productCondition: raw.product_condition ?? null,
     truckCondition: raw.truck_condition ?? null,
-    tempTrackerIncluded: raw.temp_tracker_included ?? null,
-    tempTrackerAccepted: raw.temp_tracker_accepted ?? null,
+    tttCheck: toTttCheck((raw.temp_tracker_included as string | null | undefined) ?? null),
     comments: raw.comments ?? null,
     receivedBy: raw.ownerlogin,
   };
@@ -220,7 +230,9 @@ export async function refreshGrvSource(
 // WHY: Self-registration — importing this file adds the report to the registry.
 reportRegistry.set('grv-log-supabase', {
   id: 'grv-log-supabase',
-  name: 'GRV Log (Supabase)',
+  // WHY: Also the download's file name and the sheet's fallback tab; Victor asked
+  // that the file not say Supabase (2026-11-02).
+  name: 'GRV Log',
   entity: 'priority_reports.grv_receiving_log',
   // WHY: Receiving needs the latest state every search, same as grv-log.
   disableCache: true,
@@ -238,54 +250,32 @@ reportRegistry.set('grv-log-supabase', {
   clearMemoryCache: () => {},
   queryWarnings: buildHistoryFloorWarnings,
   refreshSource: (signal) => refreshGrvSource(signal),
-  // WHY: Same template as grv-log, but the time and PO # go in the form's own
-  // Time (B) and PO Number/BOL# (C) columns (Victor, 2026-11-02). GRV #, which the
-  // paper form has no column for, follows Comments in N, then the two tracker
-  // columns in O and P. F (Driver Name) is written by hand, so it stays blank.
-  exportConfig: {
-    templateRecordId: GRV_LOG_TEMPLATE_RECORD_ID,
-    sheetName: GRV_LOG_SHEET_NAME,
-    mapping: {
-      'A': 'date',
-      'B': 'receivingTime',
-      'C': 'poNumber',
-      'D': 'vendor',
-      'E': 'driverId',
-      'G': 'licensePlate',
-      'H': 'truckTemp',
-      'I': 'productTemp',
-      'J': 'productCondition',
-      'K': 'truckCondition',
-      'L': 'receivedBy',
-      'M': 'comments',
-      'N': 'docNo',
-      'O': 'tempTrackerIncluded',
-      'P': 'tempTrackerAccepted',
-    },
-    dataStartRow: 5,
-    unmappedColumnWidths: { F: 11 },
-  },
-  // WHY: Widths sized for 8pt text so all 16 columns print on one US Letter
-  // landscape page. A-E together stay as wide as the template's (about 57) so the
-  // instruction lines under the table, which overflow from column A, are not cut.
+  // WHY: No exportConfig — the export is a plain table of the page's columns, not
+  // the paper inspection form (Victor's team template, 2026-11-02). reviewSheet
+  // boxes every cell and adds the Reviewed by / Date lines the reviewer signs.
+  // Widths are sized for 8pt text so all 17 columns print one US Letter page wide.
   excelStyle: {
     columnWidths: {
-      date: 9,
-      receivingTime: 7,
-      poNumber: 12,
-      vendor: 19,
-      driverId: 10,
-      licensePlate: 9,
-      truckTemp: 7,
-      productTemp: 7,
+      date: 8,
+      receivingTime: 8,
+      docNo: 10.5,
+      poNumber: 10.5,
+      vendor: 20,
+      warehouse: 20.5,
+      status: 8,
+      total: 8,
+      driverId: 9,
+      licensePlate: 11,
+      truckTemp: 6,
+      productTemp: 6.5,
       productCondition: 8,
       truckCondition: 8,
+      tttCheck: 9,
+      comments: 14,
       receivedBy: 9,
-      comments: 22,
-      docNo: 10,
-      tempTrackerIncluded: 9,
-      tempTrackerAccepted: 9,
     },
     fontSize: 8,
+    reviewSheet: true,
+    sheetName: GRV_LOG_SHEET_NAME,
   },
 });

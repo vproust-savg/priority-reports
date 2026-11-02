@@ -85,6 +85,45 @@ describe('generateFallbackExcel', () => {
     expect(dataFont?.bold).toBeFalsy();
   });
 
+  it('prints a review sheet when excelStyle.reviewSheet is set', async () => {
+    const style = { columnWidths: {}, fontSize: 8, reviewSheet: true, sheetName: 'Inbound Log 2026' };
+    const sixColumns: ColumnDefinition[] = [
+      ...testColumns,
+      { key: 'd', label: 'D', type: 'string' },
+      { key: 'e', label: 'E', type: 'string' },
+      { key: 'f', label: 'F', type: 'string' },
+    ];
+    const buffer = await generateFallbackExcel(testRows, sixColumns, 'GRV Log', style);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as Buffer);
+    const ws = wb.worksheets[0];
+
+    expect(ws.name).toBe('Inbound Log 2026');
+    // Header and data cells are boxed and wrap
+    for (const r of [1, 2, 3]) {
+      for (const c of [1, 6]) {
+        const cell = ws.getRow(r).getCell(c);
+        expect(cell.border?.left?.style).toBe('thin');
+        expect(cell.border?.bottom?.style).toBe('thin');
+        expect(cell.alignment?.wrapText).toBe(true);
+      }
+    }
+    // Sign-off lines one blank row under the last data row (row 3)
+    expect(ws.getRow(5).getCell(1).value).toBe('Reviewed by:');
+    expect(ws.getRow(5).getCell(3).value).toBe('Date:');
+    expect(ws.getRow(5).getCell(1).border?.left).toBeUndefined();
+  });
+
+  it('keeps the report name as the tab and adds no sign-off without reviewSheet', async () => {
+    const buffer = await generateFallbackExcel(testRows, testColumns, 'Plain', { columnWidths: {} });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as Buffer);
+    const ws = wb.worksheets[0];
+    expect(ws.name).toBe('Plain');
+    expect(ws.rowCount).toBe(3);
+    expect(ws.getRow(2).getCell(1).border?.left).toBeUndefined();
+  });
+
   it('uses auto-width when no excelStyle provided', async () => {
     const buffer = await generateFallbackExcel(testRows, testColumns, 'Auto Report');
     const wb = new ExcelJS.Workbook();
