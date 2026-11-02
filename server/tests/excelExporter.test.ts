@@ -85,45 +85,6 @@ describe('generateFallbackExcel', () => {
     expect(dataFont?.bold).toBeFalsy();
   });
 
-  it('prints a review sheet when excelStyle.reviewSheet is set', async () => {
-    const style = { columnWidths: {}, fontSize: 8, reviewSheet: true, sheetName: 'Inbound Log 2026' };
-    const sixColumns: ColumnDefinition[] = [
-      ...testColumns,
-      { key: 'd', label: 'D', type: 'string' },
-      { key: 'e', label: 'E', type: 'string' },
-      { key: 'f', label: 'F', type: 'string' },
-    ];
-    const buffer = await generateFallbackExcel(testRows, sixColumns, 'GRV Log', style);
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer as Buffer);
-    const ws = wb.worksheets[0];
-
-    expect(ws.name).toBe('Inbound Log 2026');
-    // Header and data cells are boxed and wrap
-    for (const r of [1, 2, 3]) {
-      for (const c of [1, 6]) {
-        const cell = ws.getRow(r).getCell(c);
-        expect(cell.border?.left?.style).toBe('thin');
-        expect(cell.border?.bottom?.style).toBe('thin');
-        expect(cell.alignment?.wrapText).toBe(true);
-      }
-    }
-    // Sign-off lines one blank row under the last data row (row 3)
-    expect(ws.getRow(5).getCell(1).value).toBe('Reviewed by:');
-    expect(ws.getRow(5).getCell(3).value).toBe('Date:');
-    expect(ws.getRow(5).getCell(1).border?.left).toBeUndefined();
-  });
-
-  it('keeps the report name as the tab and adds no sign-off without reviewSheet', async () => {
-    const buffer = await generateFallbackExcel(testRows, testColumns, 'Plain', { columnWidths: {} });
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer as Buffer);
-    const ws = wb.worksheets[0];
-    expect(ws.name).toBe('Plain');
-    expect(ws.rowCount).toBe(3);
-    expect(ws.getRow(2).getCell(1).border?.left).toBeUndefined();
-  });
-
   it('uses auto-width when no excelStyle provided', async () => {
     const buffer = await generateFallbackExcel(testRows, testColumns, 'Auto Report');
     const wb = new ExcelJS.Workbook();
@@ -359,6 +320,35 @@ describe('generateTemplateExcel print layout', () => {
   it('keeps only the filled worksheet so printing the workbook prints only the log', async () => {
     const wb = await exportForm(fourRows);
     expect(wb.worksheets.map((w) => w.name)).toEqual(['Form']);
+  });
+
+  it('relabels every mapped header from the report columns when relabelHeaders is set', async () => {
+    const template = await createFormTemplate();
+    const relabelled: ColumnDefinition[] = formColumns.map((c) => ({ ...c, label: c.label + ' (page)' }));
+    const buffer = await generateTemplateExcel(
+      template, fourRows, relabelled, { ...formConfig, relabelHeaders: true }, { columnWidths: {} },
+    );
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as Buffer);
+    const ws = wb.worksheets[0];
+    // Form columns keep their header style but take the report labels
+    expect(ws.getCell('A3').value).toBe('Name (page)');
+    expect(ws.getCell('B3').value).toBe('Amount (page)');
+    expect(ws.getCell('B3').font?.bold).toBe(true);
+    expect(ws.getCell('A3').alignment?.wrapText).toBe(true);
+    expect(ws.getCell('C3').value).toBe('Extra Note (page)');
+    // The form's width is still the template's, so the title widens to C
+    const merges = (ws.model as unknown as { merges: string[] }).merges;
+    expect(merges).toContain('A1:C1');
+  });
+
+  it('keeps the form header labels without relabelHeaders', async () => {
+    const template = await createFormTemplate();
+    const relabelled: ColumnDefinition[] = formColumns.map((c) => ({ ...c, label: c.label + ' (page)' }));
+    const buffer = await generateTemplateExcel(template, fourRows, relabelled, formConfig, { columnWidths: {} });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as Buffer);
+    expect(wb.worksheets[0].getCell('A3').value).toBe('Name');
   });
 
   it('renames the filled sheet when sheetName is set', async () => {

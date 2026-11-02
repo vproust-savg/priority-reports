@@ -11,7 +11,7 @@
 import type { ColumnDefinition, ColumnFilterMeta, FilterGroup, FilterOption } from '@shared/types';
 import { reportRegistry } from '../config/reportRegistry';
 import type { RefreshOutcome } from '../config/reportRegistry';
-import { GRV_LOG_SHEET_NAME } from './grvLog';
+import { GRV_LOG_TEMPLATE_RECORD_ID, GRV_LOG_SHEET_NAME } from './grvLog';
 import { querySupabase } from '../services/supabaseDb';
 import { buildSqlWhere } from '../services/sqlFilterBuilder';
 import { staysOnOrAfterFloor } from '../services/historyFloorWarnings';
@@ -250,14 +250,42 @@ reportRegistry.set('grv-log-supabase', {
   clearMemoryCache: () => {},
   queryWarnings: buildHistoryFloorWarnings,
   refreshSource: (signal) => refreshGrvSource(signal),
-  // WHY: No exportConfig — the export is a plain table of the page's columns, not
-  // the paper inspection form (Victor's team template, 2026-11-02). reviewSheet
-  // boxes every cell and adds the Reviewed by / Date lines the reviewer signs.
-  // Widths are sized for 8pt text so all 17 columns print one US Letter page wide.
+  // WHY: The official GRV Log form (title, revision stamp, instructions, Verified
+  // By / Date) around the page's 17 columns in page order, A to Q, as the team's
+  // own template lays them out (Victor, 2026-11-02). relabelHeaders writes the
+  // page labels over the paper form's headers.
+  exportConfig: {
+    templateRecordId: GRV_LOG_TEMPLATE_RECORD_ID,
+    sheetName: GRV_LOG_SHEET_NAME,
+    relabelHeaders: true,
+    mapping: {
+      'A': 'date',
+      'B': 'receivingTime',
+      'C': 'docNo',
+      'D': 'poNumber',
+      'E': 'vendor',
+      'F': 'warehouse',
+      'G': 'status',
+      'H': 'total',
+      'I': 'driverId',
+      'J': 'licensePlate',
+      'K': 'truckTemp',
+      'L': 'productTemp',
+      'M': 'productCondition',
+      'N': 'truckCondition',
+      'O': 'tttCheck',
+      'P': 'comments',
+      'Q': 'receivedBy',
+    },
+    dataStartRow: 5,
+  },
+  // WHY: Widths sized for 8pt text so all 17 columns print one US Letter page
+  // wide. A-E together stay about as wide as the form's (57) so the instruction
+  // lines under the table, which overflow from column A, are not cut.
   excelStyle: {
     columnWidths: {
       date: 8,
-      receivingTime: 8,
+      receivingTime: 10,
       docNo: 10.5,
       poNumber: 10.5,
       vendor: 20,
@@ -266,16 +294,14 @@ reportRegistry.set('grv-log-supabase', {
       total: 8,
       driverId: 9,
       licensePlate: 11,
-      truckTemp: 6,
-      productTemp: 6.5,
-      productCondition: 8,
-      truckCondition: 8,
+      truckTemp: 7,
+      productTemp: 8,
+      productCondition: 10,
+      truckCondition: 10,
       tttCheck: 9,
       comments: 14,
       receivedBy: 9,
     },
     fontSize: 8,
-    reviewSheet: true,
-    sheetName: GRV_LOG_SHEET_NAME,
   },
 });

@@ -39,6 +39,10 @@ export interface ExportConfig {
   // WHY: Widths, by column letter, for form columns no field fills (GRV Log's
   // hand-written Driver Name). excelStyle widths only reach mapped columns.
   unmappedColumnWidths?: Record<string, number>;
+  // WHY: Writes each mapped column's report label over the form's own header,
+  // for a report whose columns differ from the paper form's but which keeps the
+  // form's title, instructions and sign-off (grv-log-supabase).
+  relabelHeaders?: boolean;
 }
 
 export interface ExcelStyle {
@@ -48,11 +52,6 @@ export interface ExcelStyle {
   // WHY: Per-report font size. BBD uses 9pt (11 columns), GRV Log uses 8pt (14 columns).
   // Default: 10 if omitted.
   fontSize?: number;
-  // WHY: Fallback mode only. A printed sheet a reviewer signs (GRV Log): every
-  // cell boxed and wrapped, with Reviewed by / Date lines under the table.
-  reviewSheet?: boolean;
-  // WHY: Fallback mode only. Tab name; omitted, the tab is the report name.
-  sheetName?: string;
 }
 
 // WHY: Outcome of a report's refreshSource hook, merged into the /refresh JSON

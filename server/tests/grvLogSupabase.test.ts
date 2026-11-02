@@ -157,12 +157,17 @@ describe('report definition', () => {
     expect(filter.enumKey).toBe('tttChecks');
   });
 
-  it('exports a plain review sheet named GRV Log, not the paper-form template', () => {
+  it('exports the 17 page columns inside the official GRV Log form, labelled as on the page', () => {
     const r = report();
     expect(r.name).toBe('GRV Log');
-    expect(r.exportConfig).toBeUndefined();
-    expect(r.excelStyle!.reviewSheet).toBe(true);
-    expect(r.excelStyle!.sheetName).toBe('Inbound Log 2026');
+    const cfg = r.exportConfig!;
+    expect(cfg.templateRecordId).toBe('recJluOijRUZcZnBS');
+    expect(cfg.dataStartRow).toBe(5);
+    expect(cfg.sheetName).toBe('Inbound Log 2026');
+    expect(cfg.relabelHeaders).toBe(true);
+    // One letter per page column, A to Q, in page order
+    expect(Object.keys(cfg.mapping)).toEqual('ABCDEFGHIJKLMNOPQ'.split(''));
+    expect(Object.values(cfg.mapping)).toEqual(r.columns.map((c) => c.key));
     expect(Object.keys(r.excelStyle!.columnWidths).sort()).toEqual(r.columns.map((c) => c.key).sort());
   });
 
