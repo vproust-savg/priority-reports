@@ -351,6 +351,11 @@ describe('generateTemplateExcel print layout', () => {
     expect(wb.worksheets[0].getCell('A3').value).toBe('Name');
   });
 
+  it('prints with 0.2-inch margins and no header or footer space', async () => {
+    const ws = (await exportForm(fourRows)).worksheets[0];
+    expect(ws.pageSetup.margins).toEqual({ left: 0.2, right: 0.2, top: 0.2, bottom: 0.2, header: 0, footer: 0 });
+  });
+
   it('renames the filled sheet when sheetName is set', async () => {
     const wb = await exportForm(fourRows, { ...formConfig, sheetName: 'Inbound Log 2026' });
     expect(wb.worksheets.map((w) => w.name)).toEqual(['Inbound Log 2026']);

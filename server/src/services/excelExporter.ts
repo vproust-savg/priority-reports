@@ -210,17 +210,21 @@ export async function generateTemplateExcel(
   }
 
   // WHY: Print setup — same as fallback except printTitlesRow repeats the
-  // full header block (e.g., rows 1-4 for GRV Log) on every printed page.
+  // full header block (e.g., rows 1-4 for GRV Log) on every printed page,
+  // and the margins are narrower.
   worksheet.pageSetup.paperSize = 1 as unknown as ExcelJS.PaperSize;
   worksheet.pageSetup.orientation = 'landscape';
   worksheet.pageSetup.fitToPage = true;
   worksheet.pageSetup.fitToWidth = 1;
   worksheet.pageSetup.fitToHeight = 0;
   worksheet.pageSetup.printTitlesRow = `1:${config.dataStartRow - 1}`;
+  // WHY: Templates are printed forms (GRV Log), so the sheet gets as much of the
+  // page as printers can reach: 0.2" is about their unprintable edge, and there
+  // is no page header or footer, so none of that space is reserved (Victor, 2026-11-02).
   worksheet.pageSetup.margins = {
-    left: 0.25, right: 0.25,
-    top: 0.25, bottom: 0.25,
-    header: 0.25, footer: 0.25,
+    left: 0.2, right: 0.2,
+    top: 0.2, bottom: 0.2,
+    header: 0, footer: 0,
   };
 
   const arrayBuffer = await workbook.xlsx.writeBuffer();
