@@ -5,6 +5,8 @@
 //          "could not be confirmed" notice when the POST fails or
 //          its answer is unusable, invalidates the report query
 //          whatever happens, and clears the notice on the next click.
+// USED BY: Vitest
+// EXPORTS: none
 // ═══════════════════════════════════════════════════════════════
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -37,7 +39,11 @@ vi.mock('../../hooks/useReportQuery', () => ({
 }));
 
 vi.mock('../../hooks/useFiltersQuery', () => ({
-  useFiltersQuery: () => ({ data: { columns: [], filters: {} }, isLoading: false, error: null }),
+  useFiltersQuery: () => ({
+    data: { columns: [{ key: 'date', label: 'Date', filterType: 'date' }], filters: {} },
+    isLoading: false,
+    error: null,
+  }),
 }));
 
 vi.mock('../../hooks/useExport', () => ({
@@ -54,14 +60,6 @@ vi.mock('../../hooks/useBBDExtend', () => ({
   }),
 }));
 
-vi.mock('../../config/pages', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../config/pages')>();
-  return {
-    ...actual,
-    findWidgetByReportId: () => ({ sourceRefresh: true }),
-  };
-});
-
 const TIMEOUT_TEXT = 'Still refreshing from Priority, so data may update in a minute';
 const ERROR_TEXT = 'Refresh from Priority failed; showing the last synced data';
 const BUSY_TEXT = 'Priority refresh is paused during the nightly sync (1:45–2:45 AM); try again later';
@@ -69,11 +67,11 @@ const UNCONFIRMED_TEXT = 'Refresh could not be confirmed; showing the last synce
 
 let queryClient: QueryClient;
 
-function renderWidget() {
+function renderWidget(reportId = 'grv-log-supabase') {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <ReportTableWidget reportId="grv-log-supabase" />
+        <ReportTableWidget reportId={reportId} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -83,7 +81,16 @@ function jsonResponse(body: unknown) {
   return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
 }
 
-const REFRESH_LABEL = 'Refresh last 30 days from Priority';
+const REFRESH_LABEL = 'Refresh Date filter range from Priority';
+
+function changeDateRange(from: string, to: string) {
+  fireEvent.click(screen.getByLabelText('Filter'));
+  const operator = screen.getAllByRole<HTMLSelectElement>('combobox').find((select) => select.value === 'isInWeek')!;
+  fireEvent.change(operator, { target: { value: 'isBetween' } });
+  const [fromInput, toInput] = document.querySelectorAll('input[type="date"]');
+  fireEvent.change(fromInput, { target: { value: from } });
+  fireEvent.change(toInput, { target: { value: to } });
+}
 
 describe('ReportTableWidget — source refresh outcome', () => {
   beforeEach(() => {
@@ -92,6 +99,7 @@ describe('ReportTableWidget — source refresh outcome', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -100,6 +108,67 @@ describe('ReportTableWidget — source refresh outcome', () => {
     vi.stubGlobal('fetch', vi.fn());
     renderWidget();
     expect(screen.getByLabelText(REFRESH_LABEL)).toBeInTheDocument();
+  });
+
+  it('sends the current LA week by default, even when UTC is already in the next week', async () => {
+    vi.setSystemTime(new Date('2026-11-02T03:00:00Z'));
+    const fetchMock = vi.fn(() => jsonResponse({ status: 'done' }));
+    vi.stubGlobal('fetch', fetchMock);
+    renderWidget();
+    fireEvent.click(screen.getByLabelText(REFRESH_LABEL));
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/reports/grv-log-supabase/refresh', expect.objectContaining({
+      body: JSON.stringify({ from: '2026-10-26', to: '2026-11-01' }),
+    }));
+    await waitFor(() => expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(1));
+  });
+
+  it('posts the current Date filter immediately after an edit', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ status: 'done' }));
+    vi.stubGlobal('fetch', fetchMock);
+    renderWidget();
+    changeDateRange('2026-10-01', '2026-10-31');
+    fireEvent.click(screen.getByLabelText(REFRESH_LABEL));
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/reports/grv-log-supabase/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: '2026-10-01', to: '2026-10-31' }),
+    });
+    await waitFor(() => expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(1));
+  });
+
+  it('refuses a 32-day Date filter without sending a refresh', () => {
+    const fetchMock = vi.fn(() => jsonResponse({ status: 'done' }));
+    vi.stubGlobal('fetch', fetchMock);
+    renderWidget();
+    changeDateRange('2026-10-01', '2026-11-01');
+    fireEvent.click(screen.getByLabelText(REFRESH_LABEL));
+
+    expect(screen.getByText('Refresh covers at most 31 days; narrow the Date filter')).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(queryClient.invalidateQueries).not.toHaveBeenCalled();
+  });
+
+  it('refuses to refresh when the Date filter is missing its end date', () => {
+    const fetchMock = vi.fn(() => jsonResponse({ status: 'done' }));
+    vi.stubGlobal('fetch', fetchMock);
+    renderWidget();
+    changeDateRange('2026-10-01', '');
+    fireEvent.click(screen.getByLabelText(REFRESH_LABEL));
+
+    expect(screen.getByText('Pick a date range of 31 days or fewer to refresh')).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('posts without a body for a report without a source refresh', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ keysDeleted: 1 }));
+    vi.stubGlobal('fetch', fetchMock);
+    renderWidget('grv-log');
+    fireEvent.click(screen.getByLabelText('Refresh'));
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/reports/grv-log/refresh', { method: 'POST' });
+    await waitFor(() => expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['report', 'grv-log'] }));
   });
 
   it('shows the timeout notice', async () => {

@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import type { ColumnDefinition, ColumnFilterMeta, FilterGroup, FilterOption } from '@shared/types';
+import type { RefreshDateRange } from '@shared/utils/refreshDateRange';
 import { reportRegistry } from '../config/reportRegistry';
 import type { RefreshOutcome } from '../config/reportRegistry';
 import { GRV_LOG_TEMPLATE_RECORD_ID, GRV_LOG_SHEET_NAME } from './grvLog';
@@ -180,17 +181,21 @@ const defaultRefreshDeps: RefreshDeps = {
   now: Date.now,
 };
 
-// WHY: Asks the Supabase side to re-read the last 30 days from Priority, then waits
+// WHY: Asks the Supabase side to re-read the selected dates from Priority, then waits
 // for it so the widget's refetch sees fresh rows. deps is injected so tests never sleep.
 // Errors from querySupabase propagate: the /refresh route turns a throw into status 'error'.
 export async function refreshGrvSource(
+  range: RefreshDateRange,
   signal?: AbortSignal,
   deps: RefreshDeps = defaultRefreshDeps,
 ): Promise<RefreshOutcome> {
-  const [request] = await deps.query('select * from priority_reports.request_grv_refresh()', []);
+  const [request] = await deps.query(
+    'select * from priority_reports.request_grv_refresh($1::date, $2::date)',
+    [range.from, range.to],
+  );
   // WHY: The SQL function always returns one row; none means something is wrong, and
   // throwing lets the /refresh route report status 'error' instead of a misleading 'busy'.
-  if (!request) throw new Error('request_grv_refresh() returned no row');
+  if (!request) throw new Error('request_grv_refresh returned no row');
   // WHY: 'busy' (01:45-02:45 LA) queues nothing and has a null request_id.
   if (request.status === 'busy' || request.request_id === null) {
     return { status: 'busy' };
@@ -240,7 +245,7 @@ reportRegistry.set('grv-log-supabase', {
   // (no in-memory cache exists for this report).
   clearMemoryCache: () => {},
   queryWarnings: buildHistoryFloorWarnings,
-  refreshSource: (signal) => refreshGrvSource(signal),
+  refreshSource: (range, signal) => refreshGrvSource(range, signal),
   // WHY: The official GRV Log form (title, revision stamp, instructions, Verified
   // By / Date) around the page's 17 columns in page order, A to Q, as the team's
   // own template lays them out (Victor, 2026-11-02). relabelHeaders writes the

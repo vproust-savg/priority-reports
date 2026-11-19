@@ -255,7 +255,7 @@ describe('POST /refresh — refreshSource hook', () => {
   it('answers 200 status:error when refreshSource throws', async () => {
     registerFakeReport('fr-a', { refreshSource: vi.fn().mockRejectedValue(new Error('pg down')) });
 
-    const res = await request(makeApp(makeStubCache())).post('/api/v1/reports/fr-a/refresh');
+    const res = await request(makeApp(makeStubCache())).post('/api/v1/reports/fr-a/refresh').send({ from: '2026-11-16', to: '2026-11-22' });
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('error');
@@ -267,7 +267,7 @@ describe('POST /refresh — refreshSource hook', () => {
     });
     const cache = makeStubCache();
 
-    const res = await request(makeApp(cache)).post('/api/v1/reports/fr-a/refresh');
+    const res = await request(makeApp(cache)).post('/api/v1/reports/fr-a/refresh').send({ from: '2026-11-16', to: '2026-11-22' });
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('timeout');

@@ -8,6 +8,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import type { ColumnDefinition, ColumnFilterMeta, FilterGroup, FilterOption } from '@shared/types';
+import type { RefreshDateRange } from '@shared/utils/refreshDateRange';
 import type { ODataParams } from '../services/priorityClient';
 
 export interface ReportFilters {
@@ -140,10 +141,9 @@ export interface ReportConfig {
     filterGroup: FilterGroup,
     options: { limit: number; signal?: AbortSignal },
   ) => Promise<Record<string, unknown>[]>;
-  // WHY: Lets a report trigger its own upstream sync on Refresh (after the
-  // cache clear). Must resolve with an outcome; the route turns a throw into
-  // status 'error' so Refresh never answers 500.
-  refreshSource?: (signal?: AbortSignal) => Promise<RefreshOutcome>;
+  // WHY: Lets a report sync the validated date range on Refresh after the
+  // cache clear. A sync failure becomes status 'error' in the response.
+  refreshSource?: (range: RefreshDateRange, signal?: AbortSignal) => Promise<RefreshOutcome>;
   // WHY: Per-request notices (e.g. a history-floor warning) appended to the
   // query response's `warnings`. Not applied to Excel exports: an xlsx has no
   // warnings channel.

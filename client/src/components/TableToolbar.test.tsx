@@ -68,8 +68,8 @@ describe('TableToolbar — Refresh button label', () => {
   });
 
   it('uses refreshLabel as the Refresh button aria-label when given', () => {
-    render(<TableToolbar {...defaultProps} onRefresh={vi.fn()} refreshLabel="Refresh last 30 days from Priority" />);
-    expect(screen.getByLabelText('Refresh last 30 days from Priority')).toBeTruthy();
+    render(<TableToolbar {...defaultProps} onRefresh={vi.fn()} refreshLabel="Refresh Date filter range from Priority" />);
+    expect(screen.getByLabelText('Refresh Date filter range from Priority')).toBeTruthy();
     expect(screen.queryByLabelText('Refresh')).toBeNull();
   });
 });

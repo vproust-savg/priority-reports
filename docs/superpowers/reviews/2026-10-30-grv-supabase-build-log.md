@@ -1,5 +1,11 @@
 # Build log: GRV receiving log from Supabase
 
+> **Refresh update (2026-11-19)**
+>
+> The fixed 30-day refresh described below is historical. The receiving log's Refresh button now
+> re-reads the Date filter's inclusive range, up to 31 calendar days. This change requires
+> supabase-priority migration 0325 to be live before the Priority Reports change merges.
+
 Branch `feat/grv-supabase` (worktree `~/worktrees/priority-reports-grv-supabase`, outside iCloud). Built 2026-10-30/31 by subagents, one task at a time, with a Claude review on every task, Codex per phase, a final whole-branch review on the most capable model, and one Codex high pass. Not pushed, not merged.
 
 ## Commits
