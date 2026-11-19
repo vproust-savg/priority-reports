@@ -41,6 +41,9 @@ import { countActiveFilters } from '../../config/filterConstants';
 import { findWidgetByReportId } from '../../config/pages';
 import { getDetailComponent } from '../../config/detailRegistry';
 import { formatCellValue } from '../../utils/formatters';
+import { getRefreshDateRange } from '../../utils/refreshDateRange';
+import { nowInLA } from '@shared/utils/timezone';
+import { toISODate } from '@shared/utils/weekUtils';
 import type { PriorityEnvironment } from '@shared/types';
 
 // WHY: Copy per non-success outcome of a source refresh. 'done' (and, for
@@ -53,7 +56,7 @@ const REFRESH_NOTICES: Record<string, string> = {
 };
 const REFRESH_UNCONFIRMED_NOTICE = 'Refresh could not be confirmed; showing the last synced data';
 
-// WHY: A sourceRefresh POST always answers 200 with one of these statuses
+// WHY: An accepted sourceRefresh POST answers 200 with one of these statuses
 // (queryRefresh.ts). Anything else — a proxy 502/504 HTML page, an
 // unparseable body, a missing or unknown status — is not a confirmed refresh.
 function getSourceRefreshNotice(res: Response, body: { status?: string } | null): string | null {
@@ -144,12 +147,26 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const latestRefreshIdRef = useRef(0);
   const handleRefresh = async () => {
     const myRefreshId = ++latestRefreshIdRef.current;
+    const request: RequestInit = { method: 'POST' };
+    if (widgetConfig?.sourceRefresh) {
+      // WHY: Refresh follows the visible filter, even before the query debounce fires.
+      const result = getRefreshDateRange(filterGroup, toISODate(nowInLA()));
+      if ('reason' in result) {
+        setRefreshNotice(result.reason === 'tooLong'
+          ? 'Refresh covers at most 31 days; narrow the Date filter'
+          : 'Pick a date range of 31 days or fewer to refresh');
+        setIsRefreshing(false);
+        return;
+      }
+      request.headers = { 'Content-Type': 'application/json' };
+      request.body = JSON.stringify(result.range);
+    }
     setIsRefreshing(true);
     setRefreshNotice(null);
     try {
       let notice: string | null;
       try {
-        const res = await fetch(`/api/v1/reports/${reportId}/refresh`, { method: 'POST' });
+        const res = await fetch(`/api/v1/reports/${reportId}/refresh`, request);
         if (!res.ok) console.warn(`[refresh] Server returned ${res.status}`);
         // WHY: Widgets without a source refresh answer with no status; a body that
         // is not JSON is ignored so it can never block the invalidation below.
@@ -281,7 +298,7 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
               onExport={triggerExport}
               isRefreshing={isRefreshing}
               onRefresh={handleRefresh}
-              refreshLabel={widgetConfig?.sourceRefresh ? 'Refresh last 30 days from Priority' : undefined}
+              refreshLabel={widgetConfig?.sourceRefresh ? 'Refresh Date filter range from Priority' : undefined}
               onBulkExtend={reportId === 'bbd' && activeSubTab === 'active' ? handleBulkExtend : undefined}
               priorityEnv={activeEnv}
               onEnvChange={envToggleEnabled ? handleEnvChange : undefined}

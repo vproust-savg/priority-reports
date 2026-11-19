@@ -1,5 +1,11 @@
 # GRV Receiving Log from Supabase: Implementation Plan
 
+> **Refresh update (2026-11-19)**
+>
+> The fixed 30-day refresh described below is historical. The receiving log's Refresh button now
+> re-reads the Date filter's inclusive range, up to 31 calendar days. This change requires
+> supabase-priority migration 0325 to be live before the Priority Reports change merges.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task by task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

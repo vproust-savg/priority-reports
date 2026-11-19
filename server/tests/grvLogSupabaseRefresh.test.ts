@@ -1,9 +1,10 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/tests/grvLogSupabaseRefresh.test.ts
-// PURPOSE: Verify the grv-log-supabase history-floor warning and the 30-day
+// PURPOSE: Verify the grv-log-supabase history-floor warning and the date-range
 //          refresh (request, then poll). Query, sleep and clock are injected,
 //          so no database is reached and nothing really sleeps.
 // USED BY: Vitest
+// EXPORTS: none
 // ═══════════════════════════════════════════════════════════════
 
 import { describe, it, expect, vi } from 'vitest';
@@ -79,6 +80,7 @@ describe('buildHistoryFloorWarnings', () => {
 });
 
 describe('refreshGrvSource', () => {
+  const range = { from: '2026-10-26', to: '2026-11-01' };
   // Fake clock: sleep advances it, so "90 s later" costs no real time.
   function makeDeps(responses: Record<string, unknown>[][]) {
     let clock = 0;
@@ -97,9 +99,12 @@ describe('refreshGrvSource', () => {
     const { deps, query, sleep } = makeDeps([
       [requestRow('pending')], [statusRow('running')], [statusRow('done')],
     ]);
-    await expect(refreshGrvSource(undefined, deps)).resolves.toEqual({ status: 'done' });
+    await expect(refreshGrvSource(range, undefined, deps)).resolves.toEqual({ status: 'done' });
     expect(query).toHaveBeenCalledTimes(3);
-    expect(query.mock.calls[0][0]).toContain('priority_reports.request_grv_refresh()');
+    expect(query.mock.calls[0]).toEqual([
+      'select * from priority_reports.request_grv_refresh($1::date, $2::date)',
+      ['2026-10-26', '2026-11-01'],
+    ]);
     expect(query.mock.calls[1][0]).toContain('priority_reports.grv_refresh_status($1)');
     // WHY: bigint arrives as a string and must be passed back unchanged.
     expect(query.mock.calls[1][1]).toEqual(['42']);
@@ -109,49 +114,49 @@ describe('refreshGrvSource', () => {
 
   it('returns error when the refresh errors', async () => {
     const { deps } = makeDeps([[requestRow('running')], [statusRow('error')]]);
-    await expect(refreshGrvSource(undefined, deps)).resolves.toEqual({ status: 'error' });
+    await expect(refreshGrvSource(range, undefined, deps)).resolves.toEqual({ status: 'error' });
   });
 
   it('returns timeout after 90 s of always running', async () => {
     const { deps, advanced } = makeDeps([[requestRow('running')]]);
     deps.query.mockResolvedValue([statusRow('running')]);
-    await expect(refreshGrvSource(undefined, deps)).resolves.toEqual({ status: 'timeout' });
+    await expect(refreshGrvSource(range, undefined, deps)).resolves.toEqual({ status: 'timeout' });
     expect(advanced()).toBe(90_000);
   });
 
   it('keeps polling through an empty status result until the timeout', async () => {
     const { deps, advanced } = makeDeps([[requestRow('pending')]]);
-    await expect(refreshGrvSource(undefined, deps)).resolves.toEqual({ status: 'timeout' });
+    await expect(refreshGrvSource(range, undefined, deps)).resolves.toEqual({ status: 'timeout' });
     expect(advanced()).toBe(90_000);
   });
 
   it('returns busy without a status query', async () => {
     const { deps, query } = makeDeps([[requestRow('busy', null)]]);
-    await expect(refreshGrvSource(undefined, deps)).resolves.toEqual({ status: 'busy' });
+    await expect(refreshGrvSource(range, undefined, deps)).resolves.toEqual({ status: 'busy' });
     expect(query).toHaveBeenCalledTimes(1);
   });
 
   it('returns busy when request_id is null even if status is not busy', async () => {
     const { deps, query } = makeDeps([[requestRow('pending', null)]]);
-    await expect(refreshGrvSource(undefined, deps)).resolves.toEqual({ status: 'busy' });
+    await expect(refreshGrvSource(range, undefined, deps)).resolves.toEqual({ status: 'busy' });
     expect(query).toHaveBeenCalledTimes(1);
   });
 
   it('throws when the request function returns no row, so the route reports error', async () => {
     const { deps } = makeDeps([[]]);
-    await expect(refreshGrvSource(undefined, deps)).rejects.toThrow('no row');
+    await expect(refreshGrvSource(range, undefined, deps)).rejects.toThrow('no row');
   });
 
   it('returns a reused finished done request with no poll', async () => {
     const { deps, query, sleep } = makeDeps([[requestRow('done', '42', true)]]);
-    await expect(refreshGrvSource(undefined, deps)).resolves.toEqual({ status: 'done' });
+    await expect(refreshGrvSource(range, undefined, deps)).resolves.toEqual({ status: 'done' });
     expect(query).toHaveBeenCalledTimes(1);
     expect(sleep).not.toHaveBeenCalled();
   });
 
   it('returns a reused finished error request with no poll', async () => {
     const { deps, query } = makeDeps([[requestRow('error', '42', true)]]);
-    await expect(refreshGrvSource(undefined, deps)).resolves.toEqual({ status: 'error' });
+    await expect(refreshGrvSource(range, undefined, deps)).resolves.toEqual({ status: 'error' });
     expect(query).toHaveBeenCalledTimes(1);
   });
 
@@ -159,7 +164,7 @@ describe('refreshGrvSource', () => {
     const controller = new AbortController();
     controller.abort();
     const { deps, query } = makeDeps([[requestRow('pending')], [statusRow('running')]]);
-    await expect(refreshGrvSource(controller.signal, deps)).resolves.toEqual({ status: 'timeout' });
+    await expect(refreshGrvSource(range, controller.signal, deps)).resolves.toEqual({ status: 'timeout' });
     expect(query.mock.calls.length).toBeLessThanOrEqual(2); // request + at most one poll
   });
 
@@ -167,7 +172,7 @@ describe('refreshGrvSource', () => {
     const controller = new AbortController();
     const { deps, query } = makeDeps([[requestRow('pending')], [statusRow('running')]]);
     deps.sleep.mockImplementation(async () => { controller.abort(); });
-    await expect(refreshGrvSource(controller.signal, deps)).resolves.toEqual({ status: 'timeout' });
+    await expect(refreshGrvSource(range, controller.signal, deps)).resolves.toEqual({ status: 'timeout' });
     expect(query.mock.calls.length).toBeLessThanOrEqual(2);
   });
 

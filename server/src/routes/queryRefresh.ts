@@ -1,10 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: server/src/routes/queryRefresh.ts
 // PURPOSE: POST /api/v1/reports/:reportId/refresh — invalidates all
-//          cached queries for a report. Extracted verbatim from
-//          query.ts (2026-08-03) to keep that file under the
-//          250-line ceiling. Reports with refreshSource also trigger
-//          their upstream sync and report its status.
+//          cached queries for a report. Reports with refreshSource
+//          also sync a validated date range and report its status.
 // USED BY: index.ts (mounted at /api/v1/reports)
 // EXPORTS: createQueryRefreshRouter
 // ═══════════════════════════════════════════════════════════════
@@ -13,6 +11,13 @@ import { Router } from 'express';
 import type { CacheProvider } from '../services/cache';
 import { getReport } from '../config/reportRegistry';
 import { createClientDisconnectAbort } from './queryHelpers';
+import { validateRefreshDateRange } from '../../../shared/utils/refreshDateRange';
+
+const RANGE_ERRORS = {
+  invalidDates: 'Refresh requires valid from and to dates in YYYY-MM-DD format',
+  reversed: 'Refresh end date (to) must be on or after the start date (from)',
+  tooLong: 'Refresh covers at most 31 days',
+};
 
 export function createQueryRefreshRouter(cache: CacheProvider): Router {
   const router = Router();
@@ -24,6 +29,13 @@ export function createQueryRefreshRouter(cache: CacheProvider): Router {
   router.post('/:reportId/refresh', async (req, res) => {
     const { reportId } = req.params;
     const report = getReport(reportId);
+    const rangeResult = report?.refreshSource
+      ? validateRefreshDateRange(req.body?.from, req.body?.to)
+      : undefined;
+    if (rangeResult && 'reason' in rangeResult) {
+      res.status(400).json({ error: RANGE_ERRORS[rangeResult.reason] });
+      return;
+    }
     report?.clearMemoryCache?.();
     let payload: Record<string, unknown>;
     try {
@@ -38,9 +50,9 @@ export function createQueryRefreshRouter(cache: CacheProvider): Router {
     // WHY: After the cache clear, so the refetch the widget does next sees the
     // synced data. A throw becomes status 'error' (200, never 500) so the
     // widget's notice fires instead of a generic network error.
-    if (report?.refreshSource) {
+    if (report?.refreshSource && rangeResult) {
       try {
-        const outcome = await report.refreshSource(createClientDisconnectAbort(res).signal);
+        const outcome = await report.refreshSource(rangeResult.range, createClientDisconnectAbort(res).signal);
         payload.status = outcome.status;
       } catch (err) {
         console.warn(`[query] refreshSource failed for ${reportId}:`, err instanceof Error ? err.message : err);
