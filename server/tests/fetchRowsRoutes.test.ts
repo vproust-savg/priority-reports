@@ -8,7 +8,7 @@
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import express from 'express';
-import request from 'supertest';
+import { createTestClient } from './helpers/createTestClient';
 import type { CacheProvider } from '../src/services/cache';
 import { reportRegistry, type ReportConfig } from '../src/config/reportRegistry';
 import { createQueryRouter } from '../src/routes/query';
@@ -91,7 +91,8 @@ describe('POST /query — fetchRows branch', () => {
     const fetchRows = vi.fn().mockResolvedValue([{ DOCNO: 'S1' }, { DOCNO: 'S2' }]);
     registerFakeReport('fr-a', { fetchRows, disableCache: true });
 
-    const res = await request(makeApp(makeStubCache()))
+    const client = await createTestClient(makeApp(makeStubCache()));
+    const res = await client
       .post('/api/v1/reports/fr-a/query').send(queryBody);
 
     expect(res.status).toBe(200);
@@ -108,7 +109,8 @@ describe('POST /query — fetchRows branch', () => {
     const many = Array.from({ length: 5001 }, (_, i) => ({ DOCNO: `S${i}` }));
     registerFakeReport('fr-a', { fetchRows: vi.fn().mockResolvedValue(many), disableCache: true });
 
-    const res = await request(makeApp(makeStubCache()))
+    const client = await createTestClient(makeApp(makeStubCache()));
+    const res = await client
       .post('/api/v1/reports/fr-a/query').send({ ...queryBody, pageSize: 100 });
 
     expect(res.status).toBe(200);
@@ -121,7 +123,8 @@ describe('POST /query — fetchRows branch', () => {
     const rows = Array.from({ length: 5 }, (_, i) => ({ DOCNO: `S${i}` }));
     registerFakeReport('fr-a', { fetchRows: vi.fn().mockResolvedValue(rows), disableCache: true });
 
-    const res = await request(makeApp(makeStubCache()))
+    const client = await createTestClient(makeApp(makeStubCache()));
+    const res = await client
       .post('/api/v1/reports/fr-a/query').send({ ...queryBody, page: 2, pageSize: 2 });
 
     expect(res.body.data).toEqual([{ docNo: 'S2' }, { docNo: 'S3' }]);
@@ -134,13 +137,13 @@ describe('POST /query — fetchRows branch', () => {
       fetchRows: vi.fn().mockResolvedValue(rows), clientSidePagination: true, disableCache: true,
     });
     registerFakeReport('fr-b', { fetchRows: vi.fn().mockResolvedValue(rows), disableCache: true });
-    const app = makeApp(makeStubCache());
+    const client = await createTestClient(makeApp(makeStubCache()));
 
-    const paged = await request(app).post('/api/v1/reports/fr-a/query').send(queryBody);
+    const paged = await client.post('/api/v1/reports/fr-a/query').send(queryBody);
     expect(paged.body.data).toHaveLength(51);
     expect(paged.body.pagination.totalCount).toBe(51);
 
-    const sliced = await request(app).post('/api/v1/reports/fr-b/query').send(queryBody);
+    const sliced = await client.post('/api/v1/reports/fr-b/query').send(queryBody);
     expect(sliced.body.data).toHaveLength(50);
     expect(sliced.body.pagination.totalCount).toBe(51);
   });
@@ -152,7 +155,8 @@ describe('POST /query — fetchRows branch', () => {
       disableCache: true,
     });
 
-    const res = await request(makeApp(makeStubCache()))
+    const client = await createTestClient(makeApp(makeStubCache()));
+    const res = await client
       .post('/api/v1/reports/fr-a/query').send(queryBody);
 
     expect(res.body.warnings).toContain('W');
@@ -168,17 +172,17 @@ describe('POST /query — fetchRows branch', () => {
       disableCache: true,
     });
     registerFakeReport('fr-plain');
-    const app = makeApp(makeStubCache());
+    const client = await createTestClient(makeApp(makeStubCache()));
 
-    const a = await request(app).post('/api/v1/reports/fr-a/query').send(queryBody);
+    const a = await client.post('/api/v1/reports/fr-a/query').send(queryBody);
     expect(a.status).toBe(503);
     expect(a.body.error).toBe('Supabase is not configured for this report');
 
-    const b = await request(app).post('/api/v1/reports/fr-b/query').send(queryBody);
+    const b = await client.post('/api/v1/reports/fr-b/query').send(queryBody);
     expect(b.status).toBe(502);
     expect(b.body.error).toBe('Failed to fetch from Supabase: boom');
 
-    const plain = await request(app).post('/api/v1/reports/fr-plain/query').send(queryBody);
+    const plain = await client.post('/api/v1/reports/fr-plain/query').send(queryBody);
     expect(plain.status).toBe(200);
     expect(plain.body.meta.source).toBe('priority-odata');
   });
@@ -189,7 +193,8 @@ describe('POST /export — fetchRows branch', () => {
     const fetchRows = vi.fn().mockResolvedValue([{ DOCNO: 'S1' }]);
     registerFakeReport('fr-a', { fetchRows });
 
-    const res = await request(makeApp(makeStubCache()))
+    const client = await createTestClient(makeApp(makeStubCache()));
+    const res = await client
       .post('/api/v1/reports/fr-a/export').send(exportBody);
 
     expect(res.status).toBe(200);
@@ -205,7 +210,8 @@ describe('POST /export — fetchRows branch', () => {
     const many = Array.from({ length: 100_001 }, (_, i) => ({ DOCNO: `S${i}` }));
     registerFakeReport('fr-a', { fetchRows: vi.fn().mockResolvedValue(many) });
 
-    const res = await request(makeApp(makeStubCache()))
+    const client = await createTestClient(makeApp(makeStubCache()));
+    const res = await client
       .post('/api/v1/reports/fr-a/export').send(exportBody);
 
     expect(res.status).toBe(200);
@@ -217,13 +223,13 @@ describe('POST /export — fetchRows branch', () => {
   it('maps SupabaseNotConfiguredError to 503 and other errors to 502', async () => {
     registerFakeReport('fr-a', { fetchRows: vi.fn().mockRejectedValue(new SupabaseNotConfiguredError()) });
     registerFakeReport('fr-b', { fetchRows: vi.fn().mockRejectedValue(new Error('boom')) });
-    const app = makeApp(makeStubCache());
+    const client = await createTestClient(makeApp(makeStubCache()));
 
-    const a = await request(app).post('/api/v1/reports/fr-a/export').send(exportBody);
+    const a = await client.post('/api/v1/reports/fr-a/export').send(exportBody);
     expect(a.status).toBe(503);
     expect(a.body.error).toBe('Supabase is not configured for this report');
 
-    const b = await request(app).post('/api/v1/reports/fr-b/export').send(exportBody);
+    const b = await client.post('/api/v1/reports/fr-b/export').send(exportBody);
     expect(b.status).toBe(502);
     expect(b.body.error).toBe('Failed to fetch from Supabase: boom');
   });
@@ -235,7 +241,8 @@ describe('GET /filters — Supabase error mapping', () => {
       fetchFilters: vi.fn().mockRejectedValue(new SupabaseNotConfiguredError()),
     });
 
-    const res = await request(makeApp(makeStubCache())).get('/api/v1/reports/fr-a/filters');
+    const client = await createTestClient(makeApp(makeStubCache()));
+    const res = await client.get('/api/v1/reports/fr-a/filters');
 
     expect(res.status).toBe(503);
     expect(res.body.error).toBe('Supabase is not configured for this report');
@@ -244,7 +251,8 @@ describe('GET /filters — Supabase error mapping', () => {
   it('keeps the Priority 502 message for reports without fetchRows', async () => {
     registerFakeReport('fr-plain', { fetchFilters: vi.fn().mockRejectedValue(new Error('boom')) });
 
-    const res = await request(makeApp(makeStubCache())).get('/api/v1/reports/fr-plain/filters');
+    const client = await createTestClient(makeApp(makeStubCache()));
+    const res = await client.get('/api/v1/reports/fr-plain/filters');
 
     expect(res.status).toBe(502);
     expect(res.body.error).toBe('Failed to fetch filters: boom');
@@ -255,7 +263,8 @@ describe('POST /refresh — refreshSource hook', () => {
   it('answers 200 status:error when refreshSource throws', async () => {
     registerFakeReport('fr-a', { refreshSource: vi.fn().mockRejectedValue(new Error('pg down')) });
 
-    const res = await request(makeApp(makeStubCache())).post('/api/v1/reports/fr-a/refresh').send({ from: '2026-11-16', to: '2026-11-22' });
+    const client = await createTestClient(makeApp(makeStubCache()));
+    const res = await client.post('/api/v1/reports/fr-a/refresh').send({ from: '2026-11-16', to: '2026-11-22' });
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('error');
@@ -267,7 +276,8 @@ describe('POST /refresh — refreshSource hook', () => {
     });
     const cache = makeStubCache();
 
-    const res = await request(makeApp(cache)).post('/api/v1/reports/fr-a/refresh').send({ from: '2026-11-16', to: '2026-11-22' });
+    const client = await createTestClient(makeApp(cache));
+    const res = await client.post('/api/v1/reports/fr-a/refresh').send({ from: '2026-11-16', to: '2026-11-22' });
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('timeout');
@@ -277,7 +287,8 @@ describe('POST /refresh — refreshSource hook', () => {
   it('keeps the legacy body for reports without the hook', async () => {
     registerFakeReport('fr-plain');
 
-    const res = await request(makeApp(makeStubCache())).post('/api/v1/reports/fr-plain/refresh');
+    const client = await createTestClient(makeApp(makeStubCache()));
+    const res = await client.post('/api/v1/reports/fr-plain/refresh');
 
     expect(res.body).toEqual({ message: 'Cache refreshed for fr-plain', keysDeleted: 3 });
   });

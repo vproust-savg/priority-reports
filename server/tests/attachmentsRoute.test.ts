@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import request from 'supertest';
+import { createTestClient } from './helpers/createTestClient';
 
 vi.mock('../src/services/priorityClient', async (orig) => {
   const actual = (await orig()) as object;
@@ -37,7 +37,8 @@ describe('GET /api/v1/attachments/:entity/:docNo/:type/:extfilenum', () => {
       ],
     });
 
-    const res = await request(app).get('/api/v1/attachments/DOCUMENTS_N/RT26000050/N/1');
+    const client = await createTestClient(app);
+    const res = await client.get('/api/v1/attachments/DOCUMENTS_N/RT26000050/N/1');
 
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toContain('application/pdf');
@@ -57,7 +58,8 @@ describe('GET /api/v1/attachments/:entity/:docNo/:type/:extfilenum', () => {
         },
       ],
     });
-    const res = await request(app).get('/api/v1/attachments/DOCUMENTS_N/RT26000050/N/2');
+    const client = await createTestClient(app);
+    const res = await client.get('/api/v1/attachments/DOCUMENTS_N/RT26000050/N/2');
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toContain('image/jpeg');
     expect(res.headers['content-disposition']).toBe('attachment; filename="photo.jpg"');
@@ -74,44 +76,51 @@ describe('GET /api/v1/attachments/:entity/:docNo/:type/:extfilenum', () => {
         },
       ],
     });
-    const res = await request(app).get('/api/v1/attachments/DOCUMENTS_N/RT26000050/N/3');
+    const client = await createTestClient(app);
+    const res = await client.get('/api/v1/attachments/DOCUMENTS_N/RT26000050/N/3');
     expect(res.headers['content-disposition']).toBe('attachment; filename="noext"');
   });
 
   it('rejects entity not in allowlist with 400', async () => {
-    const res = await request(app).get('/api/v1/attachments/LOGPART/abc/x/1');
+    const client = await createTestClient(app);
+    const res = await client.get('/api/v1/attachments/LOGPART/abc/x/1');
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/entity/i);
     expect(queryPriority).not.toHaveBeenCalled();
   });
 
   it('rejects non-integer extfilenum with 400', async () => {
-    const res = await request(app).get('/api/v1/attachments/DOCUMENTS_N/RT1/N/abc');
+    const client = await createTestClient(app);
+    const res = await client.get('/api/v1/attachments/DOCUMENTS_N/RT1/N/abc');
     expect(res.status).toBe(400);
     expect(queryPriority).not.toHaveBeenCalled();
   });
 
   it('rejects docNo containing single quote with 400 (OData injection guard)', async () => {
-    const res = await request(app).get("/api/v1/attachments/DOCUMENTS_N/X'Y/N/1");
+    const client = await createTestClient(app);
+    const res = await client.get("/api/v1/attachments/DOCUMENTS_N/X'Y/N/1");
     expect(res.status).toBe(400);
     expect(queryPriority).not.toHaveBeenCalled();
   });
 
   it('rejects unsafe type with 400', async () => {
-    const res = await request(app).get('/api/v1/attachments/DOCUMENTS_N/RT1/N..%2F/1');
+    const client = await createTestClient(app);
+    const res = await client.get('/api/v1/attachments/DOCUMENTS_N/RT1/N..%2F/1');
     expect(res.status).toBe(400);
     expect(queryPriority).not.toHaveBeenCalled();
   });
 
   it('returns 404 when Priority returns no records', async () => {
     vi.mocked(queryPriority).mockResolvedValueOnce({ value: [] });
-    const res = await request(app).get('/api/v1/attachments/DOCUMENTS_N/RT26000050/N/999');
+    const client = await createTestClient(app);
+    const res = await client.get('/api/v1/attachments/DOCUMENTS_N/RT26000050/N/999');
     expect(res.status).toBe(404);
   });
 
   it('returns 502 when Priority throws', async () => {
     vi.mocked(queryPriority).mockRejectedValueOnce(new Error('boom'));
-    const res = await request(app).get('/api/v1/attachments/DOCUMENTS_N/RT26000050/N/1');
+    const client = await createTestClient(app);
+    const res = await client.get('/api/v1/attachments/DOCUMENTS_N/RT26000050/N/1');
     expect(res.status).toBe(502);
     expect(res.body.error).toBeDefined();
   });
@@ -120,7 +129,8 @@ describe('GET /api/v1/attachments/:entity/:docNo/:type/:extfilenum', () => {
     vi.mocked(queryPriority).mockResolvedValueOnce({
       value: [{ EXTFILEDES: 'x', SUFFIX: 'pdf', EXTFILENAME: 'NOT_A_DATA_URI', EXTFILENUM: 1 }],
     });
-    const res = await request(app).get('/api/v1/attachments/DOCUMENTS_N/RT1/N/1');
+    const client = await createTestClient(app);
+    const res = await client.get('/api/v1/attachments/DOCUMENTS_N/RT1/N/1');
     expect(res.status).toBe(502);
   });
 });

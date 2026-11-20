@@ -7,7 +7,7 @@
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import express from 'express';
-import request from 'supertest';
+import { createTestClient } from './helpers/createTestClient';
 import type { CacheProvider } from '../src/services/cache';
 import { reportRegistry, type ReportConfig } from '../src/config/reportRegistry';
 import { createQueryRouter } from '../src/routes/query';
@@ -73,7 +73,8 @@ describe('POST /:reportId/query — disableCache gate', () => {
     registerFakeReport('fake-disabled', { disableCache: true });
     const cache = makeStubCache();
 
-    const res = await request(makeApp(cache))
+    const client = await createTestClient(makeApp(cache));
+    const res = await client
       .post('/api/v1/reports/fake-disabled/query')
       .send(emptyBody);
 
@@ -91,7 +92,8 @@ describe('POST /:reportId/query — disableCache gate', () => {
     registerFakeReport('fake-cached'); // no disableCache
     const cache = makeStubCache();
 
-    const res = await request(makeApp(cache))
+    const client = await createTestClient(makeApp(cache));
+    const res = await client
       .post('/api/v1/reports/fake-cached/query')
       .send(emptyBody);
 

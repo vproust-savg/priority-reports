@@ -8,7 +8,7 @@
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import express from 'express';
-import request from 'supertest';
+import { createTestClient } from './helpers/createTestClient';
 import type { CacheProvider } from '../src/services/cache';
 import { reportRegistry, type ReportConfig } from '../src/config/reportRegistry';
 import { getRequestPriorityEnv } from '../src/config/priorityEnvContext';
@@ -72,7 +72,8 @@ describe('POST /:reportId/query — environment override', () => {
       return { value: [{ DOCNO: 'X' }] };
     });
 
-    const res = await request(makeApp())
+    const client = await createTestClient(makeApp());
+    const res = await client
       .post('/api/v1/reports/fake-env/query')
       .send({ ...emptyBody, environment: 'uat' });
 
@@ -89,7 +90,8 @@ describe('POST /:reportId/query — environment override', () => {
       return { value: [{ DOCNO: 'X' }] };
     });
 
-    const res = await request(makeApp())
+    const client = await createTestClient(makeApp());
+    const res = await client
       .post('/api/v1/reports/fake-plain/query')
       .send({ ...emptyBody, environment: 'uat' });
 
@@ -102,7 +104,8 @@ describe('POST /:reportId/query — environment override', () => {
 
   it('rejects invalid environment values with 400', async () => {
     registerFakeReport('fake-env', { allowEnvOverride: true });
-    const res = await request(makeApp())
+    const client = await createTestClient(makeApp());
+    const res = await client
       .post('/api/v1/reports/fake-env/query')
       .send({ ...emptyBody, environment: 'staging' });
     expect(res.status).toBe(400);
@@ -125,7 +128,8 @@ describe('POST /:reportId/query — environment override', () => {
     });
     vi.mocked(queryPriority).mockResolvedValue({ value: [{ DOCNO: 'X' }] });
 
-    const res = await request(makeApp())
+    const client = await createTestClient(makeApp());
+    const res = await client
       .post('/api/v1/reports/fake-env/query')
       .send(emptyBody);
 

@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import request from 'supertest';
+import { createTestClient } from './helpers/createTestClient';
 import { app } from '../src/index';
 import { getReport } from '../src/config/reportRegistry';
 import { fetchWithRetry } from '../src/services/priorityHttp';
@@ -23,13 +23,15 @@ vi.mock('../src/services/priorityHttp', () => ({
 
 describe('legacy GET /:reportId retirement', () => {
   it('returns 404 JSON for the retired data route', async () => {
-    const res = await request(app).get('/api/v1/reports/grv-log');
+    const client = await createTestClient(app);
+    const res = await client.get('/api/v1/reports/grv-log');
     expect(res.status).toBe(404);
     expect(res.body.error).toMatch(/retired/i);
   });
 
   it('keeps GET /list working', async () => {
-    const res = await request(app).get('/api/v1/reports/list');
+    const client = await createTestClient(app);
+    const res = await client.get('/api/v1/reports/list');
     expect(res.status).toBe(200);
     const ids = res.body.reports.map((report: { id: string }) => report.id);
     expect(ids).toEqual(expect.arrayContaining([
@@ -40,7 +42,8 @@ describe('legacy GET /:reportId retirement', () => {
 
   it.each(['grv-log', 'grv-log-supabase', 'customer-returns', 'customer-returns-supabase'])(
     'dispatches %s to query validation', async (id) => {
-      const res = await request(app).post(`/api/v1/reports/${id}/query`).send({ filterGroup: null });
+      const client = await createTestClient(app);
+      const res = await client.post(`/api/v1/reports/${id}/query`).send({ filterGroup: null });
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('Invalid request body');
     },
@@ -68,7 +71,8 @@ describe('retired BBD endpoints', () => {
   ] as const)('returns a JSON 404 for %s /bbd/%s', async (method, path) => {
     const fetch = vi.fn();
     vi.stubGlobal('fetch', fetch);
-    const response = await request(app)[method](`/api/v1/reports/bbd/${path}`);
+    const client = await createTestClient(app);
+    const response = await client[method](`/api/v1/reports/bbd/${path}`);
     expect(response.status).toBe(404);
     expect(response.body).toEqual({ error: 'Report not found: bbd' });
     expect(cache.invalidateByPrefix).not.toHaveBeenCalled();

@@ -7,7 +7,7 @@
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import express from 'express';
-import request from 'supertest';
+import { createTestClient } from './helpers/createTestClient';
 import type { CacheProvider } from '../src/services/cache';
 import { reportRegistry, type ReportConfig } from '../src/config/reportRegistry';
 import { getRequestPriorityEnv } from '../src/config/priorityEnvContext';
@@ -56,7 +56,8 @@ describe('GET /:reportId/filters — environment override', () => {
 
   it('rejects invalid environment values with 400', async () => {
     registerFakeReport('fake-env', { allowEnvOverride: true });
-    const res = await request(makeApp(makeStubCache()))
+    const client = await createTestClient(makeApp(makeStubCache()));
+    const res = await client
       .get('/api/v1/reports/fake-env/filters?environment=staging');
     expect(res.status).toBe(400);
   });
@@ -71,7 +72,8 @@ describe('GET /:reportId/filters — environment override', () => {
       },
     });
     const cache = makeStubCache();
-    const res = await request(makeApp(cache))
+    const client = await createTestClient(makeApp(cache));
+    const res = await client
       .get('/api/v1/reports/fake-env/filters?environment=uat');
 
     expect(res.status).toBe(200);
@@ -90,7 +92,8 @@ describe('GET /:reportId/filters — environment override', () => {
       },
     });
     const cache = makeStubCache();
-    const res = await request(makeApp(cache))
+    const client = await createTestClient(makeApp(cache));
+    const res = await client
       .get('/api/v1/reports/fake-env/filters?environment=uat');
 
     expect(res.status).toBe(200);
