@@ -81,7 +81,7 @@ export function sendSupabaseFetchError(res: Response, err: unknown, reportId: st
 
 // WHY: Post-fetch shaping for fetchRows reports, kept out of query.ts (line
 // budget). Over-cap rows are dropped with a generic warning (not tied to any
-// one filter field), then transformRow -> filterRows, then queryWarnings.
+// one filter field), then transformRow and queryWarnings run.
 export function shapeFetchedRows(
   report: ReportConfig,
   fetched: Record<string, unknown>[],
@@ -94,8 +94,7 @@ export function shapeFetchedRows(
     raw = raw.slice(0, cap);
     warnings.push(FETCH_ROWS_CAP_WARNING);
   }
-  let rows = raw.map(report.transformRow);
-  if (report.filterRows) rows = report.filterRows(rows);
+  const rows = raw.map(report.transformRow);
   warnings.push(...(report.queryWarnings?.(filterGroup) ?? []));
   return { rows, warnings };
 }

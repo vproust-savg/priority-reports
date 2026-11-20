@@ -19,12 +19,11 @@ vi.mock('./components/PageRenderer', () => ({
 }));
 
 describe('App routing', () => {
-  it('serves the hidden Supabase page by URL', () => {
-    window.history.pushState({}, '', '/food-safety/receiving-log-supabase');
+  it.each(['receiving-log', 'customer-returns'])('keeps the old %s embed working', (id) => {
+    window.history.pushState({}, '', '/food-safety/' + id + '-supabase');
     render(<App />);
-    expect(screen.getByTestId('page-receiving-log-supabase')).toHaveTextContent(
-      'GRV Log — Goods Receiving Vouchers',
-    );
+    expect(window.location.pathname).toBe('/food-safety/' + id);
+    expect(screen.getByTestId('page-' + id)).toBeInTheDocument();
   });
 
   it('redirects /food-safety to /food-safety/receiving-log', () => {

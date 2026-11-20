@@ -29,6 +29,9 @@ export default function App() {
 
           {/* WHY: Routes are generated from departments + pages config so adding
               a new department or page NEVER requires touching App.tsx. */}
+          {/* Keep existing Airtable embeds and bookmarks on the canonical staff pages. */}
+          <Route path="/food-safety/receiving-log-supabase" element={<Navigate replace to="/food-safety/receiving-log" />} />
+          <Route path="/food-safety/customer-returns-supabase" element={<Navigate replace to="/food-safety/customer-returns" />} />
           {departments.map((dept) => {
             const deptPages = pages.filter((p) => p.department === dept.id);
             const landingPage = firstVisiblePage(deptPages);

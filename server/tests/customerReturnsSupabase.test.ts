@@ -26,7 +26,7 @@ import { querySupabase } from '../src/services/supabaseDb';
 const report = () => reportRegistry.get('customer-returns-supabase')!;
 
 const FLOOR_WARNING =
-  'This page holds returns from 2026-06-29 on. For earlier dates, use the Customer Returns page.';
+  'This page holds returns from 2026-06-29 onward. Earlier dates are outside this report’s history.';
 
 function emptyGroup(): FilterGroup {
   return { id: 'root', conjunction: 'and', conditions: [], groups: [] };
@@ -180,10 +180,10 @@ describe('report definition', () => {
     }
   });
 
-  it('has no explode, refresh or template export and opts out of caching', () => {
+  it('uses dated refresh, uncached line rows and fallback export', () => {
     const r = report();
     expect(r.explodeRows).toBeUndefined();
-    expect(r.refreshSource).toBeUndefined();
+    expect(r.refreshSource).toBeTypeOf('function');
     expect(r.exportConfig).toBeUndefined();
     expect(r.disableCache).toBe(true);
     expect(r.clientSidePagination).toBe(true);

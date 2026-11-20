@@ -9,12 +9,16 @@ import { CALENDAR_DAY_MS, parseRefreshDate, validateRefreshDateRange } from '@sh
 import type { RefreshDateRangeResult } from '@shared/utils/refreshDateRange';
 import type { FilterGroup } from '@shared/types';
 
-export function getRefreshDateRange(group: FilterGroup, today: string): RefreshDateRangeResult {
-  // WHY: A nested Date condition or an OR root need not constrain every row.
-  const date = group.conditions.find((condition) => condition.field === 'date');
-  if (group.conjunction !== 'and' || !date) return { reason: 'invalidDates' };
+function containsDate(group: FilterGroup): boolean {
+  return group.conditions.some(condition => condition.field === 'date') || group.groups.some(containsDate);
+}
 
-  const { operator, value, valueTo } = date;
+export function getRefreshDateRange(group: FilterGroup, today: string): RefreshDateRangeResult | { reason: 'ambiguousDates' } {
+  const dates = group.conditions.filter(condition => condition.field === 'date');
+  if (group.conjunction !== 'and' || dates.length === 0) return { reason: 'invalidDates' };
+  if (dates.length > 1 || group.groups.some(containsDate)) return { reason: 'ambiguousDates' };
+
+  const { operator, value, valueTo } = dates[0];
   switch (operator) {
     case 'isBetween':
     case 'isInWeek':

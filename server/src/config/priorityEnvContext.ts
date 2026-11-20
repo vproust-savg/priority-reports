@@ -19,8 +19,7 @@ import type { PriorityEnvironment } from '@shared/types';
 const storage = new AsyncLocalStorage<PriorityEnvironment>();
 
 // WHY: undefined means "no override" — run OUTSIDE any scope so
-// getPriorityConfig() falls back to the boot PRIORITY_ENV. Write routes
-// (extend) never call this, so writes can never be switched.
+// getPriorityConfig() falls back to the boot PRIORITY_ENV.
 export function runWithPriorityEnv<T>(
   env: PriorityEnvironment | undefined,
   fn: () => T,

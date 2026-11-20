@@ -34,7 +34,7 @@ const EnvSchema = z.object({
   UPSTASH_REDIS_URL: optionalUrl,
   UPSTASH_REDIS_TOKEN: optionalString,
 
-  // Airtable (for report status updates)
+  // Airtable (Excel export templates)
   AIRTABLE_TOKEN: optionalString,
 
   // Supabase (GRV receiving log read path) — Supavisor session pooler URL, sslmode=require
@@ -47,7 +47,7 @@ export const env = EnvSchema.parse(process.env);
 
 // WHY: The schema default above is 'uat' (right for local dev). In a
 // production deploy an unset PRIORITY_ENV would therefore silently serve
-// UAT data as "Live" and point BBD writes at UAT — with valid credentials,
+// UAT data as "Live" — with valid credentials,
 // so nothing would error (Codex finding 2, env-toggle spec §8). Fail the
 // boot instead; Railway's healthcheck keeps the previous deploy serving.
 // Exported as a pure function so tests cover the matrix without module

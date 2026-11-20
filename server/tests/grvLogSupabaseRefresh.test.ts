@@ -22,7 +22,7 @@ import {
 } from '../src/reports/grvLogSupabase';
 import { reportRegistry } from '../src/config/reportRegistry';
 
-const WARNING = 'This page holds GRVs from 2026-06-28 on. For earlier dates, use the Receiving Log page.';
+const WARNING = 'This page holds GRVs from 2026-06-28 onward. Earlier dates are outside this report’s history.';
 
 function group(conjunction: 'and' | 'or', conditions: Omit<FilterCondition, 'id'>[]): FilterGroup {
   return {
@@ -117,6 +117,12 @@ describe('refreshGrvSource', () => {
     await expect(refreshGrvSource(range, undefined, deps)).resolves.toEqual({ status: 'error' });
   });
 
+  it('returns partial immediately when only some documents were committed', async () => {
+    const { deps, query } = makeDeps([[requestRow('pending')], [statusRow('partial')]]);
+    await expect(refreshGrvSource(range, undefined, deps)).resolves.toEqual({ status: 'partial' });
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
   it('returns timeout after 90 s of always running', async () => {
     const { deps, advanced } = makeDeps([[requestRow('running')]]);
     deps.query.mockResolvedValue([statusRow('running')]);
@@ -147,9 +153,9 @@ describe('refreshGrvSource', () => {
     await expect(refreshGrvSource(range, undefined, deps)).rejects.toThrow('no row');
   });
 
-  it('returns a reused finished done request with no poll', async () => {
+  it('does not confirm a fresh read when the older database reuses a finished request', async () => {
     const { deps, query, sleep } = makeDeps([[requestRow('done', '42', true)]]);
-    await expect(refreshGrvSource(range, undefined, deps)).resolves.toEqual({ status: 'done' });
+    await expect(refreshGrvSource(range, undefined, deps)).resolves.toEqual({ status: 'error' });
     expect(query).toHaveBeenCalledTimes(1);
     expect(sleep).not.toHaveBeenCalled();
   });

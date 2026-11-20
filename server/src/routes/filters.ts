@@ -22,7 +22,6 @@ import type { FiltersResponse, FilterOption } from '@shared/types';
 // loads before reports.ts. Node module cache prevents double-registration.
 // (grvLog import is named — still triggers the same registration side effect.)
 import { EXCLUDED_VENDOR_SUPNAME } from '../reports/grvLog';
-import '../reports/bbdReport';
 
 export function createFiltersRouter(cache: CacheProvider): Router {
   const router = Router();
@@ -64,7 +63,6 @@ export function createFiltersRouter(cache: CacheProvider): Router {
     let filters: Record<string, FilterOption[]>;
 
     if (report.fetchFilters) {
-      // WHY: Report defines its own filter fetching logic (BBD, future reports).
       try {
         filters = await runWithPriorityEnv(requestedEnv, () => report.fetchFilters!());
       } catch (err) {

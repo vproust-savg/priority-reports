@@ -50,14 +50,14 @@ export interface ExcelStyle {
   // WHY: Per-report column widths for print-ready Excel exports.
   // Keys are column keys from transformRow output. Values are Excel character-width units.
   columnWidths: Record<string, number>;
-  // WHY: Per-report font size. BBD uses 9pt (11 columns), GRV Log uses 8pt (14 columns).
+  // WHY: Per-report font size in points.
   // Default: 10 if omitted.
   fontSize?: number;
 }
 
 // WHY: Outcome of a report's refreshSource hook, merged into the /refresh JSON
 // so the widget can tell the user whether the upstream sync finished.
-export type RefreshOutcome = { status: 'done' | 'error' | 'timeout' | 'busy' };
+export type RefreshOutcome = { status: 'done' | 'partial' | 'error' | 'timeout' | 'busy' };
 
 export interface ReportConfig {
   id: string;
@@ -89,32 +89,16 @@ export interface ReportConfig {
   // endpoint uses the Airtable template with this column mapping.
   // When absent, export falls back to a basic Excel with headers + data.
   exportConfig?: ExportConfig;
-  // WHY: Post-transform row exclusion. Runs after enrichRows + transformRow.
-  // Used by BBD to exclude items with balance <= 0 or non-flagged status.
-  // Keeps enrichRows focused on data fetching (consistent with GRV Log pattern).
-  filterRows?: (rows: Record<string, unknown>[]) => Record<string, unknown>[];
   // WHY: Per-report filter fetching. When absent, filters.ts falls back to
   // hardcoded GRV Log logic. Avoids modifying grvLog.ts for multi-report support.
   fetchFilters?: () => Promise<Record<string, FilterOption[]>>;
-  // WHY: When present, query.ts includes this in ResponseMeta so the frontend
-  // can apply per-row styling based on the named field's value.
-  rowStyleField?: string;
   // WHY: When true, query.ts uses the report's own $filter/$top/$skip from
   // buildQuery() instead of overriding them. All post-fetch rows are returned
-  // to the frontend, which handles pagination client-side. Required for reports
-  // like BBD where post-fetch filtering (filterRows) makes OData pagination unreliable.
+  // to the frontend, which handles pagination client-side.
   clientSidePagination?: boolean;
   // WHY: Per-report Excel styling for print-ready exports. Column widths and font size
   // are applied by excelExporter.ts. When absent, fallback uses auto-width and default font.
   excelStyle?: ExcelStyle;
-  // WHY: When present, enables the subform endpoint for this report.
-  // The frontend uses rowKeyField to identify rows; the backend uses
-  // keyField and subformName to build the Priority API call.
-  expandConfig?: {
-    subformName: string;
-    keyField: string;
-    rowKeyField: string;
-  };
   // WHY: Hook for reports that maintain their own in-memory state alongside
   // Redis. The refresh endpoint invokes this so reports can flush their
   // private caches when the user clicks Refresh. Optional — most reports
@@ -132,8 +116,7 @@ export interface ReportConfig {
   allowEnvOverride?: boolean;
   // WHY: Source-agnostic row fetch. When present, query/export skip Priority
   // entirely (buildQuery, OData filters and client-only filtering are bypassed)
-  // and take already-filtered raw rows from here; transformRow and filterRows
-  // still run. The query route also bypasses enrichRows/explodeRows, but export
+  // and take already-filtered raw rows from here; transformRow still runs. The query route also bypasses enrichRows/explodeRows, but export
   // still runs them if defined, so fetchRows reports must not define them.
   // `limit` is the cap + 1 so the route can detect truncation. Used by the
   // Supabase-backed GRV log.

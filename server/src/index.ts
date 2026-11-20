@@ -17,8 +17,6 @@ import { createQueryRefreshRouter } from './routes/queryRefresh';
 import { createReportsRouter } from './routes/reports';
 import { createFiltersRouter } from './routes/filters';
 import { createExportRouter } from './routes/export';
-import { createSubformRouter } from './routes/subform';
-import { createExtendRouter } from './routes/extend';
 import { createAttachmentsRouter } from './routes/attachments';
 import { logStartup } from './services/logger';
 import { getMonday, getSunday, toISODate } from '../../shared/utils/weekUtils';
@@ -35,15 +33,16 @@ app.use(express.json());
 const cache = createCacheProvider();
 
 // Mount API routes
-// WHY: Query router before reports router — more specific path first.
 app.use('/api/v1/health', createHealthRouter(cache));
+// Check report registration before any query, cache invalidation, or SPA fallback.
+app.use('/api/v1/reports', createReportsRouter());
 app.use('/api/v1/reports', createQueryRouter(cache));
 app.use('/api/v1/reports', createQueryRefreshRouter(cache));
-app.use('/api/v1/reports', createReportsRouter());
 app.use('/api/v1/reports', createFiltersRouter(cache));
 app.use('/api/v1/reports', createExportRouter(cache));
-app.use('/api/v1/reports', createSubformRouter());
-app.use('/api/v1/reports', createExtendRouter(cache));
+app.use('/api/v1/reports', (_req, res) => {
+  res.status(404).json({ error: 'Report endpoint not found' });
+});
 app.use('/api/v1/attachments', createAttachmentsRouter());
 
 // WHY: In production, Express serves the built React app.

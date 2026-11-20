@@ -21,5 +21,4 @@ export type DepartmentConfig = z.infer<typeof DepartmentConfigSchema>;
 // immediately with a clear Zod error instead of silently breaking routing.
 export const departments = z.array(DepartmentConfigSchema).parse([
   { id: 'food-safety', name: 'Food Safety',        basePath: '/food-safety' },
-  { id: 'purchasing',  name: 'Purchasing Reports',  basePath: '/purchasing' },
 ]);

@@ -40,121 +40,22 @@ describe('pages config', () => {
   });
 });
 
-describe('grv-log widget disableCache', () => {
-  it('is set to true on the grv-log widget', () => {
-    const receivingLog = pages.find((p) => p.id === 'receiving-log')!;
-    const grvLogWidget = receivingLog.widgets.find((w) => w.id === 'grv-log')!;
-    expect(grvLogWidget.disableCache).toBe(true);
-  });
-});
-
-describe('customer-returns page configuration', () => {
-  it('customer-returns page exists under food-safety', () => {
-    const page = pages.find((p) => p.id === 'customer-returns');
-    expect(page).toBeDefined();
-    expect(page!.department).toBe('food-safety');
-    expect(page!.path).toBe('/customer-returns');
-    expect(page!.name).toBe('Customer Returns');
+describe('staff report pages', () => {
+  it('lists only Receiving Log and Customer Returns', () => {
+    expect(pages.map(page => page.id)).toEqual(['receiving-log', 'customer-returns']);
   });
 
-  it('customer-returns has one widget referencing reportId customer-returns', () => {
-    const page = pages.find((p) => p.id === 'customer-returns')!;
-    expect(page.widgets).toHaveLength(1);
-    const w = page.widgets[0];
-    expect(w.reportId).toBe('customer-returns');
-    expect(w.type).toBe('table');
-    expect(w.disableCache).toBe(true);
-    expect(w.colSpan).toBe(12);
-  });
-
-  it('findWidgetByReportId returns disableCache:true for customer-returns', () => {
-    const w = findWidgetByReportId('customer-returns');
-    expect(w).toBeDefined();
-    expect(w!.disableCache).toBe(true);
-  });
-
-  it('Receiving Log and Customer Returns are sibling tabs under food-safety', () => {
-    const foodSafetyPages = pages.filter((p) => p.department === 'food-safety');
-    const ids = foodSafetyPages.map((p) => p.id);
-    expect(ids).toContain('receiving-log');
-    expect(ids).toContain('customer-returns');
-  });
-});
-
-describe('clientSidePagination mirrors the server opt-in', () => {
-  // WHY: The server returns the whole result set for these reports no matter
-  // which page is requested. Without the widget flag, every "Next" click
-  // changes the query key, misses the Redis cache (keyed by page) and
-  // re-pulls Priority — ~30 s per page on BBD (Victor, 2026-09-11).
-  it.each(['bbd', 'customer-returns', 'customer-returns-supabase'])('%s widget paginates locally', (reportId) => {
-    expect(findWidgetByReportId(reportId)?.clientSidePagination).toBe(true);
-  });
-});
-
-describe('env toggle config', () => {
-  it('grv-log widget enables the env toggle', () => {
-    const grv = pages.flatMap((p) => p.widgets).find((w) => w.reportId === 'grv-log');
-    expect(grv?.envToggle).toBe(true);
-  });
-});
-
-describe('receiving-log-supabase hidden page', () => {
-  const page = pages.find((p) => p.id === 'receiving-log-supabase');
-
-  it('exists under food-safety, hidden from the nav', () => {
-    expect(page).toBeDefined();
-    expect(page!.department).toBe('food-safety');
-    expect(page!.name).toBe('Receiving Log (Supabase)');
-    expect(page!.path).toBe('/receiving-log-supabase');
-    expect(page!.hiddenFromNav).toBe(true);
-  });
-
-  it('widget has no env toggle and mirrors the server opt-ins', () => {
-    expect(page!.widgets).toHaveLength(1);
-    const w = page!.widgets[0];
-    expect(w.id).toBe('grv-log-supabase');
-    expect(w.reportId).toBe('grv-log-supabase');
-    expect(w.title).toBe('GRV Log — Goods Receiving Vouchers');
-    expect(w.envToggle).toBeUndefined();
-    expect(w.disableCache).toBe(true);
-    expect(w.clientSidePagination).toBe(true);
-    expect(w.sourceRefresh).toBe(true);
-  });
-
-  it('the original receiving-log page stays visible and unchanged', () => {
-    const old = pages.find((p) => p.id === 'receiving-log')!;
-    expect(old.hiddenFromNav).toBeUndefined();
-    expect(old.widgets[0].envToggle).toBe(true);
-    expect(old.widgets[0].sourceRefresh).toBeUndefined();
-  });
-});
-
-describe('customer-returns-supabase hidden page', () => {
-  const page = pages.find((p) => p.id === 'customer-returns-supabase');
-
-  it('exists under food-safety, hidden from the nav', () => {
-    expect(page).toBeDefined();
-    expect(page!.department).toBe('food-safety');
-    expect(page!.name).toBe('Customer Returns (Supabase)');
-    expect(page!.path).toBe('/customer-returns-supabase');
-    expect(page!.hiddenFromNav).toBe(true);
-  });
-
-  it('widget mirrors the server opt-ins and has no refresh button', () => {
-    expect(page!.widgets).toHaveLength(1);
-    const w = page!.widgets[0];
-    expect(w.id).toBe('customer-returns-supabase');
-    expect(w.reportId).toBe('customer-returns-supabase');
-    expect(w.type).toBe('table');
-    expect(w.title).toBe('Customer Returns');
-    expect(w.colSpan).toBe(12);
-    expect(w.disableCache).toBe(true);
-    expect(w.clientSidePagination).toBe(true);
-    expect(w.sourceRefresh).toBeFalsy();
-  });
-
-  it('the original customer-returns page stays visible', () => {
-    expect(pages.find((p) => p.id === 'customer-returns')!.hiddenFromNav).toBeUndefined();
+  it.each([
+    ['receiving-log', 'grv-log-supabase'],
+    ['customer-returns', 'customer-returns-supabase'],
+  ])('%s reads and refreshes the Supabase report', (id, reportId) => {
+    const page = pages.find(page => page.id === id)!;
+    expect(page.path).toBe('/' + id);
+    expect(page.department).toBe('food-safety');
+    expect(page.widgets.map(widget => widget.reportId)).toEqual([reportId]);
+    expect(findWidgetByReportId(reportId)).toMatchObject({
+      sourceRefresh: true, clientSidePagination: true, disableCache: true,
+    });
   });
 });
 

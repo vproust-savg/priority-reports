@@ -1,22 +1,21 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: client/src/components/widgets/ReportTableWidget.tsx
 // PURPOSE: Report widget — server-side filtering, client-side
-//          sorting, column management, expandable rows.
+//          sorting, column management, source refresh and export.
 // USED BY: widgetRegistry.ts (registered as 'table' type)
 // EXPORTS: ReportTableWidget
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
 import { useReportQuery } from '../../hooks/useReportQuery';
 import { useFiltersQuery } from '../../hooks/useFiltersQuery';
 import { useFilterState } from '../../hooks/useFilterState';
 import { useColumnManager } from '../../hooks/useColumnManager';
 import { useSortManager } from '../../hooks/useSortManager';
+import { useReportRefresh } from '../../hooks/useReportRefresh';
 import { useExport } from '../../hooks/useExport';
-import { useBBDExtend } from '../../hooks/useBBDExtend';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { AnimatePresence, motion } from 'framer-motion';
 import { PANEL_FADE } from '../../config/animationConstants';
@@ -30,41 +29,13 @@ import Toast from '../Toast';
 import LoadingToast from '../LoadingToast';
 import EmptyState from '../EmptyState';
 import ErrorState from '../ErrorState';
-import ExtendExpiryModal from '../modals/ExtendExpiryModal';
-import BulkExtendModal from '../modals/BulkExtendModal';
-import ReportSubTabs from '../ReportSubTabs';
-import BBDExtendedView from '../BBDExtendedView';
 import CopyableCell from '../cells/CopyableCell';
 import { AttachmentsCell } from './cells/AttachmentsCell';
 import type { Attachment } from './cells/AttachmentsCell';
 import { countActiveFilters } from '../../config/filterConstants';
 import { findWidgetByReportId } from '../../config/pages';
-import { getDetailComponent } from '../../config/detailRegistry';
 import { formatCellValue } from '../../utils/formatters';
-import { getRefreshDateRange } from '../../utils/refreshDateRange';
-import { nowInLA } from '@shared/utils/timezone';
-import { toISODate } from '@shared/utils/weekUtils';
 import type { PriorityEnvironment } from '@shared/types';
-
-// WHY: Copy per non-success outcome of a source refresh. 'done' (and, for
-// widgets without a source refresh, no status) deliberately have no entry —
-// success needs no message.
-const REFRESH_NOTICES: Record<string, string> = {
-  timeout: 'Still refreshing from Priority, so data may update in a minute',
-  error: 'Refresh from Priority failed; showing the last synced data',
-  busy: 'Priority refresh is paused during the nightly sync (1:45–2:45 AM); try again later',
-};
-const REFRESH_UNCONFIRMED_NOTICE = 'Refresh could not be confirmed; showing the last synced data';
-
-// WHY: An accepted sourceRefresh POST answers 200 with one of these statuses
-// (queryRefresh.ts). Anything else — a proxy 502/504 HTML page, an
-// unparseable body, a missing or unknown status — is not a confirmed refresh.
-function getSourceRefreshNotice(res: Response, body: { status?: string } | null): string | null {
-  const status = body?.status;
-  if (!res.ok || !status) return REFRESH_UNCONFIRMED_NOTICE;
-  if (status === 'done') return null;
-  return REFRESH_NOTICES[status] ?? REFRESH_UNCONFIRMED_NOTICE;
-}
 
 export default function ReportTableWidget({ reportId }: { reportId: string }) {
   const {
@@ -128,65 +99,11 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
     setCopyToast({ message: `Copied "${value}"`, anchor });
   }, []);
 
-  const [activeSubTab, setActiveSubTab] = useState<'active' | 'extended'>('active');
-
-  const {
-    extendModal, cellRenderers, handleBulkExtend, handleExtendSuccess, closeModal,
-  } = useBBDExtend(reportId, handleCopy);
-
   const filterLoadError = filtersQuery.error;
-  const queryClient = useQueryClient();
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  // WHY: Outcome of the last source refresh (Supabase-backed widgets only). Set
-  // after the POST answers, cleared at the start of the next click so a stale
-  // message never sits next to a refresh that is still running.
-  const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
-  // WHY: The Refresh button stays clickable while a refresh runs, so answers can
-  // overlap. Only the newest click may set the notice or stop the spinner; an
-  // older answer still invalidates the query (the data is fresh either way).
-  const latestRefreshIdRef = useRef(0);
-  const handleRefresh = async () => {
-    const myRefreshId = ++latestRefreshIdRef.current;
-    const request: RequestInit = { method: 'POST' };
-    if (widgetConfig?.sourceRefresh) {
-      // WHY: Refresh follows the visible filter, even before the query debounce fires.
-      const result = getRefreshDateRange(filterGroup, toISODate(nowInLA()));
-      if ('reason' in result) {
-        setRefreshNotice(result.reason === 'tooLong'
-          ? 'Refresh covers at most 31 days; narrow the Date filter'
-          : 'Pick a date range of 31 days or fewer to refresh');
-        setIsRefreshing(false);
-        return;
-      }
-      request.headers = { 'Content-Type': 'application/json' };
-      request.body = JSON.stringify(result.range);
-    }
-    setIsRefreshing(true);
-    setRefreshNotice(null);
-    try {
-      let notice: string | null;
-      try {
-        const res = await fetch(`/api/v1/reports/${reportId}/refresh`, request);
-        if (!res.ok) console.warn(`[refresh] Server returned ${res.status}`);
-        // WHY: Widgets without a source refresh answer with no status; a body that
-        // is not JSON is ignored so it can never block the invalidation below.
-        const body: { status?: string } | null = await res.json().catch(() => null);
-        notice = widgetConfig?.sourceRefresh
-          ? getSourceRefreshNotice(res, body)
-          : body?.status ? REFRESH_NOTICES[body.status] ?? null : null;
-      } catch (err) {
-        // WHY: Other widgets keep their old behaviour. For a sourceRefresh widget a
-        // rejected fetch (network drop) still invalidates below and shows the
-        // unconfirmed notice instead of escaping as an unhandled rejection.
-        if (!widgetConfig?.sourceRefresh) throw err;
-        notice = REFRESH_UNCONFIRMED_NOTICE;
-      }
-      await queryClient.invalidateQueries({ queryKey: ['report', reportId] });
-      if (myRefreshId === latestRefreshIdRef.current) setRefreshNotice(notice);
-    } finally {
-      if (myRefreshId === latestRefreshIdRef.current) setIsRefreshing(false);
-    }
-  };
+  const tableReady = filterGroup === debouncedGroup && query.isSuccess && query.fetchStatus === 'idle';
+  const { handleRefresh, isRefreshing, notice, dateLabel, changedRange, exportDisabled, needsAttention } = useReportRefresh(
+    reportId, !!widgetConfig?.sourceRefresh, filterGroup, tableReady, query.isError,
+  );
 
   const data = query.data;
   const displayData = data?.data ?? [];
@@ -197,9 +114,6 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
     () => (clientPaged ? sortedDisplayData.slice((page - 1) * 50, page * 50) : sortedDisplayData),
     [clientPaged, sortedDisplayData, page],
   );
-  const expandConfig = data?.meta?.expandConfig;
-  const DetailComponent = expandConfig ? getDetailComponent(reportId) : null;
-
   // WHY: Generic copy-renderer source — any column the server flagged
   // copyable: true gets a CopyableCell. Empty/null values fall through
   // to the default formatter (e.g., em-dash) so we don't render an
@@ -234,22 +148,10 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
     [],
   );
 
-  // WHY: BBD-specific renderers (extend modal, custom expiry cell) take
-  // precedence over generic copyable renderers on key collision.
-  const mergedRenderers = useMemo(() => {
-    const bbd = activeSubTab === 'active' ? cellRenderers : undefined;
-    if (!bbd && Object.keys(copyRenderers).length === 0 && Object.keys(attachmentsRenderer).length === 0) return undefined;
-    return { ...copyRenderers, ...attachmentsRenderer, ...(bbd ?? {}) };
-  }, [copyRenderers, attachmentsRenderer, cellRenderers, activeSubTab]);
-
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(() => new Set());
-  const toggleExpand = useCallback((rowKey: string) => {
-    setExpandedRows((prev) => {
-      const next = new Set(prev);
-      next.has(rowKey) ? next.delete(rowKey) : next.add(rowKey);
-      return next;
-    });
-  }, []);
+  const mergedRenderers = useMemo(
+    () => ({ ...copyRenderers, ...attachmentsRenderer }),
+    [copyRenderers, attachmentsRenderer],
+  );
 
   // WHY: Only one panel open at a time — opening one closes the others.
   const handleFilterToggle = () => { setIsFilterOpen(!isFilterOpen); setIsColumnPanelOpen(false); setIsSortPanelOpen(false); };
@@ -270,123 +172,110 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
 
   return (
     <>
-      {reportId === 'bbd' && (
-        <ReportSubTabs
-          activeTab={activeSubTab}
-          onTabChange={setActiveSubTab}
+      {/* WHY: Single wrapper for toolbar + panels so useClickOutside treats
+          clicks inside any panel as "inside" — closes only on real outside clicks. */}
+      <div ref={toolbarWrapRef}>
+        <TableToolbar
+          activeFilterCount={countActiveFilters(filterGroup)}
+          isFilterOpen={isFilterOpen}
+          onFilterToggle={handleFilterToggle}
+          hiddenColumnCount={hiddenCount}
+          isColumnPanelOpen={isColumnPanelOpen}
+          onColumnToggle={handleColumnToggle}
+          sortCount={sortCount}
+          isSortPanelOpen={isSortPanelOpen}
+          onSortToggle={handleSortToggle}
+          isExporting={isExporting}
+          onExport={triggerExport}
+          exportDisabled={exportDisabled}
+          isRefreshing={isRefreshing}
+          onRefresh={widgetConfig?.sourceRefresh && isExporting ? undefined : handleRefresh}
+          refreshLabel={widgetConfig?.sourceRefresh ? 'Refresh Date filter range from Priority' : undefined}
+          priorityEnv={activeEnv}
+          onEnvChange={envToggleEnabled ? handleEnvChange : undefined}
         />
+        <AnimatePresence>
+          {isFilterOpen && (
+            <motion.div key="filter-panel" {...PANEL_FADE}>
+              <FilterBuilder
+                filterGroup={filterGroup}
+                onChange={handleFilterChange}
+                columns={filterColumns}
+                filterOptions={filtersQuery.data?.filters}
+                filterOptionsLoading={filtersQuery.isLoading}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {isColumnPanelOpen && (
+            <motion.div key="column-panel" {...PANEL_FADE}>
+              <ColumnManagerPanel
+                managedColumns={managedColumns}
+                onToggle={toggleColumn}
+                onReorder={reorderColumns}
+                onShowAll={showAll}
+                onHideAll={hideAll}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {isSortPanelOpen && (
+            <motion.div key="sort-panel" {...PANEL_FADE}>
+              <SortPanel
+                sortRules={sortRules}
+                columns={visibleColumns}
+                onAddSort={addSort}
+                onRemoveSort={removeSort}
+                onUpdateSort={updateSort}
+                onReorderSorts={reorderSorts}
+                onClearAll={clearAllSorts}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+      {filterLoadError && (
+        <div className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-red-700 bg-red-50/80 border border-red-200/60 rounded-lg">
+          <AlertTriangle size={14} className="shrink-0 text-red-500" />
+          <span>Failed to load filter options. Try refreshing the page.</span>
+        </div>
       )}
-
-      {reportId === 'bbd' && activeSubTab === 'extended' ? (
-        <BBDExtendedView />
-      ) : (
-        <>
-          {/* WHY: Single wrapper for toolbar + panels so useClickOutside treats
-              clicks inside any panel as "inside" — closes only on real outside clicks. */}
-          <div ref={toolbarWrapRef}>
-            <TableToolbar
-              activeFilterCount={countActiveFilters(filterGroup)}
-              isFilterOpen={isFilterOpen}
-              onFilterToggle={handleFilterToggle}
-              hiddenColumnCount={hiddenCount}
-              isColumnPanelOpen={isColumnPanelOpen}
-              onColumnToggle={handleColumnToggle}
-              sortCount={sortCount}
-              isSortPanelOpen={isSortPanelOpen}
-              onSortToggle={handleSortToggle}
-              isExporting={isExporting}
-              onExport={triggerExport}
-              isRefreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              refreshLabel={widgetConfig?.sourceRefresh ? 'Refresh Date filter range from Priority' : undefined}
-              onBulkExtend={reportId === 'bbd' && activeSubTab === 'active' ? handleBulkExtend : undefined}
-              priorityEnv={activeEnv}
-              onEnvChange={envToggleEnabled ? handleEnvChange : undefined}
-            />
-            <AnimatePresence>
-              {isFilterOpen && (
-                <motion.div key="filter-panel" {...PANEL_FADE}>
-                  <FilterBuilder
-                    filterGroup={filterGroup}
-                    onChange={handleFilterChange}
-                    columns={filterColumns}
-                    filterOptions={filtersQuery.data?.filters}
-                    filterOptionsLoading={filtersQuery.isLoading}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <AnimatePresence>
-              {isColumnPanelOpen && (
-                <motion.div key="column-panel" {...PANEL_FADE}>
-                  <ColumnManagerPanel
-                    managedColumns={managedColumns}
-                    onToggle={toggleColumn}
-                    onReorder={reorderColumns}
-                    onShowAll={showAll}
-                    onHideAll={hideAll}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <AnimatePresence>
-              {isSortPanelOpen && (
-                <motion.div key="sort-panel" {...PANEL_FADE}>
-                  <SortPanel
-                    sortRules={sortRules}
-                    columns={visibleColumns}
-                    onAddSort={addSort}
-                    onRemoveSort={removeSort}
-                    onUpdateSort={updateSort}
-                    onReorderSorts={reorderSorts}
-                    onClearAll={clearAllSorts}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
+      <div role="status" aria-label="Source refresh" aria-atomic="true">
+        {notice && (
+          <div className={`mx-5 mt-2 px-3 py-2 text-xs border rounded-lg ${needsAttention
+            ? 'text-amber-700 bg-amber-50/80 border-amber-200/60'
+            : 'text-[var(--color-text-secondary)] border-[var(--color-gold-subtle)]'}`}>
+            <span>{notice}</span>{dateLabel && <span> {dateLabel}.</span>}
+            {changedRange && <span> The Date filter changed. Refresh the selected dates before exporting.</span>}
           </div>
-          {filterLoadError && (
-            <div className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-red-700 bg-red-50/80 border border-red-200/60 rounded-lg">
-              <AlertTriangle size={14} className="shrink-0 text-red-500" />
-              <span>Failed to load filter options. Try refreshing the page.</span>
-            </div>
-          )}
-          {/* WHY: The refresh notice goes through the same map as data.warnings so the
-              amber row is written once; the notice sits first, just above the warnings. */}
-          {[...(refreshNotice ? [refreshNotice] : []), ...(data?.warnings ?? [])].map((msg, i) => (
-            <div key={`warn-${i}`} className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-amber-700 bg-amber-50/80 border border-amber-200/60 rounded-lg">
-              <AlertTriangle size={14} className="shrink-0 text-amber-500" />
-              <span>{msg}</span>
-            </div>
-          ))}
-          {query.isLoading && <LoadingToast />}
-          {query.error && <ErrorState onRetry={() => query.refetch()} />}
-          {!query.isLoading && !query.error && displayData.length === 0 && <EmptyState />}
+        )}
+      </div>
+      {(data?.warnings ?? []).map((msg, i) => (
+        <div key={`warn-${i}`} className="flex items-center gap-2 mx-5 mt-2 px-3 py-2 text-xs text-amber-700 bg-amber-50/80 border border-amber-200/60 rounded-lg">
+          <AlertTriangle size={14} className="shrink-0 text-amber-500" />
+          <span>{msg}</span>
+        </div>
+      ))}
+      {query.isLoading && <LoadingToast />}
+      {query.error && <ErrorState onRetry={() => query.refetch()} />}
+      {!query.isLoading && !query.error && displayData.length === 0 && <EmptyState />}
 
-          {!query.isLoading && displayData.length > 0 && (
-            <>
-              <ReportTable
-                columns={visibleColumns.length > 0 ? visibleColumns : data!.columns}
-                data={pagedData}
-                rowStyleField={data?.meta?.rowStyleField}
-                reportId={reportId}
-                expandConfig={expandConfig && DetailComponent ? {
-                  rowKeyField: expandConfig.rowKeyField,
-                  DetailComponent,
-                } : undefined}
-                expandedRows={expandedRows}
-                onToggleExpand={toggleExpand}
-                cellRenderers={mergedRenderers}
-              />
-              <Pagination
-                page={page}
-                pageSize={50}
-                totalCount={data!.pagination.totalCount}
-                totalPages={data!.pagination.totalPages}
-                onPageChange={setPage}
-              />
-            </>
-          )}
+      {!query.isLoading && displayData.length > 0 && (
+        <>
+          <ReportTable
+            columns={visibleColumns.length > 0 ? visibleColumns : data!.columns}
+            data={pagedData}
+            cellRenderers={mergedRenderers}
+          />
+          <Pagination
+            page={page}
+            pageSize={50}
+            totalCount={data!.pagination.totalCount}
+            totalPages={data!.pagination.totalPages}
+            onPageChange={setPage}
+          />
         </>
       )}
 
@@ -406,27 +295,6 @@ export default function ReportTableWidget({ reportId }: { reportId: string }) {
         )}
       </AnimatePresence>
 
-      {extendModal?.type === 'single' && extendModal.row && (
-        <ExtendExpiryModal
-          isOpen
-          onClose={closeModal}
-          serialName={extendModal.row.serialName as string}
-          partName={extendModal.row.partNumber as string}
-          partDescription={extendModal.row.partDescription as string}
-          currentExpiryDate={extendModal.row.expiryDate as string}
-          onSuccess={handleExtendSuccess}
-          row={extendModal.row}
-        />
-      )}
-
-      {extendModal?.type === 'bulk' && (
-        <BulkExtendModal
-          isOpen
-          onClose={closeModal}
-          rows={sortedDisplayData}
-          onSuccess={handleExtendSuccess}
-        />
-      )}
     </>
   );
 }

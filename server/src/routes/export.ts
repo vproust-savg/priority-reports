@@ -29,7 +29,6 @@ import { sendSupabaseFetchError } from './queryHelpers';
 import '../reports/grvLog';
 import '../reports/grvLogSupabase';
 import '../reports/customerReturnsSupabase';
-import '../reports/bbdReport';
 
 const ROW_CAP = 100_000;
 const PAGE_SIZE = 5000;
@@ -67,7 +66,7 @@ export function createExportRouter(cache: CacheProvider): Router {
     const baseParams = report.buildQuery({ page: 1, pageSize: PAGE_SIZE });
     const odataFilter = buildODataFilter(body.filterGroup, report.filterColumns);
 
-    // WHY: Merge the report's base $filter (e.g., BBD's EXPIRYDATE cutoff) with
+    // WHY: Merge the report's base $filter with
     // UI-generated OData filter. Both are ANDed when present. Same pattern as query.ts.
     const combinedFilter = combineFilters(baseParams.$filter, odataFilter);
 
@@ -160,14 +159,8 @@ export function createExportRouter(cache: CacheProvider): Router {
       enrichedRows = report.explodeRows(enrichedRows);
     }
 
-    // --- Transform + post-transform exclusion + client-side filter ---
-    let transformedRows = enrichedRows.map(report.transformRow);
-
-    // WHY: Post-transform row exclusion. BBD uses this to remove items
-    // with balance <= 0 or without a flagged expiration status. Same as query.ts.
-    if (report.filterRows) {
-      transformedRows = report.filterRows(transformedRows);
-    }
+    // --- Transform + client-side filter ---
+    const transformedRows = enrichedRows.map(report.transformRow);
 
     // WHY: fetchRows rows are already filtered at the source (SQL); re-applying
     // client filters would double-filter against columns that have no client meta.
@@ -228,7 +221,7 @@ export function createExportRouter(cache: CacheProvider): Router {
     }
 
     // WHY: Filename format matches spec: report name (spaces→hyphens) + today's date.
-    // Strip non-ASCII chars (e.g., em dash "—" in "BBD — Best By Dates") because
+    // Strip non-ASCII chars because
     // HTTP Content-Disposition headers only allow ASCII (RFC 7230). Node throws
     // ERR_INVALID_CHAR on non-ASCII header values.
     const today = new Date().toISOString().slice(0, 10);

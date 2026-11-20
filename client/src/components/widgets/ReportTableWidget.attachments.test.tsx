@@ -68,16 +68,6 @@ vi.mock('../../hooks/useExport', () => ({
   }),
 }));
 
-vi.mock('../../hooks/useBBDExtend', () => ({
-  useBBDExtend: () => ({
-    extendModal: null,
-    cellRenderers: undefined,
-    handleBulkExtend: vi.fn(),
-    handleExtendSuccess: vi.fn(),
-    closeModal: vi.fn(),
-  }),
-}));
-
 // WHY: pages.ts is Zod-validated at import time and has no side effects.
 // We only need findWidgetByReportId to return disableCache:true so the
 // hook options branch is predictable.

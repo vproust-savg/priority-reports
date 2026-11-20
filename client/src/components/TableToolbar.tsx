@@ -9,7 +9,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { SlidersHorizontal, Columns3, ArrowUpDown, Download, Loader2, RefreshCw, CalendarClock } from 'lucide-react';
+import { SlidersHorizontal, Columns3, ArrowUpDown, Download, Loader2, RefreshCw } from 'lucide-react';
 import EnvToggle from './widgets/EnvToggle';
 import type { PriorityEnvironment } from '@shared/types';
 
@@ -30,7 +30,7 @@ interface TableToolbarProps {
   // WHY: Accessible name for the Refresh button. Defaults to "Refresh"; widgets
   // with a source refresh pass a longer text saying what the refresh does.
   refreshLabel?: string;
-  onBulkExtend?: () => void;
+  exportDisabled?: boolean;
   searchTerm?: string;
   onSearch?: (term: string) => void;
   totalRows?: number;
@@ -47,7 +47,7 @@ export default function TableToolbar({
   sortCount, isSortPanelOpen, onSortToggle,
   isExporting, onExport,
   isRefreshing, onRefresh, refreshLabel,
-  onBulkExtend,
+  exportDisabled,
   searchTerm = '', onSearch,
   totalRows, filteredRows,
   priorityEnv, onEnvChange,
@@ -92,19 +92,12 @@ export default function TableToolbar({
 
         <ToolbarIcon
           isOpen={false} isActive={false} badge={null}
-          onClick={onRefresh} spinning={isRefreshing}
+          onClick={onRefresh} spinning={isRefreshing} disabled={!onRefresh}
           icon={<RefreshCw size={14} />} label={refreshLabel ?? 'Refresh'}
         />
-        {onBulkExtend && (
-          <ToolbarIcon
-            isOpen={false} isActive={false} badge={null}
-            onClick={onBulkExtend}
-            icon={<CalendarClock size={14} />} label="Extend"
-          />
-        )}
         <ToolbarIcon
           isOpen={false} isActive={false} badge={null}
-          onClick={onExport} spinning={isExporting}
+          onClick={onExport} spinning={isExporting} disabled={exportDisabled || isExporting}
           icon={<Download size={14} />} label="Export"
         />
       </div>
@@ -114,9 +107,9 @@ export default function TableToolbar({
 
 /* --- Reusable icon button with three visual states --- */
 
-function ToolbarIcon({ isOpen, isActive, badge, icon, spinning, onClick, label }: {
+function ToolbarIcon({ isOpen, isActive, badge, icon, spinning, disabled, onClick, label }: {
   isOpen: boolean; isActive: boolean; badge: number | null;
-  icon: React.ReactNode; spinning?: boolean; onClick?: () => void; label: string;
+  icon: React.ReactNode; spinning?: boolean; disabled?: boolean; onClick?: () => void; label: string;
 }) {
   const cls = isOpen
     ? 'bg-[var(--color-gold-primary)] text-white'
@@ -126,8 +119,8 @@ function ToolbarIcon({ isOpen, isActive, badge, icon, spinning, onClick, label }
 
   return (
     <button
-      type="button" onClick={onClick} aria-label={label}
-      className={`relative w-7 h-7 rounded-full flex items-center justify-center transition-all duration-150 ${cls}`}
+      type="button" onClick={onClick} disabled={disabled} aria-label={label}
+      className={`disabled:opacity-50 disabled:cursor-not-allowed relative w-7 h-7 rounded-full flex items-center justify-center transition-all duration-150 ${cls}`}
     >
       {spinning ? <Loader2 size={14} className="animate-spin" /> : icon}
       {badge !== null && !isOpen && (

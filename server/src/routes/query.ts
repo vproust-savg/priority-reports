@@ -32,7 +32,6 @@ import type { ApiResponse } from '@shared/types';
 import '../reports/grvLog';
 import '../reports/grvLogSupabase';
 import '../reports/customerReturnsSupabase';
-import '../reports/bbdReport';
 
 // WHY: fetchRows reports (Supabase) load their whole filtered set in one go and
 // paginate in memory; this bounds that set. The route asks for CAP + 1 rows so
@@ -123,8 +122,7 @@ export function createQueryRouter(cache: CacheProvider): Router {
         meta: {
           reportId, reportName: report.name, generatedAt: new Date().toISOString(),
           cache: 'miss', executionTimeMs: Date.now() - startTime,
-          source: 'supabase', priorityEnv: 'production', rowStyleField: report.rowStyleField,
-          expandConfig: report.expandConfig ? { rowKeyField: report.expandConfig.rowKeyField } : undefined,
+          source: 'supabase', priorityEnv: 'production',
         },
         data: pageRows,
         pagination: {
@@ -149,12 +147,11 @@ export function createQueryRouter(cache: CacheProvider): Router {
     const hasClientFilters = hasClientOnlyConditions(body.filterGroup, report.filterColumns);
     const baseParams = report.buildQuery({ page: body.page, pageSize: body.pageSize });
 
-    // WHY: Merge the report's base $filter (e.g., BBD's EXPIRYDATE cutoff) with
+    // WHY: Merge the report's base $filter with
     // UI-generated OData filter. Both are ANDed when present.
     const combinedFilter = combineFilters(baseParams.$filter, odataFilter);
 
-    // WHY: clientSidePagination reports (like BBD) use the report's own $top/$skip
-    // because post-fetch filtering (filterRows) makes OData pagination unreliable.
+    // WHY: clientSidePagination reports fetch their whole window using the report's $top/$skip.
     // Standard reports use query.ts-controlled pagination.
     let fetchTop: number;
     let fetchSkip: number;
@@ -218,12 +215,6 @@ export function createQueryRouter(cache: CacheProvider): Router {
     }
     let rows = rawRows.map(report.transformRow);
 
-    // WHY: Post-transform row exclusion. BBD uses this to remove items
-    // with balance <= 0 or without a flagged expiration status.
-    if (report.filterRows) {
-      rows = report.filterRows(rows);
-    }
-
     // WHY: Apply post-enrichment filtering for client-only columns.
     // OData can't filter on fields that come from HTML sub-form parsing.
     if (hasClientFilters) {
@@ -258,13 +249,6 @@ export function createQueryRouter(cache: CacheProvider): Router {
         executionTimeMs: Date.now() - startTime,
         source: 'priority-odata',
         priorityEnv: resolvedEnv,
-        rowStyleField: report.rowStyleField,
-        // WHY: When the report has expandConfig, pass rowKeyField to the frontend
-        // so it knows which row field to use as the expand key. subformName and
-        // keyField stay server-side (used by the subform endpoint).
-        expandConfig: report.expandConfig
-          ? { rowKeyField: report.expandConfig.rowKeyField }
-          : undefined,
       },
       data: rows,
       pagination: {

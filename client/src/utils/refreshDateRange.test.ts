@@ -50,6 +50,16 @@ describe('getRefreshDateRange', () => {
     }
   });
 
+  it('rejects additional Date conditions at the root or anywhere below it', () => {
+    const extra = root(date('equals', '2026-11-01'));
+    const selected = root(date('equals', today));
+    for (const group of [root(...selected.conditions, ...extra.conditions), {
+      ...selected, groups: [{ ...root(), groups: [extra] }],
+    }]) {
+      expect(getRefreshDateRange(group, today)).toHaveProperty('reason');
+    }
+  });
+
   it.each([
     { condition: date('isBetween', today), reason: 'invalidDates' },
     { condition: date('isAfter', '2026-02-29'), reason: 'invalidDates' },

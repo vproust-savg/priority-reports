@@ -11,6 +11,7 @@
 
 import type { ColumnDefinition, ColumnFilterMeta, FilterGroup, FilterOption } from '@shared/types';
 import { reportRegistry } from '../config/reportRegistry';
+import { createDatedReportRefresh } from '../services/datedReportRefresh';
 import { querySupabase } from '../services/supabaseDb';
 import { buildSqlWhere } from '../services/sqlFilterBuilder';
 import { staysOnOrAfterFloor } from '../services/historyFloorWarnings';
@@ -186,21 +187,17 @@ export function transformCustomerReturnSupabaseRow(raw: Record<string, unknown>)
 }
 
 // WHY: Supabase only holds returns from this date (the first Priority backfill).
-// Earlier returns live on the Priority-backed Customer Returns page.
 export const CUSTOMER_RETURNS_SUPABASE_HISTORY_FLOOR = '2026-06-29';
 
 const HISTORY_FLOOR_WARNING =
-  `This page holds returns from ${CUSTOMER_RETURNS_SUPABASE_HISTORY_FLOOR} on. ` +
-  'For earlier dates, use the Customer Returns page.';
+  `This page holds returns from ${CUSTOMER_RETURNS_SUPABASE_HISTORY_FLOOR} onward. Earlier dates are outside this report’s history.`;
 
 export function buildReturnsHistoryFloorWarnings(group: FilterGroup): string[] {
   return staysOnOrAfterFloor(group, CUSTOMER_RETURNS_SUPABASE_HISTORY_FLOOR) ? [] : [HISTORY_FLOOR_WARNING];
 }
 
 // WHY: Self-registration — importing this file adds the report to the registry.
-// No explodeRows (the view is already one row per line, and export would run it
-// again), no refreshSource (Supabase has no on-demand refresh for returns) and no
-// exportConfig (customer-returns exports in fallback mode too).
+// The view supplies one row per line. Returns uses the standard workbook layout.
 reportRegistry.set('customer-returns-supabase', {
   id: 'customer-returns-supabase',
   name: 'Customer Returns (Supabase)',
@@ -218,4 +215,5 @@ reportRegistry.set('customer-returns-supabase', {
   // WHY: No-op kept so the /refresh route's optional-chain call site stays valid.
   clearMemoryCache: () => {},
   queryWarnings: buildReturnsHistoryFloorWarnings,
+  refreshSource: createDatedReportRefresh('return'),
 });

@@ -16,7 +16,6 @@ import { reportRegistry } from '../config/reportRegistry';
 import '../reports/grvLog';
 import '../reports/grvLogSupabase';
 import '../reports/customerReturnsSupabase';
-import '../reports/bbdReport';
 import '../reports/customerReturns';
 
 export function createReportsRouter(): Router {
@@ -29,6 +28,14 @@ export function createReportsRouter(): Router {
       name: config.name,
     }));
     res.json({ reports });
+  });
+
+  router.use('/:reportId', (req, res, next) => {
+    if (!reportRegistry.has(req.params.reportId)) {
+      res.status(404).json({ error: `Report not found: ${req.params.reportId}` });
+      return;
+    }
+    next();
   });
 
   // WHY: Legacy data route retired 2026-08-03 (env-toggle spec §7) — it

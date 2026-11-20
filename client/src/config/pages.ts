@@ -55,24 +55,6 @@ export const pages = z.array(PageConfigSchema).parse([
     path: '/receiving-log',
     widgets: [
       {
-        id: 'grv-log',
-        reportId: 'grv-log',
-        type: 'table',
-        title: 'GRV Log — Goods Receiving Vouchers',
-        colSpan: 12,
-        disableCache: true,
-        envToggle: true,
-      },
-    ],
-  },
-  {
-    id: 'receiving-log-supabase',
-    department: 'food-safety',
-    name: 'Receiving Log (Supabase)',
-    path: '/receiving-log-supabase',
-    hiddenFromNav: true,
-    widgets: [
-      {
         id: 'grv-log-supabase',
         reportId: 'grv-log-supabase',
         type: 'table',
@@ -93,26 +75,6 @@ export const pages = z.array(PageConfigSchema).parse([
     path: '/customer-returns',
     widgets: [
       {
-        id: 'customer-returns',
-        reportId: 'customer-returns',
-        type: 'table',
-        title: 'Customer Returns',
-        colSpan: 12,
-        disableCache: true,
-        // WHY: Server returns the whole month exploded into one row per line
-        // item; the widget paginates these rows locally (50/page).
-        clientSidePagination: true,
-      },
-    ],
-  },
-  {
-    id: 'customer-returns-supabase',
-    department: 'food-safety',
-    name: 'Customer Returns (Supabase)',
-    path: '/customer-returns-supabase',
-    hiddenFromNav: true,
-    widgets: [
-      {
         id: 'customer-returns-supabase',
         reportId: 'customer-returns-supabase',
         type: 'table',
@@ -122,25 +84,7 @@ export const pages = z.array(PageConfigSchema).parse([
         // WHY: Server returns the whole month, one row per line item; the
         // widget paginates these rows locally (mirrors the server opt-in).
         clientSidePagination: true,
-      },
-    ],
-  },
-  {
-    id: 'bbd',
-    department: 'purchasing',
-    name: 'BBD — Best By Dates',
-    path: '/bbd',
-    widgets: [
-      {
-        id: 'bbd',
-        reportId: 'bbd',
-        type: 'table',
-        title: 'BBD — Best By Dates',
-        colSpan: 12,
-        // WHY: bbdReport.ts sets clientSidePagination on the server, so every
-        // page request returns the whole alert list. Without this mirror the
-        // widget refetched (and re-pulled Priority, ~30 s) on every Next click.
-        clientSidePagination: true,
+        sourceRefresh: true,
       },
     ],
   },

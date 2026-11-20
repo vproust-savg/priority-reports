@@ -9,9 +9,8 @@
 // ═══════════════════════════════════════════════════════════════
 
 import type { ColumnDefinition, ColumnFilterMeta, FilterGroup, FilterOption } from '@shared/types';
-import type { RefreshDateRange } from '@shared/utils/refreshDateRange';
 import { reportRegistry } from '../config/reportRegistry';
-import type { RefreshOutcome } from '../config/reportRegistry';
+import { createDatedReportRefresh } from '../services/datedReportRefresh';
 import { GRV_LOG_TEMPLATE_RECORD_ID, GRV_LOG_SHEET_NAME } from './grvLog';
 import { querySupabase } from '../services/supabaseDb';
 import { buildSqlWhere } from '../services/sqlFilterBuilder';
@@ -147,12 +146,10 @@ export function transformGrvSupabaseRow(raw: Record<string, unknown>): Record<st
 }
 
 // WHY: Supabase only holds GRVs from this date (the first Priority backfill).
-// Earlier GRVs live on the Priority-backed Receiving Log page.
 export const GRV_SUPABASE_HISTORY_FLOOR = '2026-06-28';
 
 const HISTORY_FLOOR_WARNING =
-  `This page holds GRVs from ${GRV_SUPABASE_HISTORY_FLOOR} on. ` +
-  'For earlier dates, use the Receiving Log page.';
+  `This page holds GRVs from ${GRV_SUPABASE_HISTORY_FLOOR} onward. Earlier dates are outside this report’s history.`;
 
 // WHY: Warn unless the filter provably stays inside the held range (rules in
 // staysOnOrAfterFloor, shared with customer-returns-supabase).
@@ -160,68 +157,7 @@ export function buildHistoryFloorWarnings(group: FilterGroup): string[] {
   return staysOnOrAfterFloor(group, GRV_SUPABASE_HISTORY_FLOOR) ? [] : [HISTORY_FLOOR_WARNING];
 }
 
-const REFRESH_POLL_INTERVAL_MS = 3_000;
-const REFRESH_TIMEOUT_MS = 90_000;
-
-// WHY: type alias (not interface) so it satisfies querySupabase's Record<string, unknown> bound.
-type RefreshRow = {
-  request_id: string | null;
-  status: string;
-};
-
-interface RefreshDeps {
-  query: (sql: string, params: unknown[]) => Promise<RefreshRow[]>;
-  sleep: (ms: number) => Promise<void>;
-  now: () => number;
-}
-
-const defaultRefreshDeps: RefreshDeps = {
-  query: (sql, params) => querySupabase<RefreshRow>(sql, params),
-  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  now: Date.now,
-};
-
-// WHY: Asks the Supabase side to re-read the selected dates from Priority, then waits
-// for it so the widget's refetch sees fresh rows. deps is injected so tests never sleep.
-// Errors from querySupabase propagate: the /refresh route turns a throw into status 'error'.
-export async function refreshGrvSource(
-  range: RefreshDateRange,
-  signal?: AbortSignal,
-  deps: RefreshDeps = defaultRefreshDeps,
-): Promise<RefreshOutcome> {
-  const [request] = await deps.query(
-    'select * from priority_reports.request_grv_refresh($1::date, $2::date)',
-    [range.from, range.to],
-  );
-  // WHY: The SQL function always returns one row; none means something is wrong, and
-  // throwing lets the /refresh route report status 'error' instead of a misleading 'busy'.
-  if (!request) throw new Error('request_grv_refresh returned no row');
-  // WHY: 'busy' (01:45-02:45 LA) queues nothing and has a null request_id.
-  if (request.status === 'busy' || request.request_id === null) {
-    return { status: 'busy' };
-  }
-  // WHY: A reused request (deduplicated within 2 minutes) may already be finished.
-  if (request.status === 'done' || request.status === 'error') {
-    return { status: request.status };
-  }
-
-  const startedAt = deps.now();
-  while (deps.now() - startedAt < REFRESH_TIMEOUT_MS) {
-    if (signal?.aborted) return { status: 'timeout' };
-    await deps.sleep(REFRESH_POLL_INTERVAL_MS);
-    if (signal?.aborted) return { status: 'timeout' };
-    // WHY: request_id is a bigint, which node-postgres returns as a string; pass it back unchanged.
-    const [current] = await deps.query(
-      'select * from priority_reports.grv_refresh_status($1)',
-      [request.request_id],
-    );
-    if (current?.status === 'done' || current?.status === 'error') {
-      return { status: current.status };
-    }
-    // No row, pending or running: keep polling until the timeout.
-  }
-  return { status: 'timeout' };
-}
+export const refreshGrvSource = createDatedReportRefresh('grv');
 
 // WHY: Self-registration — importing this file adds the report to the registry.
 reportRegistry.set('grv-log-supabase', {
@@ -245,7 +181,7 @@ reportRegistry.set('grv-log-supabase', {
   // (no in-memory cache exists for this report).
   clearMemoryCache: () => {},
   queryWarnings: buildHistoryFloorWarnings,
-  refreshSource: (range, signal) => refreshGrvSource(range, signal),
+  refreshSource: refreshGrvSource,
   // WHY: The official GRV Log form (title, revision stamp, instructions, Verified
   // By / Date) around the page's 17 columns in page order, A to Q, as the team's
   // own template lays them out (Victor, 2026-11-02). relabelHeaders writes the

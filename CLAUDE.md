@@ -5,19 +5,20 @@
 A web dashboard that visualizes Priority ERP data, embedded in Airtable via Omni.
 Reports are **widgets** arranged on **configurable pages**. Adding a page or rearranging widgets requires editing one config file — no component code changes.
 
-**Data flow:** Priority OData API → Express backend → Upstash Redis cache → React frontend. The BBD Extend feature also writes to Priority (`EXPDEXT_SUBFORM`) and snapshots each extended lot to an Airtable base, which the BBD "Extended" tab reads back.
+**Data flow:** The Food Safety pages query and export saved Priority data through Express and Supabase. Refresh requests a new Priority read for the selected document dates (inclusive, up to 31 days). Customer Returns attachment downloads and the legacy report APIs use Priority directly. Airtable supplies the Receiving Log workbook template.
 **Language:** TypeScript strict mode throughout. Zero plain JavaScript.
 **Maintained by:** Claude Code (sole developer).
 
-## Production state (2026-10-31)
+## Staff routes and report APIs (2026-11-20 release branch)
 
 | Report id | Page | Key behavior |
 |-----------|------|--------------|
-| `grv-log` | `/food-safety/receiving-log` | Goods Receiving Vouchers from `DOCUMENTS_P`. Never cached (`disableCache`), Live/UAT toggle, vendor V8491 hard-excluded, week filter, template-mode Excel export |
-| `grv-log-supabase` | `/food-safety/receiving-log-supabase` (hidden, no nav tab) | Same GRVs read from Supabase view `priority_reports.grv_receiving_log` (remarks parsed by the sync; V8491 excluded in the view); SQL-side filters (`sqlFilterBuilder.ts`), TTT Check column after Truck Condition = the view's `ttt_check` (N/A when the GRV has nothing refrigerated/frozen per LOGPART SPEC13, else the Temp Tracker Included answer with Yes→Accept; migration 0257, supabase-priority PR 219); Excel export is the official GRV Log form (title, R5 stamp, instructions, Verified By / Date) around the page's 17 columns A–Q (`exportConfig.relabelHeaders`), tab Inbound Log 2026, file `GRV-Log-<date>.xlsx`, Refresh re-reads the Date filter's range, at most 31 calendar days, via `priority_reports.request_grv_refresh(p_from date, p_to date)` (requires supabase-priority migration 0325). Live only |
-| `customer-returns` | `/food-safety/customer-returns` | `DOCUMENTS_N` returns with `STATDES eq 'Final'`, exploded to one row per line item, attachments downloaded through `/api/v1/attachments` |
-| `customer-returns-supabase` | `/food-safety/customer-returns-supabase` (hidden, no nav tab) | Same Final returns read from Supabase view `priority_reports.customer_returns_log` (one row per line; remarks parsed and masked in the DB; file list as jsonb, downloads still through `/api/v1/attachments`); SQL-side filters; Invoice # relabelled Credit Memo # (the view's ivnum is the credit memo); no Refresh button (~5 min sync lag). Live only |
-| `bbd` | `/purchasing/bbd` | Best By Dates from `RAWSERIAL`; balance = sum of `RAWSERIALBAL_SUBFORM` bins; Extend (single, or bulk up to 1,000 lots in 50-lot chunks) writes to Priority + Airtable; "Extended" sub-tab lists extended lots from Airtable |
+| `grv-log` | Legacy API only | Direct `DOCUMENTS_P` reads, uncached queries, opt-in Live/UAT override, vendor V8491 excluded, template-mode Excel export |
+| `grv-log-supabase` | `/food-safety/receiving-log` | GRVs read from Supabase view `priority_reports.grv_receiving_log` (remarks parsed by the sync; V8491 excluded in the view); SQL-side filters (`sqlFilterBuilder.ts`), TTT Check column after Truck Condition = the view's `ttt_check` (N/A when the GRV has nothing refrigerated/frozen per LOGPART SPEC13, else the Temp Tracker Included answer with Yes→Accept; migration 0257, supabase-priority PR 219); Excel export is the official GRV Log form (title, R5 stamp, instructions, Verified By / Date) around the page's 17 columns A–Q (`exportConfig.relabelHeaders`), tab Inbound Log 2026, file `GRV-Log-<date>.xlsx`, Refresh re-reads the Date filter's range, at most 31 calendar days, via `priority_reports.request_grv_refresh(p_from date, p_to date)` (requires supabase-priority migration 0325). Live only |
+| `customer-returns` | Legacy API only | Direct `DOCUMENTS_N` reads with `STATDES eq 'Final'`, one row per return line, downloads through `/api/v1/attachments` |
+| `customer-returns-supabase` | `/food-safety/customer-returns` | Final returns read from Supabase view `priority_reports.customer_returns_log` (one row per line; remarks parsed and masked in the DB; file list as jsonb, downloads still through `/api/v1/attachments`); SQL-side filters; Invoice # relabelled Credit Memo # (the view's ivnum is the credit memo); standard Excel export; Refresh requests the Date filter’s range via `priority_reports.request_return_refresh(p_from date, p_to date)`. Live only |
+
+The older `/food-safety/receiving-log-supabase` and `/food-safety/customer-returns-supabase` embed URLs redirect to their respective staff pages. The Purchasing department and Best By Dates page are retired.
 
 **Spec workflow:** numbered specs 01–13 are archived in `specs/done/` (read-only history). New work uses dated files: design spec in `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, implementation plan in `docs/superpowers/plans/`. Mark the spec `**Status:** Implemented (date)` once deployed. Non-trivial plans get a Codex adversarial review (`/codex:adversarial-review`) before approval.
 
@@ -31,7 +32,7 @@ Reports are **widgets** arranged on **configurable pages**. Adding a page or rea
 | Validation | Zod |
 | Cache | Upstash Redis (via `CacheProvider` abstraction) |
 | Excel | exceljs — template mode (Airtable attachment) or fallback mode (headers + data) |
-| Airtable | REST API — export templates (API Reports table) and BBD extended-lot snapshots (Short-Dated Items base) |
+| Airtable | REST API for export templates in the API Reports table |
 | Tests | Vitest — server (`server/tests/`, also runs `shared/` tests) and client (jsdom) |
 | Deploy | GitHub → Railway auto-deploy |
 
@@ -45,9 +46,9 @@ Reports are **widgets** arranged on **configurable pages**. Adding a page or rea
 | `npm test` | `client/` | Vitest (jsdom) — client tests |
 | `npm run lint` | `client/` | ESLint |
 
-**Development:** run both `npm run dev` commands in separate terminals (`.claude/launch.json`, local only, defines them as the `backend` and `frontend` preview servers). Local `.env` uses `PRIORITY_ENV=uat`; the GRV widget defaults to Live, which 502s locally because `.env` has no production credentials — click UAT.
+**Development:** run both `npm run dev` commands in separate terminals (`.claude/launch.json`, local only, defines them as the `backend` and `frontend` preview servers). The staff pages need the Supabase connection described below. Local `PRIORITY_ENV=uat` selects credentials for direct Priority calls.
 
-**iCloud Drive gotcha:** this repo lives under `~/Documents/Documents - Victor’s MacBook Pro/…` (curly apostrophe in the path). iCloud evicts file contents, `node_modules` included, and evicted files fail on open. Symptoms: tsc "file not found" for `@types/*`, phantom vitest failures, or `tsc`/`vitest` sitting at 0 % CPU for minutes. `du -sh server/node_modules client/node_modules` reading a few MB means evicted (warm they are hundreds of MB). Warm before trusting any failure:
+**iCloud Drive gotcha:** older checkouts under `~/Documents/Documents - Victor’s MacBook Pro/…` (curly apostrophe in the path) can be affected by iCloud eviction. iCloud evicts file contents, `node_modules` included, and evicted files fail on open. Symptoms: tsc "file not found" for `@types/*`, phantom vitest failures, or `tsc`/`vitest` sitting at 0 % CPU for minutes. `du -sh server/node_modules client/node_modules` reading a few MB means evicted (warm they are hundreds of MB). Warm before trusting any failure:
 ```bash
 find server/node_modules client/node_modules -type f -print0 | xargs -0 -P 8 -n 200 cat > /dev/null
 ```
@@ -59,7 +60,7 @@ Git commands can take minutes for the same reason — run long ones in the backg
 
 **Confirming a deploy landed:** `/api/v1/health` returns a static `version: '1.0.0'`, so a 200 proves nothing. Check the Railway deployment list (Railway MCP `list_deployments`, or the dashboard) for the pushed commit with status SUCCESS. When client code changed you can also compare the bundle hash: capture `curl -s <prod>/ | grep -o 'assets/index-[^"]*\.js'` before pushing and poll until it differs (~40 s typical; stop after 5 min). Server-only or docs-only pushes keep the same hash forever — use a read-only behavior probe whose response differs between old and new code.
 
-**Airtable embed:** each department is embedded in Airtable via an Omni block whose iframe points at a department URL (`/food-safety/…`, `/purchasing/…`); `/` redirects to the first department. Test production changes at the Airtable page, not just the direct Railway URL — iframe constraints can surface different behavior.
+**Airtable embed:** Food Safety embeds use the staff URLs listed above. Both `/` and `/food-safety` lead to the Receiving Log. Test production changes in the Airtable iframe as well as at the direct Railway URL.
 
 **Local Docker test:** `docker build -t priority-dashboard . && docker run --rm -p 3001:3001 -e NODE_ENV=production -e PORT=3001 -e PRIORITY_ENV=production priority-dashboard` (PRIORITY_ENV is mandatory in production since the env-toggle boot guard, 2026-08-03)
 
@@ -72,9 +73,9 @@ Both must pass cleanly — any TypeScript error kills the Railway Docker build.
 
 ## Environments
 
-- `SUPABASE_GRV_DATABASE_URL` (optional): session-pooler URL for role `priority_reports_server`, which can read only the GRV and customer-returns views and call the two GRV refresh functions. Unset → the `grv-log-supabase` and `customer-returns-supabase` routes answer 503 and everything else works. It is set only as a Railway variable (no local `.env` copy): for local live checks run the server with `railway run -p ba2225e5-2792-4708-aa66-d3b178cfb8d0 -e production -s priority-reports -- …`, which also injects production Priority credentials.
+- `SUPABASE_GRV_DATABASE_URL` (optional): session-pooler URL for role `priority_reports_server`, which needs read access to both report views and execute access to the `request_grv_refresh` / `grv_refresh_status` and `request_return_refresh` / `return_refresh_status` functions in `priority_reports`. Without a connection, staff report queries return 503. It is set only as a Railway variable (no local `.env` copy): for local live checks run the server with `railway run -p ba2225e5-2792-4708-aa66-d3b178cfb8d0 -e production -s priority-reports -- …`, which also injects production Priority credentials.
 - `PRIORITY_ENV=uat|production` selects the `PRIORITY_UAT_*` or `PRIORITY_PROD_*` credentials from `.env` (`server/src/config/environment.ts`). With `NODE_ENV=production` the server refuses to boot unless `PRIORITY_ENV` is set explicitly.
-- The GRV widget's Live/UAT toggle sends `environment: 'production' | 'uat'` on query, filters and export requests. The server honors it only for reports with `allowEnvOverride: true` (grv-log), through the request-scoped override in `server/src/config/priorityEnvContext.ts` that `getPriorityConfig()` consults. Every other report and every write route ignores it, so writes can never be pointed at UAT.
+- Both staff widgets use the live Supabase mirror. Only the legacy `grv-log` API honors a per-request `environment` on query, filters and export through `allowEnvOverride` and `server/src/config/priorityEnvContext.ts`. Attachment downloads use the server’s configured Priority environment.
 - Redis keys are environment-scoped (query, export, filters), so Live and UAT data never mix. Responses carry `meta.priorityEnv` as provenance — assert it in probes.
 
 ## Project Structure
@@ -83,18 +84,18 @@ Both must pass cleanly — any TypeScript error kills the Railway Docker build.
 ├── server/
 │   ├── src/config/      ← environment, Priority creds, env override context, reportRegistry
 │   ├── src/reports/     ← one self-registering report definition per file
-│   ├── src/routes/      ← query, queryRefresh, filters, export, extend (BBD), subform, attachments, health
-│   ├── src/services/    ← Priority HTTP + rate limit, cache, Excel, Airtable, HTML parsers
+│   ├── src/routes/      ← reports, query, queryRefresh, filters, export, attachments, health
+│   ├── src/services/    ← Supabase reads and dated refresh, Priority HTTP + rate limit, cache, Excel, Airtable templates, HTML parsers
 │   └── tests/           ← ALL server tests (never colocate under src/)
 ├── client/
-│   ├── src/config/      ← departments.ts, pages.ts, widgetRegistry.ts, detailRegistry.ts
-│   ├── src/components/  ← widgets, table, filter/sort/column panels, modals, cells, details
+│   ├── src/config/      ← departments.ts, pages.ts, widgetRegistry.ts
+│   ├── src/components/  ← widgets, table, filter/sort/column panels, cells
 │   └── src/hooks/       ← TanStack Query hooks + UI state hooks
 ├── shared/types/        ← Types used by BOTH client and server
 ├── shared/utils/        ← weekUtils.ts, timezone.ts (LA calendar-day helpers)
 ├── docs/
 │   ├── superpowers/     ← specs/, plans/, evals/, prompts/ — dated; the current workflow
-│   ├── airtable-field-ids.md       ← Short-Dated Items base (BBD Extended tab) field IDs
+│   ├── airtable-field-ids.md       ← historical Short-Dated Items field IDs
 │   ├── filter-test-results.md      ← 2026-03-23 filter test session
 │   └── priority-api-call-example.md
 ├── specs/done/          ← Numbered specs & plans 01–13 (archive)
@@ -183,9 +184,9 @@ This code is maintained exclusively by LLMs. Every decision optimizes for AI rea
 |------|----------|---------|
 | `client/src/config/departments.ts` + `pages.ts` | **WHERE** | Departments (URL prefix + nav) and which widgets appear on which pages, in what layout |
 | `client/src/config/widgetRegistry.ts` | **HOW** | Which React component renders each widget type |
-| `server/src/config/reportRegistry.ts` + `server/src/reports/*.ts` | **WHAT** | Which reports exist: entity, columns, OData query, row transform, and opt-ins (`clientSidePagination`, `expandConfig`, `rowStyleField`, `disableCache`, `allowEnvOverride`, `excelStyle`, `exportConfig`) |
+| `server/src/config/reportRegistry.ts` + `server/src/reports/*.ts` | **WHAT** | Which reports exist: entity, columns, OData query, row transform, and opt-ins (`clientSidePagination`, `fetchRows`, `refreshSource`, `disableCache`, `allowEnvOverride`, `excelStyle`, `exportConfig`) |
 
-The Airtable "API Reports" table is Victor's request tracker (status/comments) and holds the GRV Excel export template that `templateService.ts` reads by Report ID. It does not define which reports exist.
+The Airtable "API Reports" table is Victor's request tracker (status/comments) and holds the GRV Excel export template that `templateService.ts` reads by Airtable record ID. It does not define which reports exist.
 
 ## How to Add a Widget to a Page
 
@@ -233,7 +234,7 @@ The Airtable "API Reports" table is Victor's request tracker (status/comments) a
 
 **Table:** `tblvqv3S31KQhKRU6` | **Base:** `appjwOgR4HsXeGIda` | **View:** `viwDHPgccLzje22um` (Claude To Do)
 
-**Short-Dated Items base** (BBD Extended tab snapshots): base `appEIH4f5K3vrKBuy`, table `tblR550VQRqNgNMNE`. Field IDs are in `docs/airtable-field-ids.md`; used by `server/src/services/airtableShortDated.ts` and `airtableSnapshots.ts`.
+**Historical Short-Dated Items base:** Existing BBD snapshots belong to Airtable (base `appEIH4f5K3vrKBuy`, table `tblR550VQRqNgNMNE`). `docs/airtable-field-ids.md` records the field IDs.
 
 ## Priority ERP API Reference
 
@@ -261,9 +262,8 @@ The Airtable "API Reports" table is Victor's request tracker (status/comments) a
 - Forgetting the intent block at top of new files
 - Colocating tests under `server/src/` — all server tests live in `server/tests/` (vitest picks up both locations, so a stray file still runs, but the convention is one directory)
 - Using Airtable field names instead of field IDs
-- Interpolating user input directly into OData `$filter` queries — validate with `z.string().regex(/^[a-zA-Z0-9_-]+$/)` (BBD lot numbers also allow `.` and space; single quotes are escaped at use)
+- Interpolating user input directly into OData `$filter` queries — validate with `z.string().regex(/^[a-zA-Z0-9_-]+$/)`
 - Building `$expand` with `URLSearchParams` — it percent-encodes `(` `)` and Priority rejects the query. Append `$expand=…` to the URL string raw.
-- `PATCH` on `EXPDSERIAL` — fails with "insufficient form privileges". Extend an expiry by `POST`ing `{ RENEWDATE, EXPIRYDATE }` to `EXPDSERIAL(SERIALNAME='…')/EXPDEXT_SUBFORM` (see `server/src/routes/extend.ts`)
 - Letting the request `environment` field reach a write route or a report without `allowEnvOverride` — the override is opt-in on purpose (see Environments)
 - Changing the `ApiResponse` envelope shape without reviewing all consumers
 - Using `app.get('*', ...)` for SPA catch-all — Express 5 requires `app.get('/{*path}', ...)` (path-to-regexp v8 needs named params)
@@ -276,4 +276,4 @@ The Airtable "API Reports" table is Victor's request tracker (status/comments) a
 - Deleting `railway.json` — Railway needs this file to use the Dockerfile builder. Without it, deploy breaks.
 - Removing the OID 1082 type parser in `server/src/services/supabaseDb.ts` — node-postgres turns a `date` into a local-midnight JS Date, shifting GRV dates by a day off UTC
 - Connecting to Supabase with `sslmode=require` left in the URL, or disabling verification — node-postgres treats `require` as verify-full and Supabase's root CA isn't in Node's store; `buildPoolConfig` strips the URL's ssl params and pins `SUPABASE_ROOT_CA_2021` (expires 2031-04-26)
-- Trusting a failing or silently stalled `tsc`/`vitest` run on this iCloud-backed repo before warming `node_modules` (see Commands)
+- Trusting a failing or silently stalled `tsc`/`vitest` run on an iCloud-backed checkout before warming `node_modules` (see Commands)

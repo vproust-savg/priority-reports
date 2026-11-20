@@ -1,10 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: client/src/components/widgets/ReportTableWidget.refresh.test.tsx
-// PURPOSE: Confirms the widget shows the source-refresh outcome
-//          (timeout / error / busy) as an amber notice, shows an
-//          "could not be confirmed" notice when the POST fails or
-//          its answer is unusable, invalidates the report query
-//          whatever happens, and clears the notice on the next click.
+// PURPOSE: Check refresh range selection, validation, response handling
+//          and the ordering of overlapping manual refreshes.
 // USED BY: Vitest
 // EXPORTS: none
 // ═══════════════════════════════════════════════════════════════
@@ -32,6 +29,8 @@ vi.mock('../../hooks/useReportQuery', () => ({
       columns: [{ key: 'docNo', label: 'Doc #', type: 'string' }],
     },
     isLoading: false,
+    isSuccess: true,
+    fetchStatus: 'idle',
     isError: false,
     error: null,
     refetch: vi.fn(),
@@ -50,20 +49,10 @@ vi.mock('../../hooks/useExport', () => ({
   useExport: () => ({ isExporting: false, toast: null, clearToast: vi.fn(), triggerExport: vi.fn() }),
 }));
 
-vi.mock('../../hooks/useBBDExtend', () => ({
-  useBBDExtend: () => ({
-    extendModal: null,
-    cellRenderers: undefined,
-    handleBulkExtend: vi.fn(),
-    handleExtendSuccess: vi.fn(),
-    closeModal: vi.fn(),
-  }),
-}));
-
-const TIMEOUT_TEXT = 'Still refreshing from Priority, so data may update in a minute';
-const ERROR_TEXT = 'Refresh from Priority failed; showing the last synced data';
-const BUSY_TEXT = 'Priority refresh is paused during the nightly sync (1:45–2:45 AM); try again later';
-const UNCONFIRMED_TEXT = 'Refresh could not be confirmed; showing the last synced data';
+const TIMEOUT_TEXT = 'Refresh timed out. It may still be running.';
+const ERROR_TEXT = 'Priority refresh failed. Try again before exporting.';
+const BUSY_TEXT = 'Priority is busy. Try refreshing again later.';
+const UNCONFIRMED_TEXT = 'Could not confirm the refresh. Try again before exporting.';
 
 let queryClient: QueryClient;
 
@@ -192,7 +181,7 @@ describe('ReportTableWidget — source refresh outcome', () => {
     expect(await screen.findByText(BUSY_TEXT)).toBeInTheDocument();
   });
 
-  it('shows no notice on done, and still invalidates the report query', async () => {
+  it('clears failure notices on done and invalidates the report query', async () => {
     vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ status: 'done' })));
     renderWidget();
     fireEvent.click(screen.getByLabelText(REFRESH_LABEL));
