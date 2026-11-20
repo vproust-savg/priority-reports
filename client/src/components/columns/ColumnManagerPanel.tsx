@@ -74,7 +74,7 @@ export default function ColumnManagerPanel({
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full text-sm border border-[var(--color-gold-subtle)] rounded-lg py-1.5 pl-8 pr-3
-            focus:outline-none focus:ring-2 focus:ring-[var(--color-gold-primary)]/20 focus:border-[var(--color-gold-primary)]/40
+            report-filter-control
             placeholder:text-[var(--color-text-muted)]"
         />
       </div>

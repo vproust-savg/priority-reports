@@ -8,6 +8,7 @@
 
 import type { ColumnFilterMeta, FilterOperator, FilterOption, FiltersResponse } from '@shared/types';
 import { FILTER_INPUT_CLASS } from '../../config/filterConstants';
+import FilterDatePicker from './FilterDatePicker';
 import WeekPicker from './WeekPicker';
 
 interface FilterValueInputProps {
@@ -62,17 +63,14 @@ export default function FilterValueInput({
     if (isBetweenOp) {
       return (
         <div className="flex items-center gap-1">
-          <input type="date" value={value} onChange={(e) => onChange(e.target.value, valueTo)}
-            className={`${FILTER_INPUT_CLASS} w-36`} />
+          <FilterDatePicker label={`${column.label} start`} value={value} onChange={date => onChange(date, valueTo)} />
           <span className="text-xs text-[var(--color-text-muted)] px-1">and</span>
-          <input type="date" value={valueTo ?? ''} onChange={(e) => onChange(value, e.target.value)}
-            className={`${FILTER_INPUT_CLASS} w-36`} />
+          <FilterDatePicker label={`${column.label} end`} value={valueTo ?? ''} onChange={date => onChange(value, date)} />
         </div>
       );
     }
     return (
-      <input type="date" value={value} onChange={(e) => onChange(e.target.value)}
-        className={`${FILTER_INPUT_CLASS} w-36`} />
+      <FilterDatePicker label={column.label} value={value} onChange={date => onChange(date)} />
     );
   }
 

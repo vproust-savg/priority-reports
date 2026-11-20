@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import ReportTableWidget from './ReportTableWidget';
@@ -76,9 +76,19 @@ function changeDateRange(from: string, to: string) {
   fireEvent.click(screen.getByLabelText('Filter'));
   const operator = screen.getAllByRole<HTMLSelectElement>('combobox').find((select) => select.value === 'isInWeek')!;
   fireEvent.change(operator, { target: { value: 'isBetween' } });
-  const [fromInput, toInput] = document.querySelectorAll('input[type="date"]');
-  fireEvent.change(fromInput, { target: { value: from } });
-  fireEvent.change(toInput, { target: { value: to } });
+  for (const [label, date] of [['Date start', from], ['Date end', to]]) {
+    if (!date) continue;
+    const [year, month, day] = date.split('-');
+    const field = within(screen.getByRole('group', { name: label }));
+    for (const [part, digits] of [['month', month], ['day', day], ['year', year]]) {
+      const segment = field.getByRole('spinbutton', { name: new RegExp(part, 'i') });
+      for (const digit of digits) {
+        fireEvent(segment, new InputEvent('beforeinput', {
+          inputType: 'insertText', data: digit, bubbles: true, cancelable: true,
+        }));
+      }
+    }
+  }
 }
 
 describe('ReportTableWidget — source refresh outcome', () => {

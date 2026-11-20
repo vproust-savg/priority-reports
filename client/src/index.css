@@ -120,3 +120,76 @@ html, body, #root {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Draw focus directly over the border so fields have one continuous stroke. */
+.report-filter-control:focus-visible,
+.report-date-field:focus-within {
+  outline: 2px solid #847252;
+  outline-offset: -2px;
+}
+
+.report-date-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 38px;
+  padding: 2px 4px 2px 10px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-gold-subtle);
+  border-radius: var(--radius-base);
+  font-size: .875rem;
+}
+.report-date-segment { font-variant-numeric: tabular-nums; border-radius: 2px; }
+.report-date-segment[data-placeholder] { color: var(--color-text-secondary); }
+.report-date-segment:focus,
+.report-date-field .report-date-icon:focus-visible {
+  outline: none;
+  background: var(--color-gold-muted);
+  color: var(--color-dark);
+}
+.report-date-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.report-date-icon:hover, .report-calendar footer button:hover { background: var(--color-gold-subtle); }
+.report-calendar {
+  padding: 12px;
+  color: var(--color-dark);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-gold-muted);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-dropdown);
+  max-height: var(--available-height);
+  overflow: auto;
+}
+.report-calendar th {
+  font-size: .675rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+.report-calendar-day {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: .8125rem;
+  cursor: pointer;
+}
+.report-calendar-day[data-outside-month] { visibility: hidden; }
+.report-calendar-day[data-hovered] { background: var(--color-gold-subtle); }
+.report-calendar-day[data-selected] { color: white; background: var(--color-dark); }
+.report-calendar-day[data-focus-visible] { outline: 2px solid #847252; outline-offset: -2px; }
+.report-calendar footer button {
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-md);
+  font-size: .8125rem;
+  font-weight: 500;
+}
