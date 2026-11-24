@@ -408,7 +408,7 @@ describe('generateTemplateExcel print layout', () => {
   });
 });
 
-describe('generateTemplateExcel form instructions', () => {
+describe('generateTemplateExcel form text', () => {
   const columns: ColumnDefinition[] = [
     { key: 'name', label: 'Name', type: 'string' },
     { key: 'note', label: 'Note', type: 'string' },
@@ -418,76 +418,53 @@ describe('generateTemplateExcel form instructions', () => {
     mapping: { 'A': 'name', 'D': 'note' },
     dataStartRow: 3,
   };
-  const formInstructions = { 'A': ['• one', '• two'], 'C': ['• three', '• four'] };
+  const formText = { '1. cold @ <41': '1. cold @ <38', '8. reject >41': '8. reject >40' };
 
-  // WHY: Shaped like the GRV Log footer — a rich-text rule, rules in two columns,
-  // a merged rule, a bold merged warning, then the Comments and sign-off rows.
-  // The form is A:C; column D is mapped past it, so the merges get widened.
-  async function createInstructionsTemplate(): Promise<Buffer> {
+  // WHY: Shaped like the GRV Log footer — a rich-text rule, a merged rule and a
+  // bold merged warning. The form is A:C; column D is mapped past it, so the
+  // merges get widened.
+  async function createFormTextTemplate(): Promise<Buffer> {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Form');
     ws.getCell('A2').value = 'Name';
     ws.getCell('C2').value = 'Form edge';
     ws.getCell('A5').value = 'Instructions:';
-    ws.getCell('A6').value = { richText: [{ text: '1. old @ ' }, { font: { underline: true }, text: '<41' }] };
-    ws.getCell('C6').value = '4. old';
-    ws.getCell('A7').value = '2. old';
-    ws.getCell('C7').value = '5. old';
-    ws.getCell('A8').value = '3. old';
-    ws.getCell('B8').value = '6. old merged';
-    ws.mergeCells('B8:C8');
-    ws.getCell('A9').value = '**old warning**';
-    ws.getCell('A9').font = { bold: true };
-    ws.mergeCells('A9:C9');
-    ws.getRow(9).height = 27;
-    ws.getCell('A10').value = 'Comments:';
-    ws.getCell('A11').value = 'Verified By:';
-    ws.mergeCells('B11:C11');
+    ws.getCell('A6').value = { richText: [{ text: '1. cold @ ' }, { font: { underline: true }, text: '<' }, { text: '41' }] };
+    ws.getCell('C6').value = '4. kept';
+    ws.getCell('B7').value = '8. reject >41';
+    ws.mergeCells('B7:C7');
+    ws.getCell('A8').value = '**kept warning -\nsecond line**';
+    ws.mergeCells('A8:C8');
+    ws.getRow(8).height = 27;
     // An empty merge down column A: ExcelJS's cell.text throws on its second cell.
-    ws.mergeCells('A12:A13');
+    ws.mergeCells('A9:A10');
     return Buffer.from(await wb.xlsx.writeBuffer());
   }
 
   async function exportRows(count: number, exportConfig: ExportConfig): Promise<ExcelJS.Worksheet> {
     const rows = Array.from({ length: count }, (_, i) => ({ name: `row ${i}`, note: 'n' }));
-    const buffer = await generateTemplateExcel(await createInstructionsTemplate(), rows, columns, exportConfig);
+    const buffer = await generateTemplateExcel(await createFormTextTemplate(), rows, columns, exportConfig);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as unknown as ArrayBuffer);
     return wb.worksheets[0];
   }
 
-  function columnTexts(ws: ExcelJS.Worksheet, letter: string, from: number, to: number): string[] {
-    return Array.from({ length: to - from + 1 }, (_, i) => ws.getCell(`${letter}${from + i}`).text);
-  }
-
-  it.each([1, 2, 6])('replaces the whole instruction block and keeps the rows around it (%i data rows)', async (count) => {
-    const ws = await exportRows(count, { ...config, formInstructions });
+  it.each([1, 2, 6])('swaps the listed lines as plain text and keeps the rest of the form (%i data rows)', async (count) => {
+    const ws = await exportRows(count, { ...config, formText });
     const heading = 5 + Math.max(0, count - 2);
-    expect(columnTexts(ws, 'A', heading, heading + 6)).toEqual([
-      'Instructions:', '• one', '• two', '', '', 'Comments:', 'Verified By:',
-    ]);
-    expect(columnTexts(ws, 'C', heading + 1, heading + 4)).toEqual(['• three', '• four', '', '']);
-    let allText = '';
-    ws.eachRow((row) => row.eachCell((cell) => { if (cell.value != null) allText += `${cell.text}\n`; }));
-    expect(allText).not.toMatch(/old|41/);
-    expect(ws.getCell(`A${heading + 1}`).font?.bold).toBeFalsy();
+    expect(ws.getCell(`A${heading + 1}`).value).toBe('1. cold @ <38');
+    expect(ws.getCell(`C${heading + 1}`).value).toBe('4. kept');
+    expect(ws.getCell(`B${heading + 2}`).value).toBe('8. reject >40');
+    expect(ws.getCell(`A${heading + 3}`).value).toBe('**kept warning -\nsecond line**');
+    // Two printed lines need 30pt; the template's 27pt cut the tails of the letters.
+    expect(ws.getRow(heading + 3).height).toBe(30);
     const merges = (ws.model as unknown as { merges: string[] }).merges;
-    expect(merges).toEqual([`B${heading + 6}:D${heading + 6}`, `A${heading + 7}:A${heading + 8}`]);
+    expect(merges).toEqual(expect.arrayContaining([`B${heading + 2}:D${heading + 2}`, `A${heading + 3}:D${heading + 3}`]));
   });
 
-  it('leaves the block as it is without formInstructions', async () => {
+  it('leaves the form text as it is without formText', async () => {
     const ws = await exportRows(2, config);
-    expect(columnTexts(ws, 'A', 5, 9)).toEqual(['Instructions:', '1. old @ <41', '2. old', '3. old', '**old warning**']);
-  });
-
-  it('still exports a template that has no instruction block', async () => {
-    const template = new ExcelJS.Workbook();
-    template.addWorksheet('Log').getCell('A2').value = 'Name';
-    const buffer = await generateTemplateExcel(
-      Buffer.from(await template.xlsx.writeBuffer()), [{ name: 'Alice' }], columns, { ...config, formInstructions },
-    );
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer as unknown as ArrayBuffer);
-    expect(wb.worksheets[0].getCell('A3').value).toBe('Alice');
+    expect(ws.getCell('A6').text).toBe('1. cold @ <41');
+    expect(ws.getCell('B7').value).toBe('8. reject >41');
   });
 });

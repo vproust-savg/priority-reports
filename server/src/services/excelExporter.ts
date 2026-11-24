@@ -47,46 +47,23 @@ function columnNumberToLetter(colNum: number): string {
   return letter;
 }
 
-// WHY: A no-op when the template has no such block: throwing would make
-// export.ts fall back to a plain sheet and lose the whole form.
-function replaceFormInstructions(
-  worksheet: ExcelJS.Worksheet,
-  dataStartRow: number,
-  instructions: Record<string, string[]>,
-): void {
-  let headingRow = 0;
-  let commentsRow = 0;
-  for (let r = dataStartRow; r <= worksheet.rowCount; r++) {
-    // WHY: value, not text — ExcelJS's text throws on an empty merged cell.
-    const value = worksheet.getRow(r).getCell(1).value;
-    const label = typeof value === 'string' ? value.trim() : '';
-    if (label === 'Instructions:') headingRow = r;
-    if (label === 'Comments:') commentsRow = r;
-  }
-  const firstRow = headingRow + 1;
-  if (headingRow === 0 || commentsRow <= firstRow) return;
-
-  const merges = [...(worksheet.model as unknown as { merges: string[] }).merges];
-  for (const range of merges) {
-    const match = /^[A-Z]+(\d+):/.exec(range);
-    if (match && Number(match[1]) >= firstRow && Number(match[1]) < commentsRow) worksheet.unMergeCells(range);
-  }
-
-  const lineStyle = copyCellStyle(worksheet.getRow(firstRow).getCell(1).style);
-  const lineCount = Math.max(...Object.values(instructions).map((lines) => lines.length));
-  for (let r = firstRow; r < commentsRow; r++) {
-    const row = worksheet.getRow(r);
-    row.eachCell((cell) => { cell.value = null; });
-    const line = r - firstRow;
-    for (const [letter, lines] of Object.entries(instructions)) {
-      if (lines[line] == null) continue;
-      row.getCell(letter).value = lines[line];
-      row.getCell(letter).style = copyCellStyle(lineStyle);
-    }
-    // WHY: The old block had more rows than the new one needs; the spare ones
-    // become a thin gap instead of a blank hole above Comments.
-    if (line >= lineCount) row.height = 4;
-  }
+// WHY: Reads value, not cell.text — ExcelJS's text throws on an empty merged
+// cell, and a throw makes export.ts fall back to a plain sheet without the form.
+// Rich text is matched on its joined runs and replaced by plain text.
+function replaceFormText(worksheet: ExcelJS.Worksheet, formText: Record<string, string>): void {
+  worksheet.eachRow((row) => row.eachCell((cell) => {
+    if (cell.master !== cell) return;
+    const value = cell.value;
+    const text = value && typeof value === 'object' && 'richText' in value
+      ? value.richText.map((run) => run.text).join('')
+      : value;
+    if (typeof text !== 'string') return;
+    if (Object.hasOwn(formText, text)) cell.value = formText[text];
+    // WHY: GRV Log's two-line warning sits in a 27pt row, which printed with the
+    // tails of its letters cut off. 15pt is what one 10pt line has elsewhere.
+    const lineCount = text.split('\n').length;
+    if (lineCount > 1) row.height = Math.max(row.height ?? 0, lineCount * 15);
+  }));
 }
 
 export async function generateTemplateExcel(
@@ -164,10 +141,8 @@ export async function generateTemplateExcel(
     }
   }
 
-  // WHY: Before rows are inserted, for the same merge-list reason as above.
-  if (config.formInstructions) {
-    replaceFormInstructions(worksheet, dataStartRow, config.formInstructions);
-  }
+  // WHY: Before the data is filled in, so only the form's own text can match.
+  if (config.formText) replaceFormText(worksheet, config.formText);
 
   // WHY: Find the footer region — scan forward from dataStartRow to find
   // the first non-empty row. Everything between dataStartRow and that row
