@@ -210,19 +210,15 @@ reportRegistry.set('grv-log-supabase', {
       'Q': 'receivedBy',
     },
     dataStartRow: 5,
-    // WHY: Victor's wording (2026-11-24). Each line must fit
-    // on one line: A to E on the left, F to Q on the right.
-    formInstructions: {
-      'A': [
-        '• Refrigerated products: receive below 38°F.',
-        '• Frozen products: receive below 0°F, with no signs of thawing.',
-        '• Dry products: enter "Dry" in the temperature column.',
-      ],
-      'F': [
-        '• Check trailer cleanliness, product condition and seal numbers.',
-        '• Reject or place on hold refrigerated products above 40°F or frozen products above 10°F.',
-        '• Document any issues and notify the appropriate manager.',
-      ],
+    // WHY: The form's wording with the 2026-11-24 temperature limits, exactly as
+    // Victor's colleague sent it, template typos included. The template underlines "<"
+    // on lines 1 and 2 (reads as "or equal"); the sent text does not.
+    formText: {
+      '1. Refrigerated products to be received @ <41⁰F': '1. Refrigerated products to be received @ <38⁰F',
+      '2. Frozen products shall be received @<0⁰F, with no signs of thawing':
+        '2. Frozen products shall be received @<0⁰F, with no signs of thawing',
+      '8. If Temp is >41°F for refrigerated product or >10°F for Frozen procuct, reject &/or place on Hold.':
+        '8. If Temp is >40°F for refrigerated product or >10°F for Frozen procuct, reject &/or place on Hold.',
     },
   },
   // WHY: Widths sized for 8pt text so all 17 columns print one US Letter page
