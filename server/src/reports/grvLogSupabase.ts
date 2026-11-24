@@ -210,6 +210,20 @@ reportRegistry.set('grv-log-supabase', {
       'Q': 'receivedBy',
     },
     dataStartRow: 5,
+    // WHY: Victor's wording (2026-11-24). Each line must fit
+    // on one line: A to E on the left, F to Q on the right.
+    formInstructions: {
+      'A': [
+        '• Refrigerated products: receive below 38°F.',
+        '• Frozen products: receive below 0°F, with no signs of thawing.',
+        '• Dry products: enter "Dry" in the temperature column.',
+      ],
+      'F': [
+        '• Check trailer cleanliness, product condition and seal numbers.',
+        '• Reject or place on hold refrigerated products above 40°F or frozen products above 10°F.',
+        '• Document any issues and notify the appropriate manager.',
+      ],
+    },
   },
   // WHY: Widths sized for 8pt text so all 17 columns print one US Letter page
   // wide. A-E together stay about as wide as the form's (57) so the instruction

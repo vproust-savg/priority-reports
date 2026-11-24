@@ -47,6 +47,48 @@ function columnNumberToLetter(colNum: number): string {
   return letter;
 }
 
+// WHY: A no-op when the template has no such block: throwing would make
+// export.ts fall back to a plain sheet and lose the whole form.
+function replaceFormInstructions(
+  worksheet: ExcelJS.Worksheet,
+  dataStartRow: number,
+  instructions: Record<string, string[]>,
+): void {
+  let headingRow = 0;
+  let commentsRow = 0;
+  for (let r = dataStartRow; r <= worksheet.rowCount; r++) {
+    // WHY: value, not text — ExcelJS's text throws on an empty merged cell.
+    const value = worksheet.getRow(r).getCell(1).value;
+    const label = typeof value === 'string' ? value.trim() : '';
+    if (label === 'Instructions:') headingRow = r;
+    if (label === 'Comments:') commentsRow = r;
+  }
+  const firstRow = headingRow + 1;
+  if (headingRow === 0 || commentsRow <= firstRow) return;
+
+  const merges = [...(worksheet.model as unknown as { merges: string[] }).merges];
+  for (const range of merges) {
+    const match = /^[A-Z]+(\d+):/.exec(range);
+    if (match && Number(match[1]) >= firstRow && Number(match[1]) < commentsRow) worksheet.unMergeCells(range);
+  }
+
+  const lineStyle = copyCellStyle(worksheet.getRow(firstRow).getCell(1).style);
+  const lineCount = Math.max(...Object.values(instructions).map((lines) => lines.length));
+  for (let r = firstRow; r < commentsRow; r++) {
+    const row = worksheet.getRow(r);
+    row.eachCell((cell) => { cell.value = null; });
+    const line = r - firstRow;
+    for (const [letter, lines] of Object.entries(instructions)) {
+      if (lines[line] == null) continue;
+      row.getCell(letter).value = lines[line];
+      row.getCell(letter).style = copyCellStyle(lineStyle);
+    }
+    // WHY: The old block had more rows than the new one needs; the spare ones
+    // become a thin gap instead of a blank hole above Comments.
+    if (line >= lineCount) row.height = 4;
+  }
+}
+
 export async function generateTemplateExcel(
   templateBuffer: Buffer,
   rows: Record<string, unknown>[],
@@ -120,6 +162,11 @@ export async function generateTemplateExcel(
       newCell.style = copyCellStyle(stampCell.style);
       stampCell.value = null;
     }
+  }
+
+  // WHY: Before rows are inserted, for the same merge-list reason as above.
+  if (config.formInstructions) {
+    replaceFormInstructions(worksheet, dataStartRow, config.formInstructions);
   }
 
   // WHY: Find the footer region — scan forward from dataStartRow to find
@@ -224,6 +271,10 @@ export async function generateTemplateExcel(
   worksheet.pageSetup.fitToWidth = 1;
   worksheet.pageSetup.fitToHeight = 0;
   worksheet.pageSetup.printTitlesRow = `1:${config.dataStartRow - 1}`;
+  // WHY: The exported GRV form carried copies="12", which pre-filled Excel's print
+  // dialog with 12 (Victor wants 1, 2026-11-24). ExcelJS reads and writes copies
+  // but leaves it out of its PageSetup type.
+  Object.assign(worksheet.pageSetup, { copies: 1 });
   // WHY: Templates are printed forms (GRV Log), so the sheet gets as much of the
   // page as printers can reach: 0.2" is about their unprintable edge, and there
   // is no page header or footer, so none of that space is reserved (Victor, 2026-11-02).
