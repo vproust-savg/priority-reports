@@ -170,6 +170,17 @@ describe('report definition', () => {
     expect(Object.keys(r.excelStyle!.columnWidths).sort()).toEqual(r.columns.map((c) => c.key).sort());
   });
 
+  it('prints the current receiving instructions on the form', () => {
+    expect(Object.values(report().exportConfig!.formInstructions!).flat()).toEqual([
+      '• Refrigerated products: receive below 38°F.',
+      '• Frozen products: receive below 0°F, with no signs of thawing.',
+      '• Dry products: enter "Dry" in the temperature column.',
+      '• Check trailer cleanliness, product condition and seal numbers.',
+      '• Reject or place on hold refrigerated products above 40°F or frozen products above 10°F.',
+      '• Document any issues and notify the appropriate manager.',
+    ]);
+  });
+
   it('opts out of caching and paginates client-side', () => {
     expect(report().disableCache).toBe(true);
     expect(report().clientSidePagination).toBe(true);

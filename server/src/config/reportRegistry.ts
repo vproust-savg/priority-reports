@@ -44,6 +44,10 @@ export interface ExportConfig {
   // for a report whose columns differ from the paper form's but which keeps the
   // form's title, instructions and sign-off (grv-log-supabase).
   relabelHeaders?: boolean;
+  // WHY: Replaces the rules between the form's "Instructions:" and "Comments:"
+  // rows, one line per row, by the column letter each list starts in. The
+  // template in Airtable is not ours to edit. Omitted: keep the template's rules.
+  formInstructions?: Record<string, string[]>;
 }
 
 export interface ExcelStyle {

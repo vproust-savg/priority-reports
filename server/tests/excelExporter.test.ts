@@ -375,6 +375,24 @@ describe('generateTemplateExcel print layout', () => {
     expect(wb.worksheets[0].views[0].state).toBe('normal');
   });
 
+  // WHY: The exported GRV form carried copies="12", so Excel's print dialog
+  // defaulted to 12 paper copies.
+  it('defaults to one printed copy even when the template asks for 12', async () => {
+    const template = new ExcelJS.Workbook();
+    const sheet = template.addWorksheet('Log');
+    sheet.getRow(1).getCell(1).value = 'Name';
+    Object.assign(sheet.pageSetup, { copies: 12 });
+    const buffer = await generateTemplateExcel(
+      Buffer.from(await template.xlsx.writeBuffer()),
+      testRows,
+      testColumns,
+      { templateRecordId: 'rec', mapping: { A: 'name' }, dataStartRow: 2 },
+    );
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as unknown as ArrayBuffer);
+    expect(wb.worksheets[0].pageSetup).toMatchObject({ copies: 1 });
+  });
+
   it('renames the filled sheet when sheetName is set', async () => {
     const wb = await exportForm(fourRows, { ...formConfig, sheetName: 'Inbound Log 2026' });
     expect(wb.worksheets.map((w) => w.name)).toEqual(['Inbound Log 2026']);
@@ -387,5 +405,89 @@ describe('generateTemplateExcel print layout', () => {
       unmappedColumnWidths: { 'B': 6 },
     })).worksheets[0];
     expect(ws.getColumn(2).width).toBe(6);
+  });
+});
+
+describe('generateTemplateExcel form instructions', () => {
+  const columns: ColumnDefinition[] = [
+    { key: 'name', label: 'Name', type: 'string' },
+    { key: 'note', label: 'Note', type: 'string' },
+  ];
+  const config: ExportConfig = {
+    templateRecordId: 'recTest000000000',
+    mapping: { 'A': 'name', 'D': 'note' },
+    dataStartRow: 3,
+  };
+  const formInstructions = { 'A': ['• one', '• two'], 'C': ['• three', '• four'] };
+
+  // WHY: Shaped like the GRV Log footer — a rich-text rule, rules in two columns,
+  // a merged rule, a bold merged warning, then the Comments and sign-off rows.
+  // The form is A:C; column D is mapped past it, so the merges get widened.
+  async function createInstructionsTemplate(): Promise<Buffer> {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Form');
+    ws.getCell('A2').value = 'Name';
+    ws.getCell('C2').value = 'Form edge';
+    ws.getCell('A5').value = 'Instructions:';
+    ws.getCell('A6').value = { richText: [{ text: '1. old @ ' }, { font: { underline: true }, text: '<41' }] };
+    ws.getCell('C6').value = '4. old';
+    ws.getCell('A7').value = '2. old';
+    ws.getCell('C7').value = '5. old';
+    ws.getCell('A8').value = '3. old';
+    ws.getCell('B8').value = '6. old merged';
+    ws.mergeCells('B8:C8');
+    ws.getCell('A9').value = '**old warning**';
+    ws.getCell('A9').font = { bold: true };
+    ws.mergeCells('A9:C9');
+    ws.getRow(9).height = 27;
+    ws.getCell('A10').value = 'Comments:';
+    ws.getCell('A11').value = 'Verified By:';
+    ws.mergeCells('B11:C11');
+    // An empty merge down column A: ExcelJS's cell.text throws on its second cell.
+    ws.mergeCells('A12:A13');
+    return Buffer.from(await wb.xlsx.writeBuffer());
+  }
+
+  async function exportRows(count: number, exportConfig: ExportConfig): Promise<ExcelJS.Worksheet> {
+    const rows = Array.from({ length: count }, (_, i) => ({ name: `row ${i}`, note: 'n' }));
+    const buffer = await generateTemplateExcel(await createInstructionsTemplate(), rows, columns, exportConfig);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as unknown as ArrayBuffer);
+    return wb.worksheets[0];
+  }
+
+  function columnTexts(ws: ExcelJS.Worksheet, letter: string, from: number, to: number): string[] {
+    return Array.from({ length: to - from + 1 }, (_, i) => ws.getCell(`${letter}${from + i}`).text);
+  }
+
+  it.each([1, 2, 6])('replaces the whole instruction block and keeps the rows around it (%i data rows)', async (count) => {
+    const ws = await exportRows(count, { ...config, formInstructions });
+    const heading = 5 + Math.max(0, count - 2);
+    expect(columnTexts(ws, 'A', heading, heading + 6)).toEqual([
+      'Instructions:', '• one', '• two', '', '', 'Comments:', 'Verified By:',
+    ]);
+    expect(columnTexts(ws, 'C', heading + 1, heading + 4)).toEqual(['• three', '• four', '', '']);
+    let allText = '';
+    ws.eachRow((row) => row.eachCell((cell) => { if (cell.value != null) allText += `${cell.text}\n`; }));
+    expect(allText).not.toMatch(/old|41/);
+    expect(ws.getCell(`A${heading + 1}`).font?.bold).toBeFalsy();
+    const merges = (ws.model as unknown as { merges: string[] }).merges;
+    expect(merges).toEqual([`B${heading + 6}:D${heading + 6}`, `A${heading + 7}:A${heading + 8}`]);
+  });
+
+  it('leaves the block as it is without formInstructions', async () => {
+    const ws = await exportRows(2, config);
+    expect(columnTexts(ws, 'A', 5, 9)).toEqual(['Instructions:', '1. old @ <41', '2. old', '3. old', '**old warning**']);
+  });
+
+  it('still exports a template that has no instruction block', async () => {
+    const template = new ExcelJS.Workbook();
+    template.addWorksheet('Log').getCell('A2').value = 'Name';
+    const buffer = await generateTemplateExcel(
+      Buffer.from(await template.xlsx.writeBuffer()), [{ name: 'Alice' }], columns, { ...config, formInstructions },
+    );
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as unknown as ArrayBuffer);
+    expect(wb.worksheets[0].getCell('A3').value).toBe('Alice');
   });
 });
