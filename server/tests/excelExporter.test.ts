@@ -356,6 +356,25 @@ describe('generateTemplateExcel print layout', () => {
     expect(ws.pageSetup.margins).toEqual({ left: 0.2, right: 0.2, top: 0.2, bottom: 0.2, header: 0, footer: 0 });
   });
 
+  // WHY: The GRV Log template is saved in Page Layout view, where Excel put the
+  // columns past M (TTT Check among them) on a second page to the right.
+  it('opens in Normal view even when the template is saved in Page Layout view', async () => {
+    const template = new ExcelJS.Workbook();
+    const sheet = template.addWorksheet('Log');
+    sheet.getRow(1).getCell(1).value = 'Name';
+    sheet.views = [{ state: 'normal', style: 'pageLayout', zoomScaleNormal: 125 }];
+    const buffer = await generateTemplateExcel(
+      Buffer.from(await template.xlsx.writeBuffer()),
+      testRows,
+      testColumns,
+      { templateRecordId: 'rec', mapping: { A: 'name' }, dataStartRow: 2 },
+    );
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as unknown as ArrayBuffer);
+    expect(wb.worksheets[0].views[0].style).toBeUndefined();
+    expect(wb.worksheets[0].views[0].state).toBe('normal');
+  });
+
   it('renames the filled sheet when sheetName is set', async () => {
     const wb = await exportForm(fourRows, { ...formConfig, sheetName: 'Inbound Log 2026' });
     expect(wb.worksheets.map((w) => w.name)).toEqual(['Inbound Log 2026']);

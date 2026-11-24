@@ -209,6 +209,12 @@ export async function generateTemplateExcel(
     worksheet.getColumn(columnLetterToNumber(letter.toUpperCase())).width = width;
   }
 
+  // WHY: The GRV Log template is saved in Page Layout view with its own print
+  // scale. Excel paginates that view by the saved scale, not by fit-to-width, so
+  // the columns past M (TTT Check among them) opened on a second page off screen.
+  // Normal view shows every column side by side.
+  worksheet.views = [{ state: 'normal' }];
+
   // WHY: Print setup — same as fallback except printTitlesRow repeats the
   // full header block (e.g., rows 1-4 for GRV Log) on every printed page,
   // and the margins are narrower.
